@@ -25,7 +25,7 @@ const Hero = () => {
               className="text-lg md:text-xl lg:text-2xl tracking-widest uppercase text-muted-foreground transition-all duration-700 delay-200"
               style={{ opacity: isVisible ? 1 : 0, transform: isVisible ? 'translateY(0)' : 'translateY(20px)' }}
             >
-              Experiencias que trasciendend
+              Experiencias que trascienden
             </p>
           </div>
 
