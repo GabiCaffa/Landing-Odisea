@@ -33,7 +33,7 @@ const EventCard = ({
     <>
       <article className="card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px] transition-transform duration-300 hover:scale-105 hover:z-10">
         {/* Event Image */}
-        <div className="relative aspect-[4/3] overflow-hidden">
+        <div className="relative aspect-[4/3] bg-white flex items-center justify-center">
           <img
             src={image}
             alt={name}

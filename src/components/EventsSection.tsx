@@ -1,9 +1,9 @@
 import { useRef, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import EventCard from "./EventCard";
-import event1 from "@/assets/event-1.jpg";
-import event2 from "@/assets/foto4.jpg";
-import event3 from "@/assets/event-3.jpg";
+import event1 from "@/assets/carmelocarru1.jpg";
+import event2 from "@/assets/dolorescarru1.jpg";
+import event3 from "@/assets/dolorescarru3.jpg";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 
 // Events data with ticket configuration
