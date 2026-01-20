@@ -232,7 +232,7 @@ const TicketPurchaseModal = ({
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   <strong>Importante:</strong> Transfiere el monto total de <strong>${total}</strong> a la cuenta indicada. 
                   Si te equivocas con el monto, nos pondremos en contacto contigo: si es menor no enviaremos las entradas, 
-                  y si es mayor devolveremos el dinero. Por favor, intenta enviar el monto justo.
+                  y si es mayor devolveremos el dinero en un plazo de 90 dias. Por favor, intenta enviar el monto justo.
                 </p>
               </div>
               <div className="mt-3 pt-3 border-t border-border/50">
