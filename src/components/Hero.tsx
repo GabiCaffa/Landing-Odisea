@@ -29,20 +29,7 @@ const Hero = () => {
             </p>
           </div>
 
-          <div 
-            className="transition-all duration-700 delay-300"
-            style={{ opacity: isVisible ? 1 : 0, transform: isVisible ? 'translateY(0)' : 'translateY(20px)' }}
-          >
-            <a
-              href="https://wa.me/59891816716"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-techno group"
-            >
-              <img src={whatsappLogo} alt="WhatsApp" className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-              <span>Comprar Entradas</span>
-            </a>
-          </div>
+      
 
           <div 
             className="pt-4 md:pt-6 transition-all duration-700 delay-500"

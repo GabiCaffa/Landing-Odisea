@@ -4,13 +4,9 @@ import EventCard from "./EventCard";
 import event1 from "@/assets/event-1.jpg";
 import event2 from "@/assets/foto4.jpg";
 import event3 from "@/assets/event-3.jpg";
-
 import { useScrollReveal } from "@/hooks/useScrollReveal";
-import { styleText } from "util";
-import { Description } from "@radix-ui/react-toast";
 
-// Events data updated with real information
-
+// Events data with ticket configuration
 const events = [  
   {
     id: 1,
@@ -18,9 +14,12 @@ const events = [
     name: "ODISEA CARMELO",
     date: "24 ENERO 2026",
     location: "Predio La Querencia, Carmelo",
-    description:
-      "Experiencia única en Carmelo. La nueva escuela en vivo en el Predio La Querencia.",
+    description: "Experiencia única en Carmelo. La nueva escuela en vivo en el Predio La Querencia.",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
+    tickets: [
+      { name: "General", price: 450 },
+
+    ]
   },
   {
     id: 2,
@@ -28,8 +27,10 @@ const events = [
     name: "ODISEA DOLORES",
     date: "14 FEBRERO 2026",
     location: "No disponible aún",
-    description:"No disponible aún",
+    description: "No disponible aún",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
+    tickets: [
+    ]
   },
   {
     id: 3,
@@ -37,11 +38,12 @@ const events = [
     name: "ODISEA SALTO",
     date: "21 FEBRERO 2026",
     location: "No disponible aún",
-    description:"No disponible aún",
+    description: "No disponible aún",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
+    tickets: [
+    ]
   },
 ];
-
 
 const EventsSection = () => {
   const { ref: headerRef, isVisible: headerVisible } = useScrollReveal({ threshold: 0.3 });
@@ -140,6 +142,7 @@ const EventsSection = () => {
                   location={event.location}
                   description={event.description}
                   instagramUrl={event.instagramUrl}
+                  tickets={event.tickets}
                 />
               </div>
             ))}
