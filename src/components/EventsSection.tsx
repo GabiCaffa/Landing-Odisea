@@ -17,7 +17,7 @@ const events = [
     description: "Experiencia única en Carmelo. La nueva escuela en vivo en el Predio La Querencia.",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
-      { name: "General", price: 450 },
+      { name: "General", price: 500},
 
     ]
   },
