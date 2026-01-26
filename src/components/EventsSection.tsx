@@ -11,13 +11,13 @@ const events = [
   {
     id: 1,
     image: event1,
-    name: "ODISEA CARMELO",
-    date: "24 ENERO 2026",
-    location: "Predio La Querencia, Carmelo",
-    description: "Experiencia única en Carmelo. La nueva escuela en vivo en el Predio La Querencia.",
+    name: "ODISEA SUNSET",
+    date: "07 FEBRERO 2026",
+    location: "Mojito, colonia del sacramento",
+    description: "Vení a disfrutar de la mejor puesta de sol en mojito",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
-      { name: "General", price: 500},
+      { name: "General", price: 300},
 
     ]
   },
