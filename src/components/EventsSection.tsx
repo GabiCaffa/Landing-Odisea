@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import EventCard from "./EventCard";
-import event1 from "@/assets/carmelocarru1.jpg";
+import event1 from "@/assets/sunset.jpg";
 import event2 from "@/assets/dolorescarru1.jpg";
 import event3 from "@/assets/dolorescarru3.jpg";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
