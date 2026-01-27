@@ -225,9 +225,10 @@ const TicketPurchaseModal = ({
             <div className="p-4 bg-secondary/30 border border-border space-y-3">
               <h4 className="font-medium text-base">Datos para Transferencia</h4>
               <div className="text-sm space-y-1">
-                <p className="font-medium">Lautaro Martin Larrama</p>
-                <p className="text-muted-foreground">CA 110074532-00001</p>
-                <p className="text-muted-foreground">CA 600-0913866</p>
+                <p className="font-medium">JOSE IGNACIO FANETTI PEDULLA</p>
+                <p className="text-muted-foreground">Nro de cuenta 3895198000</p>
+                <p className="text-muted-forvaeground">SANTANDER</p>
+                <p className="text-muted-forvaeground">CAJA AHORRO PESOS</p>
               </div>
               <div className="mt-4 pt-3 border-t border-border/50">
                 <p className="text-xs text-muted-foreground leading-relaxed">
