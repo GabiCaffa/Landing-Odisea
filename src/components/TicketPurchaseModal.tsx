@@ -74,12 +74,13 @@ const TicketPurchaseModal = ({
     message += `Email: ${formData.email}\n`;
     message += `Teléfono: ${formData.phone}\n\n`;
     message += `Voy a realizar la transferencia a:\n`;
-    message += `Lautaro Martin Larrama\n`;
-    message += `CA 110074532-00001\n`;
-    message += `CA 600-0913866\n\n`;
+    message += `JOSE IGNACIO FANETTI PEDULLA\n`;
+    message += 'SANTANDER'
+    message += 'Tipo de cuenta: CAJA DE AHORRO'
+    message += `Nro de cuenta: 3895198000\n`;
     message += `Comprobante: `;
 
-    return message;
+t    return message;
   };
 
   const handleSubmit = () => {
