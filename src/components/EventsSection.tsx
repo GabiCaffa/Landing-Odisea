@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import EventCard from "./EventCard";
 import event1 from "@/assets/sunset.png";
 import event2 from "@/assets/dolorescarru1.jpg";
-import event3 from "@/assets/dolorescarru3.jpg";
+import event3 from "@/assets/saltocarru.png";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 
 // Events data with ticket configuration
@@ -30,6 +30,7 @@ const events = [
     description: "No disponible aún",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
+      {name: "general", price: 300}
     ]
   },
   {
@@ -41,6 +42,7 @@ const events = [
     description: "No disponible aún",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
+      {name: "general", price: 300}
     ]
   },
 ];
