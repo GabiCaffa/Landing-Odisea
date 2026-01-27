@@ -30,7 +30,7 @@ const events = [
     description: "Odisea Dolores te espera...",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
-      {name: "general", price: 300}
+      {name: "general", price: 300},
     ]
   },
   {
@@ -42,7 +42,7 @@ const events = [
     description: "Odisea Salto te espera",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
-      {name: "general", price: 300}
+      {name: "general", price: 300},
     ]
   },
 ];
