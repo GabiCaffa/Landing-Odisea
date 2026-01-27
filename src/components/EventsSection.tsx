@@ -26,8 +26,8 @@ const events = [
     image: event2,
     name: "ODISEA DOLORES",
     date: "14 FEBRERO 2026",
-    location: "No disponible aún",
-    description: "No disponible aún",
+    location: "Costanera general Artigas, rio negro",
+    description: "Odisea Dolores te espera...",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
       {name: "general", price: 300}
@@ -38,8 +38,8 @@ const events = [
     image: event3,
     name: "ODISEA SALTO",
     date: "21 FEBRERO 2026",
-    location: "No disponible aún",
-    description: "No disponible aún",
+    location: "LA CHACRA",
+    description: "Odisea Salto te espera",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
       {name: "general", price: 300}
