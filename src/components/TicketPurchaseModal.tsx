@@ -75,12 +75,12 @@ const TicketPurchaseModal = ({
     message += `Teléfono: ${formData.phone}\n\n`;
     message += `Voy a realizar la transferencia a:\n`;
     message += `JOSE IGNACIO FANETTI PEDULLA\n`;
-    message += 'SANTANDER'
-    message += 'Tipo de cuenta: CAJA DE AHORRO'
+    message += 'SANTANDER\n'
+    message += 'Tipo de cuenta: CAJA DE AHORRO\n'
     message += `Nro de cuenta: 3895198000\n`;
     message += `Comprobante: `;
 
-t    return message;
+   return message;
   };
 
   const handleSubmit = () => {
