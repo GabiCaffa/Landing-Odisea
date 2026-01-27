@@ -76,7 +76,7 @@ const TicketPurchaseModal = ({
     message += `Voy a realizar la transferencia a:\n`;
     message += `JOSE IGNACIO FANETTI PEDULLA\n`;
     message += 'SANTANDER\n'
-    message += 'Tipo de cuenta: CAJA DE AHORRO\n'
+    message += 'Tipo de cuenta: CAJA DE AHORRO PESOS\n'
     message += `Nro de cuenta: 3895198000\n`;
     message += `Comprobante: `;
 
