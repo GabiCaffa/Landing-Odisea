@@ -75,7 +75,7 @@ const TicketPurchaseModal = ({
     message += `Teléfono: ${formData.phone}\n\n`;
     message += `Voy a realizar la transferencia a:\n`;
     message += `JOSE IGNACIO FANETTI PEDULLA\n`;
-    message += 'Banco: SANTANDER\n'
+    message += 'Banco: SCOTIABANK\n'
     message += 'Tipo de cuenta: CAJA DE AHORRO PESOS\n'
     message += `Nro de cuenta: 3895198000\n`;
     message += `Comprobante: `;
@@ -227,7 +227,7 @@ const TicketPurchaseModal = ({
               <div className="text-sm space-y-1">
                 <p className="font-medium">JOSE IGNACIO FANETTI PEDULLA</p>
                 <p className="text-muted-foreground">Nro de cuenta 3895198000</p>
-                <p className="text-muted-forvaeground">SANTANDER</p>
+                <p className="text-muted-forvaeground">SCOTIABANK</p>
                 <p className="text-muted-forvaeground">CAJA AHORRO PESOS</p>
               </div>
               <div className="mt-4 pt-3 border-t border-border/50">
