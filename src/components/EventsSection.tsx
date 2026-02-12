@@ -9,19 +9,6 @@ import { useScrollReveal } from "@/hooks/useScrollReveal";
 // Events data with ticket configuration
 const events = [  
   {
-    id: 1,
-    image: event1,
-    name: "ODISEA SUNSET",
-    date: "07 FEBRERO 2026",
-    location: "Mojito, colonia del sacramento",
-    description: "Vení a disfrutar de la mejor puesta de sol en mojito",
-    instagramUrl: "https://www.instagram.com/odisea.uy/",
-    tickets: [
-      { name: "General", price: 300},
-
-    ]
-  },
-  {
     id: 2,
     image: event2,
     name: "ODISEA DOLORES",
@@ -30,7 +17,7 @@ const events = [
     description: "Odisea Dolores te espera...",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
-      {name: "general", price: 300},
+      {name: "general", price: 350},
     ]
   },
   {
