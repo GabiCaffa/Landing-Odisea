@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import EventsSection from "@/components/EventsSection";
+import PromosSection from "@/components/PromosSection";
 import Footer from "@/components/Footer";
 
 const Index = () => {
@@ -16,6 +17,7 @@ const Index = () => {
       <main>
         <Hero />
         <EventsSection />
+        <PromosSection />
       </main>
       <Footer />
     </div>
