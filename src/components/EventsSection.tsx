@@ -1,35 +1,47 @@
 import { useRef, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import EventCard from "./EventCard";
-import event1 from "@/assets/sunset.png";
-import event2 from "@/assets/dolorescarru1.jpg";
-import event3 from "@/assets/saltocarru.png";
+import event1 from "@/assets/OdiColonia (1).jpeg";
+import event2 from "@/assets/OdiCarme.jpeg";
+import event3 from "@/assets/OdiNh.jpeg";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 
 // Events data with ticket configuration
 const events = [  
   {
     id: 2,
-    image: event2,
-    name: "ODISEA DOLORES",
-    date: "14 FEBRERO 2026",
-    location: "Costanera general Artigas, rio negro",
-    description: "Odisea Dolores te espera...",
+    image: event3,
+    name: "ODISEA NUEVA HELVECIA",
+    date: "13 JUNIO 2026",
+    location: "Club Artesano",
+    description: "Odisea Nueva Helvecia te espera...",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
-      {name: "general", price: 350},
+      {name: "general", price: 400},
     ]
   },
   {
     id: 3,
-    image: event3,
-    name: "ODISEA SALTO",
-    date: "21 FEBRERO 2026",
-    location: "LA CHACRA",
-    description: "Odisea Salto te espera",
+    image: event1,
+    name: "ODISEA COLONIA",
+    date: "20 JUNIO 2026",
+    location: "Colonia Soho",
+    description: "Odisea Colonia te espera",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
       {name: "general", price: 300},
+    ]
+  },
+  {
+    id: 4,
+    image: event2,
+    name: "ODISEA CARMELO",
+    date: "20 JUNIO 2026",
+    location: "Club Union Carmelo",
+    description: "Odisea Carmelo te espera",
+    instagramUrl: "https://www.instagram.com/odisea.uy/",
+    tickets: [
+      {name: "general", price: 250},
     ]
   },
 ];
