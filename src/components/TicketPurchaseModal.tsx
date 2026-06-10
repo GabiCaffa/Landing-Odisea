@@ -86,7 +86,7 @@ const TicketPurchaseModal = ({
   const handleSubmit = () => {
     const message = generateWhatsAppMessage();
     if (message) {
-      const whatsappUrl = `https://wa.me/59891816716?text=${encodeURIComponent(message)}`;
+      const whatsappUrl = `https://wa.me/59892592179?text=${encodeURIComponent(message)}`;
       window.open(whatsappUrl, "_blank");
       onClose();
     }

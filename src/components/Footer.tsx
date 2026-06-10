@@ -33,7 +33,7 @@ const Footer = () => {
 
             {/* WhatsApp - Using official logo */}
             <a
-              href="https://wa.me/59891816716"
+              href="https://wa.me/59892592179"
               target="_blank"
               rel="noopener noreferrer"
               className="p-3 border border-background/20 hover:border-background/50 hover:bg-background/10 transition-all duration-300"

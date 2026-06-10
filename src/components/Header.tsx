@@ -55,7 +55,7 @@ const Header = () => {
 
           {/* Mobile WhatsApp button */}
           <a
-            href="https://wa.me/59891816716"
+            href="https://wa.me/59892592179"
             target="_blank"
             rel="noopener noreferrer"
             className="md:hidden btn-techno-outline text-xs py-2 px-4"

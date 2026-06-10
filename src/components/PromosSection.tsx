@@ -34,7 +34,7 @@ const promos = [
       "Comprá 5 entradas juntos y la sexta es nuestra. Coordiná con tu grupo y paguen en un solo pago para acceder al beneficio.",
     cta: "Consultar por WhatsApp",
     ctaHref:
-      "https://wa.me/59891816716?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Grupos",
+      "https://wa.me/59892592179?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Grupos",
   },
   {
     number: "02",
@@ -44,7 +44,7 @@ const promos = [
       "Si tu cumpleaños cae cerca de la fecha del evento, tenemos un beneficio especial para vos. Escribinos y coordinamos.",
     cta: "Consultar mi beneficio",
     ctaHref:
-      "https://wa.me/59891816716?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Cumplea%C3%B1os",
+      "https://wa.me/59892592179?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Cumplea%C3%B1os",
   },
   {
     number: "03",
@@ -320,7 +320,7 @@ const BottomCta = () => {
         <p className="font-display text-2xl md:text-3xl tracking-wide">HABLÁ CON NOSOTROS</p>
       </div>
       <a
-        href="https://wa.me/59891816716"
+        href="https://wa.me/59892592179"
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-3 bg-foreground text-background px-7 py-4 text-sm tracking-widest uppercase hover:bg-foreground/80 transition-colors duration-300 whitespace-nowrap"
