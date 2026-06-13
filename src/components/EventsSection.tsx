@@ -17,7 +17,7 @@ const events = [
     description: "Odisea Nueva Helvecia te espera...",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
-      {name: "general", price: 400},
+      {name: "general", price: 450},
     ]
   },
   {
@@ -29,7 +29,7 @@ const events = [
     description: "Odisea Colonia te espera",
     instagramUrl: "https://www.instagram.com/odisea.uy/",
     tickets: [
-      {name: "general", price: 300},
+      {name: "general", price: 350},
     ]
   },
   {
