@@ -118,7 +118,14 @@ const Terms = () => {
               >
                 @odisea.uy
               </a>{" "}
-              o al correo <span className="font-semibold text-foreground">[COMPLETAR: correo de contacto]</span>.
+              o al correo{" "}
+              <a
+                href="mailto:odiseaoficialcolonia@gmail.com"
+                className="text-foreground font-semibold hover:underline"
+              >
+                odiseaoficialcolonia@gmail.com
+              </a>
+              .
             </LegalSection>
           </div>
 
