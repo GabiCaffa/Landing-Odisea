@@ -531,6 +531,15 @@ const EventFormModal = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // ISO (UTC) → valor para <input type="datetime-local"> en hora local
+  const isoToLocalInput = (iso?: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   const [form, setForm] = useState<Omit<AdminEvent, "id" | "createdAt">>({
     name: initial?.name ?? "",
     date: initial?.date ?? "",
@@ -539,6 +548,7 @@ const EventFormModal = ({
     price: initial?.price ?? 0,
     capacity: initial?.capacity ?? 0,
     status: initial?.status ?? "activo",
+    saleEndsAt: isoToLocalInput(initial?.saleEndsAt),
     image: initial?.image ?? "",
     imagePosition: initial?.imagePosition ?? { ...DEFAULT_IMAGE_TRANSFORM },
     instagramUrl: initial?.instagramUrl ?? "https://www.instagram.com/odisea.uy/",
@@ -589,7 +599,11 @@ const EventFormModal = ({
     }
     setSaving(true);
     try {
-      await onSave(form);
+      await onSave({
+        ...form,
+        // datetime-local (hora local) → ISO UTC; vacío → "" (se guarda null)
+        saleEndsAt: form.saleEndsAt ? new Date(form.saleEndsAt).toISOString() : "",
+      });
     } finally {
       setSaving(false);
     }
@@ -721,6 +735,18 @@ const EventFormModal = ({
                 </select>
               </FormField>
             </div>
+
+            <FormField label="Cierre de venta (opcional)">
+              <input
+                type="datetime-local"
+                value={form.saleEndsAt ?? ""}
+                onChange={(e) => setForm({ ...form, saleEndsAt: e.target.value })}
+                className="input-techno"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Pasada esta fecha y hora, el card se muestra “Agotado” y se deshabilita la compra automáticamente.
+              </p>
+            </FormField>
 
             <FormField label="Instagram (opcional)">
               <input

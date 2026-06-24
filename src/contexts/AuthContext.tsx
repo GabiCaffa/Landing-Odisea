@@ -68,6 +68,8 @@ export interface AdminEvent {
   price: number;
   capacity: number;
   status: "activo" | "agotado" | "finalizado";
+  /** ISO datetime. Pasado este momento la venta se cierra sola (queda "agotado"). */
+  saleEndsAt?: string;
   image: string;
   imagePosition: ImageTransform;
   instagramUrl?: string;
@@ -143,6 +145,7 @@ function eventFromDb(row: any): AdminEvent {
     price: Number(row.price),
     capacity: row.capacity,
     status: row.status,
+    saleEndsAt: row.sale_ends_at ?? undefined,
     image: row.image_url ?? "",
     imagePosition: normalizeImageTransform(row.image_position),
     instagramUrl: row.instagram_url ?? undefined,
@@ -159,6 +162,7 @@ function eventToDb(e: Partial<NewEventInput>) {
   if (e.price !== undefined) out.price = e.price;
   if (e.capacity !== undefined) out.capacity = e.capacity;
   if (e.status !== undefined) out.status = e.status;
+  if (e.saleEndsAt !== undefined) out.sale_ends_at = e.saleEndsAt || null;
   if (e.image !== undefined) out.image_url = e.image || null;
   if (e.imagePosition !== undefined) out.image_position = e.imagePosition;
   if (e.instagramUrl !== undefined) out.instagram_url = e.instagramUrl || null;

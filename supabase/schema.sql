@@ -30,11 +30,15 @@ create table if not exists public.events (
   price           numeric(10, 2) not null default 0,
   capacity        integer not null default 0,
   status          text not null default 'activo' check (status in ('activo', 'agotado', 'finalizado')),
+  sale_ends_at    timestamptz,
   image_url       text,
   image_position  jsonb not null default '{"x":50,"y":50,"scale":1,"fit":"cover"}'::jsonb,
   instagram_url   text,
   created_at      timestamptz not null default now()
 );
+
+-- Para tablas ya existentes (create table if not exists no agrega columnas nuevas):
+alter table public.events add column if not exists sale_ends_at timestamptz;
 
 create index if not exists events_date_idx on public.events(date);
 create index if not exists events_status_idx on public.events(status);

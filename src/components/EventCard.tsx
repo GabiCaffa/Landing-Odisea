@@ -23,6 +23,8 @@ interface EventCardProps {
   instagramUrl?: string;
   tickets: Ticket[];
   soldOut?: boolean;
+  /** ISO datetime; pasado este momento la venta se cierra sola */
+  saleEndsAt?: string;
 }
 
 const EventCard = ({
@@ -36,9 +38,13 @@ const EventCard = ({
   instagramUrl,
   tickets,
   soldOut,
+  saleEndsAt,
 }: EventCardProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
+
+  // Agotado si el admin lo marcó así, o si ya pasó la fecha/hora de cierre de venta.
+  const isSoldOut = soldOut || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
 
   return (
     <>
@@ -63,7 +69,7 @@ const EventCard = ({
             <span className="text-xs font-semibold tracking-[0.12em] uppercase">{date}</span>
           </div>
 
-          {soldOut && (
+          {isSoldOut && (
             <div className="absolute inset-0 bg-tinta/65 backdrop-blur-[1px] flex items-center justify-center">
               <span className="title-display text-4xl md:text-5xl text-white bg-charrua rounded-lg px-5 py-1.5 -rotate-6 shadow-[var(--shadow-lg)]">
                 AGOTADO
@@ -93,11 +99,11 @@ const EventCard = ({
           <div className="flex gap-2 mt-auto">
             <button
               onClick={() => setIsModalOpen(true)}
-              disabled={soldOut}
+              disabled={isSoldOut}
               className="btn-techno flex-1 text-xs py-2.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <img src={whatsappLogo} alt="WhatsApp" className="w-4 h-4" />
-              <span>{soldOut ? "Agotado" : "Comprar"}</span>
+              <span>{isSoldOut ? "Agotado" : "Comprar"}</span>
             </button>
 
             {instagramUrl && (
