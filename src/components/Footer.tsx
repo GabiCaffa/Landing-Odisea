@@ -1,4 +1,5 @@
 import { Instagram } from "lucide-react";
+import { Link } from "react-router-dom";
 import odiseaLogoWhite from "@/assets/odisea-logo-white.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
@@ -50,6 +51,17 @@ const Footer = () => {
             >
               <img src={whatsappLogo} alt="WhatsApp" className="w-5 h-5" />
             </a>
+          </div>
+
+          {/* Links legales */}
+          <div className="flex items-center gap-5 text-xs text-papel/60">
+            <Link to="/terminos" className="hover:text-celeste transition-colors">
+              Términos de Uso
+            </Link>
+            <span className="h-3 w-px bg-papel/20" />
+            <Link to="/privacidad" className="hover:text-celeste transition-colors">
+              Política de Privacidad
+            </Link>
           </div>
 
           {/* Divider */}

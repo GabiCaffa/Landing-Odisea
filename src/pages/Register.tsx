@@ -23,6 +23,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -97,6 +98,11 @@ const Register = () => {
       setSubmitting(false);
       return;
     }
+    if (!acceptedTerms) {
+      toast.error("Tenés que aceptar los Términos de Uso y la Política de Privacidad");
+      setSubmitting(false);
+      return;
+    }
 
     const result = await register({
       firstName: form.firstName.trim(),
@@ -132,13 +138,11 @@ const Register = () => {
       <main className="flex-1 pt-24 md:pt-32 pb-16">
         <div className="container-odisea max-w-2xl">
           <div className="text-center mb-8 md:mb-10">
-            <p className="font-sport text-xs tracking-[0.4em] uppercase text-celeste-deep font-bold mb-3">
-              Sumate a la comunidad
-            </p>
-            <h1 className="title-sport text-5xl md:text-6xl tracking-wide font-black mb-3 text-tinta">
+            <p className="eyebrow mb-4">Sumate a la comunidad</p>
+            <h1 className="title-sport text-5xl md:text-6xl mb-4 text-tinta">
               CREAR <span className="highlight-celeste">CUENTA</span>
             </h1>
-            <div className="w-20 h-1.5 bg-tinta mx-auto" />
+            <div className="w-16 h-px bg-celeste mx-auto" />
           </div>
 
           {confirmationEmail ? (
@@ -290,9 +294,40 @@ const Register = () => {
                 </div>
               </FormSection>
 
+              {/* ─── Consentimiento (Ley 18.331) ─── */}
+              <label className="flex items-start gap-3 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-celeste cursor-pointer"
+                />
+                <span>
+                  He leído y acepto los{" "}
+                  <Link
+                    to="/terminos"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground font-semibold hover:underline"
+                  >
+                    Términos de Uso
+                  </Link>{" "}
+                  y la{" "}
+                  <Link
+                    to="/privacidad"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground font-semibold hover:underline"
+                  >
+                    Política de Privacidad
+                  </Link>
+                  , y autorizo el tratamiento de mis datos personales.
+                </span>
+              </label>
+
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !acceptedTerms}
                 className="btn-techno w-full disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {submitting ? "Creando cuenta..." : "Crear cuenta"}
