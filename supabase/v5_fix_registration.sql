@@ -44,9 +44,20 @@ begin
 end;
 $$;
 
--- 3) Trigger que dispara la función al crearse un usuario en auth.users
---    (esto era lo que faltaba en los .sql del repo)
-drop trigger if exists on_auth_user_created on auth.users;
+-- 2.5) Borrar TODOS los triggers custom de auth.users.
+--      Había un trigger viejo (de otro nombre) que insertaba un perfil incompleto
+--      -> "null value in column first_name violates not-null". Lo eliminamos.
+do $$
+declare r record;
+begin
+  for r in select tgname from pg_trigger
+           where tgrelid = 'auth.users'::regclass and not tgisinternal
+  loop
+    execute format('drop trigger if exists %I on auth.users', r.tgname);
+  end loop;
+end $$;
+
+-- 3) Dejar UN solo trigger en auth.users, el correcto
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
