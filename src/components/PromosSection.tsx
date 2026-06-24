@@ -76,30 +76,28 @@ const PromosSection = () => {
   };
 
   return (
-    <section id="promos" className="section-padding bg-background">
+    <section id="promos" className="section-padding bg-papel">
       <div className="container-odisea">
         {/* Header */}
         <div
           ref={headerRef}
-          className={`text-center mb-12 md:mb-16 transition-all duration-700 ${
+          className={`text-center mb-10 md:mb-16 transition-all duration-700 ${
             headerVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground mb-3">
-            Beneficios exclusivos
-          </p>
-          <h2 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-wide mb-4">
-            PROMOCIONES
+          <p className="eyebrow mb-4">Beneficios</p>
+          <h2 className="title-sport text-5xl sm:text-6xl md:text-7xl lg:text-8xl mb-6 text-tinta">
+            <span className="highlight-celeste">PROMOCIONES</span>
           </h2>
           <div
-            className={`w-16 h-0.5 bg-foreground mx-auto transition-all duration-500 delay-200 ${
+            className={`w-16 h-px bg-celeste mx-auto transition-all duration-500 delay-200 ${
               headerVisible ? "scale-x-100" : "scale-x-0"
             }`}
           />
         </div>
 
         {/* Cards grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-border">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
           {promos.map((promo, index) => (
             <PromoCard
               key={promo.number}
@@ -217,17 +215,17 @@ const PromoCard = ({
   return (
     <div
       ref={ref}
-      className={`relative p-8 md:p-10 flex flex-col gap-6 group transition-all duration-700 ${
+      className={`relative p-8 md:p-10 flex flex-col gap-6 group rounded-2xl border transition-all duration-700 hover:-translate-y-1 ${
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
-      } ${promo.highlight ? "bg-foreground text-background" : "bg-background"}`}
+      } ${promo.highlight ? "bg-celeste text-white border-celeste shadow-[var(--shadow-lg)]" : "bg-card border-border hover:shadow-[var(--shadow-md)]"}`}
       style={{ transitionDelay: `${index * 120}ms` }}
     >
       {/* Número watermark */}
       <span
-        className={`absolute top-6 right-8 font-display text-7xl leading-none select-none pointer-events-none transition-opacity duration-300 ${
+        className={`absolute top-4 right-6 title-sport text-8xl font-black leading-none select-none pointer-events-none transition-opacity duration-300 ${
           promo.highlight
-            ? "text-background/10 group-hover:text-background/20"
-            : "text-foreground/5 group-hover:text-foreground/10"
+            ? "text-tinta/15 group-hover:text-tinta/25"
+            : "text-tinta/8 group-hover:text-celeste-deep/30"
         }`}
       >
         {promo.number}
@@ -250,8 +248,8 @@ const PromoCard = ({
 
       {/* Título */}
       <h3
-        className={`font-display text-3xl md:text-4xl tracking-wide leading-tight whitespace-pre-line ${
-          promo.highlight ? "text-background" : "text-foreground"
+        className={`title-sport text-3xl md:text-4xl lg:text-5xl tracking-wide leading-[0.95] font-black whitespace-pre-line ${
+          promo.highlight ? "text-tinta" : "text-tinta"
         }`}
       >
         {promo.title}
@@ -270,14 +268,10 @@ const PromoCard = ({
       {"isModal" in promo && promo.isModal ? (
         <button
           onClick={onOpenModal}
-          className={`inline-flex items-center gap-2 text-sm tracking-wide uppercase border px-5 py-3 transition-all duration-300 w-fit cursor-pointer ${
-            promo.highlight
-              ? "border-background text-background hover:bg-background hover:text-foreground"
-              : "border-foreground text-foreground hover:bg-foreground hover:text-background"
-          }`}
+          className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide bg-tinta text-papel rounded-full px-6 py-3 transition-all duration-200 w-fit hover:bg-white hover:text-tinta active:scale-[0.98] cursor-pointer"
         >
           {promo.cta}
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -286,11 +280,7 @@ const PromoCard = ({
           href={"ctaHref" in promo ? promo.ctaHref : "#"}
           target="_blank"
           rel="noopener noreferrer"
-          className={`inline-flex items-center gap-2 text-sm tracking-wide uppercase border px-5 py-3 transition-all duration-300 w-fit ${
-            promo.highlight
-              ? "border-background text-background hover:bg-background hover:text-foreground"
-              : "border-foreground text-foreground hover:bg-foreground hover:text-background"
-          }`}
+          className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide border border-tinta/20 rounded-full px-6 py-3 transition-all duration-200 w-fit hover:bg-tinta hover:text-papel active:scale-[0.98]"
         >
           {promo.cta}
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -309,21 +299,19 @@ const BottomCta = () => {
   return (
     <div
       ref={ref}
-      className={`mt-px bg-secondary/40 border border-border p-8 md:p-10 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-700 delay-300 ${
+      className={`mt-5 bg-tinta text-papel rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-700 delay-300 shadow-[var(--shadow-lg)] ${
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
       }`}
     >
-      <div>
-        <p className="text-xs tracking-[0.25em] uppercase text-muted-foreground mb-1">
-          ¿Tenés dudas?
-        </p>
-        <p className="font-display text-2xl md:text-3xl tracking-wide">HABLÁ CON NOSOTROS</p>
+      <div className="text-center md:text-left">
+        <p className="eyebrow mb-3">¿Tenés dudas?</p>
+        <p className="title-sport text-3xl md:text-4xl lg:text-5xl">HABLÁ CON NOSOTROS</p>
       </div>
       <a
         href="https://wa.me/59892592179"
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-3 bg-foreground text-background px-7 py-4 text-sm tracking-widest uppercase hover:bg-foreground/80 transition-colors duration-300 whitespace-nowrap"
+        className="inline-flex items-center gap-3 bg-celeste text-white rounded-full px-8 py-4 text-sm font-semibold tracking-wide hover:bg-celeste-deep active:scale-[0.98] transition-all whitespace-nowrap"
       >
         <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />

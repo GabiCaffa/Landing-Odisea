@@ -47,27 +47,27 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // ODÍSEA custom colors
-        odisea: {
-          black: "hsl(var(--odisea-black))",
-          white: "hsl(var(--odisea-white))",
-          gray: {
-            100: "hsl(var(--odisea-gray-100))",
-            200: "hsl(var(--odisea-gray-200))",
-            300: "hsl(var(--odisea-gray-300))",
-            400: "hsl(var(--odisea-gray-400))",
-            500: "hsl(var(--odisea-gray-500))",
-            600: "hsl(var(--odisea-gray-600))",
-            700: "hsl(var(--odisea-gray-700))",
-            800: "hsl(var(--odisea-gray-800))",
-            900: "hsl(var(--odisea-gray-900))",
-          },
+        // Paleta Odísea Minimal Monochrome.
+        // "celeste" = acento naranja, "sol" = neutro cálido, "charrua" = rojo error.
+        // (Se conservan los nombres de token para no romper clases existentes.)
+        celeste: {
+          DEFAULT: "hsl(var(--celeste))",
+          deep: "hsl(var(--celeste-deep))",
+          soft: "hsl(var(--celeste-soft))",
         },
+        sol: {
+          DEFAULT: "hsl(var(--sol))",
+          deep: "hsl(var(--sol-deep))",
+        },
+        charrua: "hsl(var(--charrua))",
+        papel: "hsl(var(--papel))",
+        tinta: "hsl(var(--tinta))",
         whatsapp: "hsl(var(--whatsapp-green))",
       },
       fontFamily: {
-        display: ['Bebas Neue', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
+        display: ['"Inter Tight"', 'system-ui', 'sans-serif'],
+        sport: ['"Inter Tight"', 'system-ui', 'sans-serif'],
+        body: ['"Inter Tight"', 'Inter', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",

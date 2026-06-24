@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Instagram } from "lucide-react";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
-import TicketPurchaseModal from "./TicketPurchaseModal";
+import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
+
+// Carga diferida: el modal arrastra libphonenumber-js (~145KB) + PhoneInput.
+// Así no entran al bundle inicial de la home; se cargan recién al tocar "Comprar".
+const TicketPurchaseModal = lazy(() => import("./TicketPurchaseModal"));
 
 interface Ticket {
   name: string;
@@ -9,88 +13,91 @@ interface Ticket {
 }
 
 interface EventCardProps {
+  id?: string;
   image: string;
+  imagePosition?: ImageTransform;
   name: string;
   date: string;
   location: string;
   description: string;
   instagramUrl?: string;
   tickets: Ticket[];
+  soldOut?: boolean;
 }
 
 const EventCard = ({
+  id,
   image,
+  imagePosition,
   name,
   date,
   location,
   description,
   instagramUrl,
   tickets,
+  soldOut,
 }: EventCardProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
 
   return (
     <>
-      <article className="card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px] transition-transform duration-300 hover:scale-105 hover:z-10">
+      <article className="card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px]">
         {/* Event Image */}
-        <div className="relative aspect-[4/3] bg-white flex items-center justify-center">
+        <div className="relative aspect-[4/3] bg-papel overflow-hidden border-b border-border">
           <img
             src={image}
             alt={name}
-            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full"
+            style={{
+              objectFit: pos.fit,
+              objectPosition: `${pos.x}% ${pos.y}%`,
+              transform: `scale(${pos.scale})`,
+              transformOrigin: `${pos.x}% ${pos.y}%`,
+            }}
           />
-          {/* Date overlay */}
-          <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm px-3 py-1.5">
-            <span className="text-xs tracking-wider uppercase">
-              {date}
-            </span>
+          {/* Date badge estilo ticket */}
+          <div className="absolute top-3 left-3 bg-celeste text-white px-3 py-1.5 rounded-full shadow-sm">
+            <span className="text-xs font-semibold tracking-[0.12em] uppercase">{date}</span>
           </div>
+
+          {soldOut && (
+            <div className="absolute inset-0 bg-tinta/65 backdrop-blur-[1px] flex items-center justify-center">
+              <span className="title-display text-4xl md:text-5xl text-white bg-charrua rounded-lg px-5 py-1.5 -rotate-6 shadow-[var(--shadow-lg)]">
+                AGOTADO
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Content */}
         <div className="flex flex-col flex-1 p-4">
-          {/* Event name */}
-          <h3 className="text-xl md:text-2xl tracking-wide mb-2">
+          <h3 className="font-sport text-2xl md:text-3xl font-black tracking-wide leading-[0.95] mb-2 text-tinta">
             {name}
           </h3>
 
-          {/* Location */}
-          <div className="flex items-center gap-2 text-muted-foreground mb-4">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-              />
+          <div className="flex items-center gap-2 text-tinta/70 mb-3 font-sport">
+            <svg className="w-4 h-4 text-celeste-deep" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <span className="text-sm">{location}</span>
+            <span className="text-sm font-semibold tracking-wide uppercase">{location}</span>
           </div>
 
-          {/* Description */}
           <p className="text-xs text-muted-foreground leading-relaxed flex-1 mb-4 line-clamp-3">
             {description}
           </p>
 
-          {/* Buttons - Always aligned at bottom */}
           <div className="flex gap-2 mt-auto">
             <button
               onClick={() => setIsModalOpen(true)}
-              className="btn-techno flex-1 text-xs py-2 px-3"
+              disabled={soldOut}
+              className="btn-techno flex-1 text-xs py-2.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <img src={whatsappLogo} alt="WhatsApp" className="w-4 h-4" />
-              <span>Comprar</span>
+              <span>{soldOut ? "Agotado" : "Comprar"}</span>
             </button>
 
             {instagramUrl && (
@@ -98,7 +105,7 @@ const EventCard = ({
                 href={instagramUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-techno-outline flex-shrink-0 text-xs py-2 px-3"
+                className="btn-techno-outline flex-shrink-0 text-xs py-2.5 px-3"
                 aria-label="Ver en Instagram"
               >
                 <Instagram className="w-4 h-4" />
@@ -108,15 +115,20 @@ const EventCard = ({
         </div>
       </article>
 
-      {/* Purchase Modal */}
-      <TicketPurchaseModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        eventName={name}
-        eventDate={date}
-        eventLocation={location}
-        tickets={tickets}
-      />
+      {/* Purchase Modal — montado solo al abrirse (lazy) */}
+      {isModalOpen && (
+        <Suspense fallback={null}>
+          <TicketPurchaseModal
+            isOpen
+            onClose={() => setIsModalOpen(false)}
+            eventId={id}
+            eventName={name}
+            eventDate={date}
+            eventLocation={location}
+            tickets={tickets}
+          />
+        </Suspense>
+      )}
     </>
   );
 };

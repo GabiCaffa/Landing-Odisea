@@ -8,35 +8,44 @@ const Footer = () => {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.3 });
 
   return (
-    <footer ref={ref} className="bg-foreground text-background section-padding">
-      <div className="container-odisea">
-        <div className={`flex flex-col items-center text-center space-y-8 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-          {/* Logo - Always an image */}
+    <footer ref={ref} className="relative bg-tinta text-papel overflow-hidden">
+      {/* Halo de acento sutil */}
+      <div className="pointer-events-none absolute -bottom-32 -right-20 h-[420px] w-[420px] rounded-full bg-celeste/15 blur-[130px]" />
+
+      <div className="container-odisea relative z-10 py-16 md:py-24">
+        <div
+          className={`flex flex-col items-center text-center space-y-9 transition-all duration-700 ${
+            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+          }`}
+        >
+          {/* Logo */}
           <img
             src={odiseaLogoWhite}
             alt="ODÍSEA"
-            className="h-10 md:h-12 w-auto object-contain"
+            className="h-10 md:h-14 w-auto object-contain"
           />
 
-          {/* Social links */}
-          <div className="flex items-center gap-6">
-            {/* Instagram */}
+          <p className="text-sm md:text-base text-papel/60 max-w-md leading-relaxed">
+            Productora de música y eventos. Seguinos para enterarte de las
+            próximas fechas.
+          </p>
+
+          {/* Social */}
+          <div className="flex items-center gap-3">
             <a
               href="https://www.instagram.com/odisea.uy/"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-3 border border-background/20 hover:border-background/50 hover:bg-background/10 transition-all duration-300"
+              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-white transition-all"
               aria-label="Síguenos en Instagram"
             >
               <Instagram className="w-5 h-5" />
             </a>
-
-            {/* WhatsApp - Using official logo */}
             <a
               href="https://wa.me/59892592179"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-3 border border-background/20 hover:border-background/50 hover:bg-background/10 transition-all duration-300"
+              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-white transition-all"
               aria-label="Contáctanos por WhatsApp"
             >
               <img src={whatsappLogo} alt="WhatsApp" className="w-5 h-5" />
@@ -44,16 +53,17 @@ const Footer = () => {
           </div>
 
           {/* Divider */}
-          <div className="w-16 h-px bg-background/20" />
+          <div className="w-16 h-px bg-papel/15" />
 
           {/* Copyright */}
-          <p className="text-sm text-background/60 tracking-wide">
-            © {currentYear} ODÍSEA. Todos los derechos reservados.
-          </p>
-           {/* Copyright */}
-          <p className="text-sm text-background/60 tracking-wide">
-            Diseñado y desarrollado por LiSoft <h1>lisoftuy@gmail.com</h1>
-          </p>
+          <div className="space-y-1.5">
+            <p className="text-xs text-papel/50 tracking-wide">
+              © {currentYear} ODÍSEA. Todos los derechos reservados.
+            </p>
+            <p className="text-[10px] text-papel/35 tracking-wide">
+              Diseñado y desarrollado por LiSoft · lisoftuy@gmail.com
+            </p>
+          </div>
         </div>
       </div>
     </footer>
