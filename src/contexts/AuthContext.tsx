@@ -3,6 +3,12 @@ import { supabase, EVENT_IMAGES_BUCKET } from "@/lib/supabase";
 
 export type UserRole = "admin" | "user";
 
+/** Única cuenta autorizada como admin. Inmutable: enforzado también en la DB. */
+export const OFFICIAL_ADMIN_EMAIL = "lisoftuy@gmail.com";
+
+export const isOfficialAdmin = (email?: string | null) =>
+  (email ?? "").trim().toLowerCase() === OFFICIAL_ADMIN_EMAIL;
+
 export interface User {
   id: string;
   firstName: string;
@@ -361,12 +367,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteUser: AuthContextValue["deleteUser"] = async (id) => {
     if (id === currentUser?.id) return { ok: false, error: "No podés eliminar tu propia cuenta" };
+    const target = users.find((u) => u.id === id);
+    if (isOfficialAdmin(target?.email)) {
+      return { ok: false, error: "La cuenta admin oficial no se puede eliminar" };
+    }
     const { error } = await supabase.from("profiles").delete().eq("id", id);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   };
 
   const promoteUser: AuthContextValue["promoteUser"] = async (id, role) => {
+    const target = users.find((u) => u.id === id);
+    if (isOfficialAdmin(target?.email)) {
+      return { ok: false, error: "El rol de la cuenta admin oficial no se puede cambiar" };
+    }
+    if (role === "admin") {
+      return { ok: false, error: `Solo ${OFFICIAL_ADMIN_EMAIL} puede ser admin` };
+    }
     const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
     if (error) return { ok: false, error: error.message };
     if (currentUser?.id === id) setCurrentUser({ ...currentUser, role });

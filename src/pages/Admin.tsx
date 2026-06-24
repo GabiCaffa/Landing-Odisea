@@ -23,6 +23,7 @@ import {
   Maximize2,
   Crop,
   Move,
+  Lock,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
@@ -33,6 +34,7 @@ import {
   ImageTransform,
   DEFAULT_IMAGE_TRANSFORM,
   formatEventDate,
+  isOfficialAdmin,
 } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -1174,7 +1176,9 @@ const UsersAdmin = () => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((u) => (
+            {filtered.map((u) => {
+              const locked = isOfficialAdmin(u.email);
+              return (
               <tr key={u.id} className="border-b border-border/50 hover:bg-secondary/30">
                 <Td>
                   <div className="flex items-center gap-3">
@@ -1194,33 +1198,52 @@ const UsersAdmin = () => {
                 <Td>{formatEventDate(u.birthDate)}</Td>
                 <Td>{calcAge(u.birthDate)}</Td>
                 <Td>
-                  <select
-                    value={u.role}
-                    onChange={async (e) => {
-                      const result = await promoteUser(u.id, e.target.value as User["role"]);
-                      if (!result.ok) {
-                        toast.error(result.error ?? "No se pudo actualizar");
-                        return;
-                      }
-                      toast.success("Rol actualizado");
-                    }}
-                    className="border border-border px-2 py-1 text-xs bg-background disabled:opacity-50"
-                  >
-                    <option value="user">user</option>
-                    <option value="admin">admin</option>
-                  </select>
+                  {locked ? (
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground"
+                      title="Admin oficial · no se puede modificar"
+                    >
+                      <Lock className="w-3 h-3" /> admin
+                    </span>
+                  ) : (
+                    <select
+                      value={u.role}
+                      onChange={async (e) => {
+                        const result = await promoteUser(u.id, e.target.value as User["role"]);
+                        if (!result.ok) {
+                          toast.error(result.error ?? "No se pudo actualizar");
+                          return;
+                        }
+                        toast.success("Rol actualizado");
+                      }}
+                      className="border border-border px-2 py-1 text-xs bg-background disabled:opacity-50"
+                    >
+                      <option value="user">user</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  )}
                 </Td>
                 <Td>
-                  <button
-                    onClick={() => handleDelete(u)}
-                    className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                    aria-label="Eliminar"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {locked ? (
+                    <span
+                      className="inline-flex p-2 text-muted-foreground/50 cursor-not-allowed"
+                      title="La cuenta admin oficial no se puede eliminar"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleDelete(u)}
+                      className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                      aria-label="Eliminar"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </Td>
               </tr>
-            ))}
+              );
+            })}
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={7} className="text-center py-12 text-muted-foreground text-sm">

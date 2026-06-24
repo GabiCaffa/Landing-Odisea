@@ -77,6 +77,49 @@ create policy "profiles_update_own"   on public.profiles for update using (auth.
 create policy "profiles_update_admin" on public.profiles for update using (public.is_admin());
 create policy "profiles_delete_admin" on public.profiles for delete using (public.is_admin());
 
+-- ─── ADMIN ÚNICO: lisoftuy@gmail.com (inmutable a nivel DB) ─────────────────
+-- Garantiza que SOLO lisoftuy@gmail.com pueda ser admin, que no se le pueda
+-- cambiar el rol ni eliminar el perfil, ni desde el panel ni por SQL del panel.
+create or replace function public.enforce_unique_admin()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if lower(new.email) = 'lisoftuy@gmail.com' then
+    new.role := 'admin';
+  elsif new.role = 'admin' then
+    new.role := 'user';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_enforce_unique_admin on public.profiles;
+create trigger trg_enforce_unique_admin
+  before insert or update on public.profiles
+  for each row execute function public.enforce_unique_admin();
+
+create or replace function public.prevent_admin_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if lower(old.email) = 'lisoftuy@gmail.com' then
+    raise exception 'La cuenta admin oficial no se puede eliminar';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists trg_prevent_admin_delete on public.profiles;
+create trigger trg_prevent_admin_delete
+  before delete on public.profiles
+  for each row execute function public.prevent_admin_delete();
+
 -- ─── RLS: events ────────────────────────────────────────────────────────────
 drop policy if exists "events_select_public" on public.events;
 drop policy if exists "events_insert_admin"  on public.events;
@@ -125,9 +168,9 @@ on conflict do nothing;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- DESPUÉS de ejecutar esto:
--- 1) Andá a /registro en la app y creá tu cuenta normalmente.
--- 2) En el Dashboard de Supabase → SQL Editor, ejecutá:
---      update public.profiles set role = 'admin' where email = 'tu@email.com';
--- 3) Cerrá sesión y volvé a entrar para que se refresque el rol.
--- 4) Listo: ya tenés acceso al panel /admin.
+-- 1) Andá a /registro en la app y creá la cuenta con lisoftuy@gmail.com.
+--    El trigger enforce_unique_admin la marca admin automáticamente; cualquier
+--    otra cuenta queda como 'user' aunque se intente promoverla.
+-- 2) Cerrá sesión y volvé a entrar para que se refresque el rol.
+-- 3) Listo: lisoftuy@gmail.com ya tiene acceso al panel /admin.
 -- ════════════════════════════════════════════════════════════════════════════
