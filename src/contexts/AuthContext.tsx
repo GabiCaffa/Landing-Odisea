@@ -108,6 +108,7 @@ interface AuthContextValue {
     country: string;
     state?: string;
   }) => Promise<AuthResult>;
+  resendConfirmation: (email: string) => Promise<{ ok: boolean; error?: string }>;
   checkBirthdayPromo: (eventId: string) => Promise<BirthdayCheck>;
   claimBirthdayPromo: (eventId: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -310,7 +311,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email: email.trim().toLowerCase(),
       password,
     });
-    if (error) return { ok: false, error: translateAuthError(error.message) };
+    if (error)
+      return {
+        ok: false,
+        error: translateAuthError(error.message),
+        needsEmailConfirmation: error.message.toLowerCase().includes("email not confirmed"),
+      };
     if (!data.user) return { ok: false, error: "No se pudo iniciar sesión" };
     const profile = await loadProfile(data.user.id);
     if (!profile) return { ok: false, error: "Cuenta sin perfil. Contactá al admin." };
@@ -333,7 +339,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email,
       password: data.password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: {
           first_name: data.firstName,
           last_name: data.lastName,
@@ -357,6 +363,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const profile = await loadProfile(signUpData.user.id);
     if (profile) setCurrentUser(profile);
     return { ok: true, user: profile ?? undefined };
+  };
+
+  // Reenvía el correo de confirmación a una cuenta que se registró pero nunca
+  // confirmó. Evita tener que borrar el usuario a mano desde el dashboard.
+  const resendConfirmation: AuthContextValue["resendConfirmation"] = async (email) => {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim().toLowerCase(),
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) return { ok: false, error: translateAuthError(error.message) };
+    return { ok: true };
   };
 
   const logout = async () => {
@@ -586,6 +604,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading,
         login,
         register,
+        resendConfirmation,
         logout,
         deleteUser,
         promoteUser,

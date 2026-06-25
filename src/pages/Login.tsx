@@ -8,11 +8,13 @@ import { toast } from "sonner";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, resendConfirmation } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,11 +22,21 @@ const Login = () => {
     const result = await login(email, password);
     if (!result.ok) {
       toast.error(result.error ?? "No se pudo iniciar sesión");
+      setNeedsConfirm(!!result.needsEmailConfirmation);
       setSubmitting(false);
       return;
     }
     toast.success(`Hola ${result.user?.firstName}!`);
     navigate(result.user?.role === "admin" ? "/admin" : "/");
+  };
+
+  const handleResend = async () => {
+    if (!email || resending) return;
+    setResending(true);
+    const result = await resendConfirmation(email);
+    setResending(false);
+    if (result.ok) toast.success("Te reenviamos el correo de confirmación");
+    else toast.error(result.error ?? "No se pudo reenviar el correo");
   };
 
   return (
@@ -99,6 +111,20 @@ const Login = () => {
             >
               {submitting ? "Ingresando..." : "Ingresar"}
             </button>
+
+            {needsConfirm && (
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-center text-sm text-muted-foreground">
+                Tu email todavía no está confirmado.{" "}
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="text-foreground font-semibold hover:underline disabled:opacity-60"
+                >
+                  {resending ? "Reenviando..." : "Reenviar correo"}
+                </button>
+              </div>
+            )}
 
             <p className="text-center text-sm text-muted-foreground">
               ¿No tenés cuenta?{" "}

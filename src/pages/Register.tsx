@@ -19,9 +19,10 @@ import { toast } from "sonner";
 
 const Register = () => {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, resendConfirmation } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
@@ -42,6 +43,15 @@ const Register = () => {
     (field: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const handleResend = async () => {
+    if (!confirmationEmail || resending) return;
+    setResending(true);
+    const result = await resendConfirmation(confirmationEmail);
+    setResending(false);
+    if (result.ok) toast.success("Te reenviamos el correo de confirmación");
+    else toast.error(result.error ?? "No se pudo reenviar el correo");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,6 +169,17 @@ const Register = () => {
               <Link to="/login" className="btn-techno-outline inline-block">
                 Ir al login
               </Link>
+              <p className="text-sm text-muted-foreground">
+                ¿No te llegó?{" "}
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="text-foreground font-semibold hover:underline disabled:opacity-60"
+                >
+                  {resending ? "Reenviando..." : "Reenviar correo"}
+                </button>
+              </p>
             </div>
           ) : (
             <form
