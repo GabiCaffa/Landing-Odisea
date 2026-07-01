@@ -79,9 +79,10 @@ Estado actual (funcionando en producción):
 > - Email OTP Expiration = **300**.
 > - Template "Confirm signup" = contenido de `supabase/email-confirm-signup.html`.
 
-**Pendiente/opcional:** el envío de mails usa el SMTP de prueba de Supabase (límite
-bajo). Si crece el volumen, configurar **Resend** como SMTP propio
-(smtp.resend.com:465, user `resend`, pass = API key, sender del dominio verificado).
+**Envío de mails — Resend:** para no depender del SMTP de prueba de Supabase (límite
+bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, remitente
+`no-reply@odiseaoficial.com`, DNS en Vercel). Runbook paso a paso en
+**`supabase/RESEND_SMTP.md`**. Es trabajo de dashboards/DNS (sin cambios de código).
 
 ---
 
