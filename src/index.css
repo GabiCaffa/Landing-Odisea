@@ -264,3 +264,62 @@
 .animate-spin-slow {
   animation: spinSlow 60s linear infinite;
 }
+
+/* ─── Toasts (sonner) · estética ODÍSEA ─────────────────────────────────── */
+/* Fondo tinta + texto papel + barra de acento a la izquierda según el tipo.
+   Se apunta a los data-attrs de sonner con !important para ganarle al estilo
+   por defecto de la librería. */
+[data-sonner-toaster] {
+  font-family: var(--font-body);
+}
+
+[data-sonner-toast] {
+  background: hsl(var(--tinta)) !important;
+  color: hsl(var(--papel)) !important;
+  border: 1px solid hsl(0 0% 100% / 0.08) !important;
+  border-left: 4px solid hsl(var(--celeste)) !important; /* default: naranja */
+  border-radius: 14px !important;
+  box-shadow: var(--shadow-lg) !important;
+  padding: 15px 16px !important;
+}
+
+[data-sonner-toast] [data-title] {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+[data-sonner-toast] [data-description] {
+  color: hsl(var(--papel) / 0.72) !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  margin-right: 6px;
+}
+
+/* Éxito → verde */
+[data-sonner-toast][data-type="success"] {
+  border-left-color: hsl(150 65% 45%) !important;
+}
+[data-sonner-toast][data-type="success"] [data-icon] {
+  color: hsl(150 65% 45%) !important;
+}
+
+/* Error → rojo charrúa */
+[data-sonner-toast][data-type="error"] {
+  border-left-color: hsl(var(--charrua)) !important;
+}
+[data-sonner-toast][data-type="error"] [data-icon] {
+  color: hsl(var(--charrua)) !important;
+}
+
+/* Botones dentro del toast (acción / cerrar) */
+[data-sonner-toast] [data-button] {
+  background: hsl(var(--celeste)) !important;
+  color: #fff !important;
+  border-radius: 9999px !important;
+}
+[data-sonner-toast] [data-close-button] {
+  background: hsl(var(--tinta)) !important;
+  border: 1px solid hsl(0 0% 100% / 0.22) !important;
+  color: hsl(var(--papel)) !important;
+}
