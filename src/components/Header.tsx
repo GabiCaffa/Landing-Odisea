@@ -37,6 +37,11 @@ const Header = () => {
 
   const handleLogout = async () => {
     setMenuOpen(false);
+    // En desktop el botón vive dentro del dropdown, que se desmonta con este
+    // mismo click. Esperamos un tick a que eso ocurra antes de abrir el diálogo;
+    // si no, Radix interpreta el click como "click afuera" y lo cierra al toque
+    // (se nota con mouse, no con touch). Así funciona en PC y en mobile.
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
     const ok = await confirm({
       title: "Cerrar sesión",
       description: "¿Querés cerrar tu sesión?",
