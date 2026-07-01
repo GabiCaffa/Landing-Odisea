@@ -15,29 +15,33 @@ import { toast } from "sonner";
 const AuthCallback = () => {
   const navigate = useNavigate();
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+  const [firstName, setFirstName] = useState<string>("");
   const settled = useRef(false);
 
   useEffect(() => {
     let active = true;
 
-    const finish = (ok: boolean) => {
+    const finish = (ok: boolean, session?: { user?: { user_metadata?: Record<string, unknown> } } | null) => {
       if (!active || settled.current) return;
       settled.current = true;
       setStatus(ok ? "ok" : "error");
       if (ok) {
-        toast.success("¡Cuenta confirmada!");
-        setTimeout(() => active && navigate("/", { replace: true }), 1600);
+        // El nombre viaja en la metadata del signUp; está disponible al instante.
+        const name = (session?.user?.user_metadata?.first_name as string) ?? "";
+        setFirstName(name);
+        toast.success(name ? `¡Bienvenido, ${name}!` : "¡Iniciaste sesión!");
+        setTimeout(() => active && navigate("/", { replace: true }), 2200);
       }
     };
 
     // Caso 1: la sesión ya está cuando llegamos
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) finish(true);
+      if (data.session) finish(true, data.session);
     });
 
     // Caso 2: la sesión llega un instante después (al procesarse el hash)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) finish(true);
+      if (session) finish(true, session);
     });
 
     // Fallback: si pasados unos segundos no hay sesión, el link no sirve
@@ -72,8 +76,12 @@ const AuthCallback = () => {
                 <div className="w-14 h-14 rounded-full bg-foreground text-background flex items-center justify-center mx-auto">
                   <Check className="w-6 h-6" />
                 </div>
-                <h1 className="font-display text-2xl tracking-wide">¡CUENTA CONFIRMADA!</h1>
-                <p className="text-sm text-muted-foreground">Te llevamos al inicio...</p>
+                <h1 className="font-display text-2xl tracking-wide">
+                  {firstName ? `¡BIENVENIDO, ${firstName.toUpperCase()}!` : "¡BIENVENIDO!"}
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Iniciaste sesión. Te llevamos al inicio...
+                </p>
               </>
             )}
 

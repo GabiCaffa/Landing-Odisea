@@ -35,6 +35,7 @@ const Register = () => {
     state: "",
     phone: "",
     email: "",
+    confirmEmail: "",
     password: "",
     confirmPassword: "",
   });
@@ -95,6 +96,11 @@ const Register = () => {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       toast.error("Email inválido");
+      setSubmitting(false);
+      return;
+    }
+    if (form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase()) {
+      toast.error("Los emails no coinciden. Revisá que estén bien escritos.");
       setSubmitting(false);
       return;
     }
@@ -277,6 +283,23 @@ const Register = () => {
                     placeholder="tu@email.com"
                     autoComplete="email"
                   />
+                </Field>
+
+                <Field label="Confirmar email">
+                  <input
+                    type="email"
+                    required
+                    value={form.confirmEmail}
+                    onChange={update("confirmEmail")}
+                    onPaste={(e) => e.preventDefault()}
+                    className="input-techno"
+                    placeholder="Repetí tu email"
+                    autoComplete="off"
+                  />
+                  {form.confirmEmail &&
+                    form.email.trim().toLowerCase() !== form.confirmEmail.trim().toLowerCase() && (
+                      <span className="mt-1 block text-xs text-charrua">Los emails no coinciden</span>
+                    )}
                 </Field>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
