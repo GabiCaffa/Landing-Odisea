@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
+import { useConfirm } from "@/components/ConfirmDialog";
 import {
   useAuth,
   AdminEvent,
@@ -361,6 +362,7 @@ const StatusBadge = ({ status }: { status: AdminEvent["status"] }) => {
 // ────────────────────────────────────────────────────────────────────────────
 const EventsAdmin = () => {
   const { events, createEvent, updateEvent, deleteEvent } = useAuth();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<AdminEvent | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
@@ -389,7 +391,13 @@ const EventsAdmin = () => {
   };
 
   const handleDelete = async (e: AdminEvent) => {
-    if (!confirm(`¿Eliminar el evento "${e.name}"?`)) return;
+    const ok = await confirm({
+      title: "Eliminar evento",
+      description: `¿Seguro que querés eliminar el evento "${e.name}"? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     const result = await deleteEvent(e.id);
     if (!result.ok) {
       toast.error(result.error ?? "No se pudo eliminar");
@@ -1119,6 +1127,7 @@ const FormField = ({ label, children }: { label: string; children: React.ReactNo
 // ────────────────────────────────────────────────────────────────────────────
 const UsersAdmin = () => {
   const { users, deleteUser, promoteUser, currentUser } = useAuth();
+  const confirm = useConfirm();
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(
@@ -1135,7 +1144,13 @@ const UsersAdmin = () => {
       toast.error("No podés eliminar tu propia cuenta");
       return;
     }
-    if (!confirm(`¿Eliminar a ${u.firstName} ${u.lastName}?`)) return;
+    const ok = await confirm({
+      title: "Eliminar usuario",
+      description: `¿Seguro que querés eliminar a ${u.firstName} ${u.lastName}? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
     const result = await deleteUser(u.id);
     if (!result.ok) {
       toast.error(result.error ?? "No se pudo eliminar");

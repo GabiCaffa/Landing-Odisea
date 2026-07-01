@@ -20,6 +20,7 @@ import Footer from "@/components/Footer";
 import PhoneInput from "@/components/PhoneInput";
 import LocationSelect from "@/components/LocationSelect";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE, getCountry } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
@@ -312,6 +313,7 @@ function phoneMatchesCurrent(typed: string, country: string, currentE164?: strin
 // ─── AVATAR ───────────────────────────────────────────────────────────────
 const AvatarSection = () => {
   const { currentUser, uploadAvatar, removeAvatar } = useAuth();
+  const confirm = useConfirm();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -336,7 +338,13 @@ const AvatarSection = () => {
   };
 
   const handleRemove = async () => {
-    if (!confirm("¿Quitar tu foto de perfil?")) return;
+    const ok = await confirm({
+      title: "Quitar foto",
+      description: "¿Querés quitar tu foto de perfil?",
+      confirmText: "Quitar",
+      destructive: true,
+    });
+    if (!ok) return;
     const result = await removeAvatar();
     if (!result.ok) {
       toast.error(result.error ?? "No se pudo quitar la foto");
