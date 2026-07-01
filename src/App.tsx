@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
+import ScrollToTop from "@/components/ScrollToTop";
+import LoadingScreen from "@/components/LoadingScreen";
 import Index from "./pages/Index";
 
 // Páginas secundarias: code-splitting para que NO entren en el bundle inicial
@@ -29,9 +31,10 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <ScrollToTop />
         <AuthProvider>
           <ConfirmProvider>
-          <Suspense fallback={null}>
+          <Suspense fallback={<LoadingScreen />}>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/registro" element={<Register />} />

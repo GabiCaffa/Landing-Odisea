@@ -4,6 +4,7 @@ import { LogOut, ShieldCheck, User as UserIcon, UserCircle } from "lucide-react"
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo2 from "@/assets/whatsapp-logo2.png";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { ProfileAvatar } from "@/pages/Profile";
 
 
@@ -12,6 +13,7 @@ const Header = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { currentUser, logout } = useAuth();
+  const confirm = useConfirm();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,8 +36,14 @@ const Header = () => {
   }, []);
 
   const handleLogout = async () => {
-    await logout();
     setMenuOpen(false);
+    const ok = await confirm({
+      title: "Cerrar sesión",
+      description: "¿Querés cerrar tu sesión?",
+      confirmText: "Cerrar sesión",
+    });
+    if (!ok) return;
+    await logout();
     navigate("/");
   };
 

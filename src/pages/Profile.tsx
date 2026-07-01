@@ -21,6 +21,7 @@ import PhoneInput from "@/components/PhoneInput";
 import LocationSelect from "@/components/LocationSelect";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import { useConfirm } from "@/components/ConfirmDialog";
+import LoadingScreen from "@/components/LoadingScreen";
 import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE, getCountry } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
@@ -33,13 +34,7 @@ const Profile = () => {
   const navigate = useNavigate();
   const [section, setSection] = useState<Section>("info");
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground">Cargando...</p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
   if (!currentUser) return <Navigate to="/login" replace />;
 
   return (
@@ -414,6 +409,7 @@ const AvatarSection = () => {
 // ─── SEGURIDAD ────────────────────────────────────────────────────────────
 const SecuritySection = () => {
   const { currentUser, changePassword, changeEmail } = useAuth();
+  const confirm = useConfirm();
   const [pwOpen, setPwOpen] = useState(true);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -435,6 +431,12 @@ const SecuritySection = () => {
       toast.error("Las contraseñas no coinciden");
       return;
     }
+    const ok = await confirm({
+      title: "Cambiar contraseña",
+      description: "¿Confirmás el cambio de tu contraseña?",
+      confirmText: "Cambiar",
+    });
+    if (!ok) return;
     setPwSaving(true);
     const result = await changePassword(currentPassword, newPassword);
     setPwSaving(false);
@@ -458,6 +460,12 @@ const SecuritySection = () => {
       toast.error("Es tu email actual");
       return;
     }
+    const ok = await confirm({
+      title: "Cambiar email",
+      description: `Te enviaremos un link de confirmación a ${newEmail}. ¿Continuar?`,
+      confirmText: "Cambiar email",
+    });
+    if (!ok) return;
     setEmailSaving(true);
     const result = await changeEmail(newEmail);
     setEmailSaving(false);

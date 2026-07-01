@@ -28,6 +28,7 @@ import {
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
 import { useConfirm } from "@/components/ConfirmDialog";
+import LoadingScreen from "@/components/LoadingScreen";
 import {
   useAuth,
   AdminEvent,
@@ -45,20 +46,21 @@ type Tab = "dashboard" | "events" | "users";
 
 const Admin = () => {
   const { currentUser, logout, users, events, loading } = useAuth();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("dashboard");
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-secondary/20">
-        <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground">Cargando...</p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
   if (!currentUser) return <Navigate to="/login" replace />;
   if (currentUser.role !== "admin") return <Navigate to="/" replace />;
 
   const handleLogout = async () => {
+    const ok = await confirm({
+      title: "Cerrar sesión",
+      description: "¿Querés cerrar tu sesión de administrador?",
+      confirmText: "Cerrar sesión",
+    });
+    if (!ok) return;
     await logout();
     toast.success("Sesión cerrada");
     navigate("/");
@@ -1224,7 +1226,15 @@ const UsersAdmin = () => {
                     <select
                       value={u.role}
                       onChange={async (e) => {
-                        const result = await promoteUser(u.id, e.target.value as User["role"]);
+                        const newRole = e.target.value as User["role"];
+                        if (newRole === u.role) return;
+                        const ok = await confirm({
+                          title: "Cambiar rol",
+                          description: `¿Cambiar el rol de ${u.firstName} ${u.lastName} a "${newRole}"?`,
+                          confirmText: "Cambiar rol",
+                        });
+                        if (!ok) return; // el select vuelve solo a su valor al re-render
+                        const result = await promoteUser(u.id, newRole);
                         if (!result.ok) {
                           toast.error(result.error ?? "No se pudo actualizar");
                           return;
