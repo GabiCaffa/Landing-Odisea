@@ -135,10 +135,10 @@ const TicketPurchaseModal = ({
       msg += `\n🎂 Aplico promo CUMPLEAÑOS\n`;
     }
     msg += `\nVoy a realizar la transferencia a:\n`;
-    msg += `JOSE IGNACIO FANETTI PEDULLA\n`;
-    msg += `Banco: SCOTIABANK\n`;
-    msg += `Tipo de cuenta: CAJA DE AHORRO PESOS\n`;
-    msg += `Nro de cuenta: 3895198000\n`;
+    msg += `GABRIEL CAFFAREL DALMAU\n`;
+    msg += `Banco: ITAÚ\n`;
+    msg += `Tipo de cuenta: CAJA DE AHORRO PESOS (UYU)\n`;
+    msg += `Nro de cuenta: 3483509\n`;
     msg += `Comprobante: `;
     return msg;
   };
@@ -329,10 +329,10 @@ const TicketPurchaseModal = ({
               <div className="p-4 bg-secondary/30 border border-border space-y-3">
                 <h4 className="font-medium text-base">Datos para transferencia</h4>
                 <div className="text-sm space-y-1">
-                  <p className="font-medium">JOSE IGNACIO FANETTI PEDULLA</p>
-                  <p className="text-muted-foreground">Nro de cuenta 3895198000</p>
-                  <p className="text-muted-foreground">SCOTIABANK</p>
-                  <p className="text-muted-foreground">CAJA AHORRO PESOS</p>
+                  <p className="font-medium">GABRIEL CAFFAREL DALMAU</p>
+                  <p className="text-muted-foreground">Nro de cuenta 3483509</p>
+                  <p className="text-muted-foreground">BANCO ITAÚ</p>
+                  <p className="text-muted-foreground">CAJA AHORRO PESOS (UYU)</p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-border/50">
                   <p className="text-xs text-muted-foreground leading-relaxed">
