@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { LogOut, ShieldCheck, User as UserIcon, UserCircle } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo2 from "@/assets/whatsapp-logo2.png";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, isStaffRole } from "@/contexts/AuthContext";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 
@@ -119,14 +119,14 @@ const Header = () => {
                       <UserCircle className="w-4 h-4" />
                       Mi perfil
                     </Link>
-                    {currentUser.role === "admin" && (
+                    {isStaffRole(currentUser.role) && (
                       <Link
                         to="/admin"
                         onClick={() => setMenuOpen(false)}
                         className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary"
                       >
                         <ShieldCheck className="w-4 h-4" />
-                        Panel admin
+                        {currentUser.role === "admin" ? "Panel admin" : "Entregas"}
                       </Link>
                     )}
                     <button
@@ -164,11 +164,11 @@ const Header = () => {
                 <Link to="/perfil" className="rounded-full border border-border overflow-hidden" aria-label="Mi perfil">
                   <ProfileAvatar size={36} />
                 </Link>
-                {currentUser.role === "admin" && (
+                {isStaffRole(currentUser.role) && (
                   <Link
                     to="/admin"
                     className="p-2 rounded-full border border-border"
-                    aria-label="Panel admin"
+                    aria-label={currentUser.role === "admin" ? "Panel admin" : "Entregas"}
                   >
                     <ShieldCheck className="w-4 h-4" />
                   </Link>

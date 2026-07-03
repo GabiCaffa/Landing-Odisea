@@ -45,6 +45,7 @@ import {
   DEFAULT_IMAGE_TRANSFORM,
   formatEventDate,
   isOfficialAdmin,
+  isStaffRole,
 } from "@/contexts/AuthContext";
 import PhoneInput from "@/components/PhoneInput";
 import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
@@ -74,7 +75,11 @@ const Admin = () => {
 
   if (loading) return <LoadingScreen />;
   if (!currentUser) return <Navigate to="/login" replace />;
-  if (currentUser.role !== "admin") return <Navigate to="/" replace />;
+  if (!isStaffRole(currentUser.role)) return <Navigate to="/" replace />;
+
+  // El operador sólo ve Entregas: forzamos esa pestaña sin importar el estado.
+  const isOperator = currentUser.role === "operador";
+  const activeTab: Tab = isOperator ? "deliveries" : tab;
 
   const handleLogout = async () => {
     const ok = await confirm({
@@ -104,28 +109,32 @@ const Admin = () => {
         </div>
 
         <nav className="flex md:flex-col md:flex-1 p-3 md:p-4 gap-1 overflow-x-auto md:overflow-visible">
-          <SidebarLink
-            icon={<LayoutDashboard className="w-4 h-4" />}
-            label="Dashboard"
-            active={tab === "dashboard"}
-            onClick={() => setTab("dashboard")}
-          />
-          <SidebarLink
-            icon={<CalendarDays className="w-4 h-4" />}
-            label="Eventos"
-            active={tab === "events"}
-            onClick={() => setTab("events")}
-          />
-          <SidebarLink
-            icon={<Users className="w-4 h-4" />}
-            label="Usuarios"
-            active={tab === "users"}
-            onClick={() => setTab("users")}
-          />
+          {!isOperator && (
+            <>
+              <SidebarLink
+                icon={<LayoutDashboard className="w-4 h-4" />}
+                label="Dashboard"
+                active={activeTab === "dashboard"}
+                onClick={() => setTab("dashboard")}
+              />
+              <SidebarLink
+                icon={<CalendarDays className="w-4 h-4" />}
+                label="Eventos"
+                active={activeTab === "events"}
+                onClick={() => setTab("events")}
+              />
+              <SidebarLink
+                icon={<Users className="w-4 h-4" />}
+                label="Usuarios"
+                active={activeTab === "users"}
+                onClick={() => setTab("users")}
+              />
+            </>
+          )}
           <SidebarLink
             icon={<Send className="w-4 h-4" />}
             label="Entregas"
-            active={tab === "deliveries"}
+            active={activeTab === "deliveries"}
             onClick={() => setTab("deliveries")}
           />
 
@@ -156,16 +165,16 @@ const Admin = () => {
         <div className="flex items-center justify-between mb-6 md:mb-8">
           <div>
             <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground">
-              {tab === "dashboard" && "Resumen general"}
-              {tab === "events" && "Gestión"}
-              {tab === "users" && "Comunidad"}
-              {tab === "deliveries" && "Envío de entradas"}
+              {activeTab === "dashboard" && "Resumen general"}
+              {activeTab === "events" && "Gestión"}
+              {activeTab === "users" && "Comunidad"}
+              {activeTab === "deliveries" && "Envío de entradas"}
             </p>
             <h1 className="title-sport text-3xl md:text-4xl tracking-wide font-black text-tinta">
-              {tab === "dashboard" && "DASHBOARD"}
-              {tab === "events" && "EVENTOS"}
-              {tab === "users" && "USUARIOS"}
-              {tab === "deliveries" && "ENTREGAS"}
+              {activeTab === "dashboard" && "DASHBOARD"}
+              {activeTab === "events" && "EVENTOS"}
+              {activeTab === "users" && "USUARIOS"}
+              {activeTab === "deliveries" && "ENTREGAS"}
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -185,10 +194,10 @@ const Admin = () => {
           </div>
         </div>
 
-        {tab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
-        {tab === "events" && <EventsAdmin />}
-        {tab === "users" && <UsersAdmin />}
-        {tab === "deliveries" && <DeliveriesAdmin />}
+        {activeTab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
+        {activeTab === "events" && <EventsAdmin />}
+        {activeTab === "users" && <UsersAdmin />}
+        {activeTab === "deliveries" && <DeliveriesAdmin />}
       </main>
     </div>
   );
@@ -1275,7 +1284,7 @@ const UsersAdmin = () => {
                       className="border border-border px-2 py-1 text-xs bg-background disabled:opacity-50"
                     >
                       <option value="user">user</option>
-                      <option value="admin">admin</option>
+                      <option value="operador">operador</option>
                     </select>
                   )}
                 </Td>

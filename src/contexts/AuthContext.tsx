@@ -1,7 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { supabase, EVENT_IMAGES_BUCKET } from "@/lib/supabase";
 
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "operador" | "user";
+
+/** Staff = puede entrar al panel (admin ve todo; operador sólo Entregas). */
+export const isStaffRole = (role?: UserRole | null) =>
+  role === "admin" || role === "operador";
 
 /** Única cuenta autorizada como admin. Inmutable: enforzado también en la DB. */
 export const OFFICIAL_ADMIN_EMAIL = "lisoftuy@gmail.com";
@@ -275,9 +279,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [loadProfile, loadEvents]);
 
-  // Cuando el currentUser es admin, traer todos los usuarios + suscribirse
+  // Si el currentUser es staff (admin u operador), traer todos los usuarios +
+  // suscribirse. El operador los necesita para el selector "cliente registrado".
   useEffect(() => {
-    if (currentUser?.role !== "admin") return;
+    if (!isStaffRole(currentUser?.role)) return;
     loadUsers();
     const channel = supabase
       .channel("profiles-changes")

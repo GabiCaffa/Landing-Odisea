@@ -91,7 +91,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `schema.sql` (base) → `profile_features.sql` → `v3_profile_and_promos.sql` →
 `v4_sale_ends_at.sql` → `v5_fix_registration.sql` → `v6_lock_admin.sql` →
 `v7_profile_on_confirm.sql` → `v8_cleanup_unconfirmed.sql` →
-`v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql`.
+`v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -111,6 +111,14 @@ usuario registrado, el form permite elegirlo y copia sus datos del perfil (badge
 visible, aviso de duplicados (mismo email+evento) y resumen de recaudación. El envío
 de las entradas al cliente es **manual** (botón ✉️ que abre el correo; se marca como
 enviada a mano).
+
+**v11 — Rol `operador`:** rol intermedio entre `user` y `admin`. El operador entra al
+panel pero **sólo ve/gestiona Entregas** (no eventos ni usuarios). DB: helper
+`is_staff()` (admin u operador); las políticas de `ticket_deliveries` y la lectura de
+`profiles` pasan a `is_staff()`. Front: `isStaffRole()` en `AuthContext`; el guard de
+`Admin.tsx` deja pasar a staff y fuerza la pestaña Entregas para el operador; el rol se
+asigna desde la pestaña Usuarios (selector user/operador). El admin sigue siendo único
+(`lisoftuy@gmail.com`).
 
 ---
 
