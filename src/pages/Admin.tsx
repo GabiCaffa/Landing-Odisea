@@ -31,6 +31,7 @@ import {
   Calendar,
   Download,
   DollarSign,
+  MapPin,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
@@ -46,14 +47,7 @@ import {
   isOfficialAdmin,
 } from "@/contexts/AuthContext";
 import PhoneInput from "@/components/PhoneInput";
-import LocationSelect from "@/components/LocationSelect";
-import {
-  validateDocumentByCountry,
-  documentLabelByCountry,
-  documentPlaceholderByCountry,
-  normalizePhone,
-  formatPhoneDisplay,
-} from "@/lib/validators";
+import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import {
@@ -1478,6 +1472,7 @@ const DeliveriesAdmin = () => {
           eventId,
           eventName: event?.name ?? "Evento eliminado",
           eventDate: event?.date ?? "",
+          eventLocation: event?.location ?? "",
           rows: list,
           totalTickets: list.reduce((a, d) => a + d.quantity, 0),
           totalValue: list.reduce((a, d) => a + d.value, 0),
@@ -1499,25 +1494,25 @@ const DeliveriesAdmin = () => {
 
   // Exporta a CSV la lista visible (pestaña actual + búsqueda), lista para Excel.
   const exportCsv = () => {
-    const rows = groups.flatMap((g) => g.rows.map((d) => ({ d, eventName: g.eventName })));
+    const rows = groups.flatMap((g) =>
+      g.rows.map((d) => ({ d, eventName: g.eventName, eventLocation: g.eventLocation }))
+    );
     if (rows.length === 0) {
       toast.error("No hay nada para exportar en esta lista");
       return;
     }
     const headers = [
-      "Evento", "Nombre", "Apellido", "Email", "Teléfono", "Documento",
-      "Departamento", "País", "Nacimiento", "Entradas", "Valor total",
-      "Estado", "Enviada", "Registrado", "Notas",
+      "Evento", "Ubicación evento", "Nombre completo", "Email", "Teléfono",
+      "Entradas", "Total", "Estado", "Enviada", "Registrado", "Notas",
     ];
     const esc = (v: unknown) => {
       const s = String(v ?? "");
       return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const lines = rows.map(({ d, eventName }) =>
+    const lines = rows.map(({ d, eventName, eventLocation }) =>
       [
-        eventName, d.firstName, d.lastName, d.email,
+        eventName, eventLocation, `${d.firstName} ${d.lastName}`.trim(), d.email,
         d.phone ? formatPhoneDisplay(d.phone) : "",
-        d.documentId ?? "", d.state ?? "", d.country ?? "", d.birthDate ?? "",
         d.quantity, d.value,
         d.status === "sent" ? "Enviada" : "Pendiente",
         d.sentAt ? d.sentAt.slice(0, 10) : "",
@@ -1651,6 +1646,12 @@ const DeliveriesAdmin = () => {
                   </span>
                 )}
               </div>
+              {g.eventLocation && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{g.eventLocation}</span>
+                </div>
+              )}
               <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                 <span><b className="text-foreground">{g.rows.length}</b> clientes</span>
                 <span><b className="text-foreground">{g.totalTickets}</b> entradas</span>
@@ -1680,10 +1681,6 @@ const DeliveriesAdmin = () => {
                   </div>
                   <div className="text-xs text-muted-foreground space-y-0.5">
                     {d.phone && <p className="font-mono">{formatPhoneDisplay(d.phone)}</p>}
-                    <p>
-                      {[d.state, d.country].filter(Boolean).join(", ") || "—"}
-                      {d.documentId ? ` · ${d.documentId}` : ""}
-                    </p>
                     {statusFilter === "sent" && d.sentAt && (
                       <p>Enviada el {formatEventDate(d.sentAt.slice(0, 10))}</p>
                     )}
@@ -1709,7 +1706,6 @@ const DeliveriesAdmin = () => {
                   <tr className="border-b border-border text-left">
                     <Th>Cliente</Th>
                     <Th>Contacto</Th>
-                    <Th>Ubicación</Th>
                     <Th>Entradas</Th>
                     <Th>Total</Th>
                     {statusFilter === "sent" && <Th>Enviada</Th>}
@@ -1724,9 +1720,6 @@ const DeliveriesAdmin = () => {
                           {d.firstName} {d.lastName}
                           {d.userId && <RegBadge />}
                         </p>
-                        {d.documentId && (
-                          <p className="text-xs text-muted-foreground font-mono">{d.documentId}</p>
-                        )}
                       </Td>
                       <Td>
                         <p className="text-xs font-mono">{d.email}</p>
@@ -1735,9 +1728,6 @@ const DeliveriesAdmin = () => {
                             {formatPhoneDisplay(d.phone)}
                           </p>
                         )}
-                      </Td>
-                      <Td className="text-xs text-muted-foreground">
-                        {[d.state, d.country].filter(Boolean).join(", ") || "—"}
                       </Td>
                       <Td className="font-semibold">{d.quantity}</Td>
                       <Td className="font-semibold">{fmtMoney(d.value)}</Td>
@@ -1801,19 +1791,16 @@ const DeliveryFormModal = ({
 }) => {
   const confirm = useConfirm();
   // "registered": elegís un usuario ya registrado y sólo cargás las entradas.
-  // "manual": tipeás todos los datos a mano. Al editar siempre usamos manual.
+  // "manual": tipeás nombre/mail/teléfono. Al editar siempre usamos manual.
   const [mode, setMode] = useState<"registered" | "manual">(
     !editing && users.length > 0 ? "registered" : "manual"
   );
   const [form, setForm] = useState({
     eventId: editing?.eventId ?? (events[0]?.id ?? ""),
     userId: editing?.userId ?? "",
-    firstName: editing?.firstName ?? "",
-    lastName: editing?.lastName ?? "",
-    birthDate: editing?.birthDate ?? "",
-    country: editing?.country ?? DEFAULT_COUNTRY_CODE,
-    state: editing?.state ?? "",
-    documentId: editing?.documentId ?? "",
+    fullName: editing ? `${editing.firstName} ${editing.lastName ?? ""}`.trim() : "",
+    // País sólo para el widget de teléfono (formato/bandera), no es ubicación del cliente.
+    phoneCountry: editing?.country || DEFAULT_COUNTRY_CODE,
     phone: editing?.phone ? formatPhoneDisplay(editing.phone).replace(/^\+\d+\s*/, "") : "",
     email: editing?.email ?? "",
     quantity: String(editing?.quantity ?? 1),
@@ -1833,12 +1820,11 @@ const DeliveryFormModal = ({
     [users]
   );
   const selectedUser = users.find((u) => u.id === form.userId) ?? null;
+  const selectedEvent = events.find((ev) => ev.id === form.eventId) ?? null;
 
   const switchMode = (m: "registered" | "manual") => {
     setMode(m);
-    // Al pasar a "registrado" limpiamos el vínculo para forzar elegir de la lista.
-    if (m === "registered") setForm((p) => ({ ...p, userId: "" }));
-    else setForm((p) => ({ ...p, userId: "" })); // manual = sin vínculo a perfil
+    setForm((p) => ({ ...p, userId: "" })); // limpiar vínculo al cambiar de modo
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1847,14 +1833,14 @@ const DeliveryFormModal = ({
 
     const quantity = parseInt(form.quantity, 10);
     if (!Number.isFinite(quantity) || quantity < 1) return toast.error("La cantidad debe ser 1 o más");
-    if (!form.value.trim()) return toast.error("Indicá el valor total pagado");
+    if (!form.value.trim()) return toast.error("Indicá el total de la compra");
     const value = parseFloat(form.value);
-    if (!Number.isFinite(value) || value < 0) return toast.error("El valor total no es válido");
+    if (!Number.isFinite(value) || value < 0) return toast.error("El total no es válido");
 
     let input: DeliveryInput;
 
     if (mode === "registered" && !editing) {
-      // Cliente registrado: tomamos sus datos del perfil (ya validados al registrarse).
+      // Cliente registrado: tomamos nombre/mail/teléfono del perfil.
       const u = users.find((x) => x.id === form.userId);
       if (!u) return toast.error("Elegí el cliente registrado");
       input = {
@@ -1862,10 +1848,6 @@ const DeliveryFormModal = ({
         userId: u.id,
         firstName: u.firstName,
         lastName: u.lastName,
-        birthDate: u.birthDate ?? null,
-        country: u.country ?? null,
-        state: u.state ?? null,
-        documentId: u.documentId ?? null,
         phone: u.phone ?? null,
         email: u.email,
         quantity,
@@ -1873,33 +1855,27 @@ const DeliveryFormModal = ({
         notes: form.notes.trim() || null,
       };
     } else {
-      // Manual (o edición): validamos todos los datos.
-      if (!form.firstName.trim() || !form.lastName.trim()) return toast.error("Completá nombre y apellido");
-      if (!form.birthDate) return toast.error("Indicá la fecha de nacimiento");
-      if (!form.state.trim()) return toast.error("Indicá la provincia o departamento");
+      // Manual (o edición): nombre completo, email y teléfono.
+      const fullName = form.fullName.trim();
+      if (!fullName) return toast.error("Indicá el nombre completo");
 
       const email = form.email.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast.error("Email inválido");
 
-      const doc = form.documentId.trim();
-      if (!doc) return toast.error(`Indicá ${documentLabelByCountry(form.country)}`);
-      if (!validateDocumentByCountry(doc, form.country)) {
-        return toast.error(`${documentLabelByCountry(form.country)} inválido`);
-      }
-
       if (!form.phone.trim()) return toast.error("Indicá el teléfono");
-      const phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
+      const phoneE164 = normalizePhone(form.phone, form.phoneCountry as CountryCode);
       if (!phoneE164) return toast.error("Teléfono inválido");
+
+      // Guardamos el nombre partido en nombre / resto para mantener el formato.
+      const parts = fullName.split(/\s+/);
+      const firstName = parts[0];
+      const lastName = parts.slice(1).join(" ");
 
       input = {
         eventId: form.eventId,
         userId: form.userId || null, // preserva el vínculo si se editaba una registrada
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        birthDate: form.birthDate,
-        country: form.country,
-        state: form.state.trim(),
-        documentId: doc,
+        firstName,
+        lastName,
         phone: phoneE164,
         email,
         quantity,
@@ -1983,23 +1959,31 @@ const DeliveryFormModal = ({
             </div>
           )}
 
-          <FormField label="Evento">
-            <select
-              value={form.eventId}
-              onChange={(e) => set("eventId", e.target.value)}
-              required
-              className="input-techno"
-            >
-              {events.length === 0 && <option value="">No hay eventos creados</option>}
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.name} · {formatEventDate(ev.date)}
-                </option>
-              ))}
-            </select>
-          </FormField>
+          <div>
+            <FormField label="Evento">
+              <select
+                value={form.eventId}
+                onChange={(e) => set("eventId", e.target.value)}
+                required
+                className="input-techno"
+              >
+                {events.length === 0 && <option value="">No hay eventos creados</option>}
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.name} · {formatEventDate(ev.date)}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            {selectedEvent?.location && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="w-3.5 h-3.5 shrink-0" />
+                {selectedEvent.location}
+              </p>
+            )}
+          </div>
 
-          {/* Modo REGISTRADO: elegir usuario + resumen de sus datos (solo lectura) */}
+          {/* Modo REGISTRADO: elegir usuario + resumen (solo lectura) */}
           {!showManualFields && (
             <>
               <FormField label="Cliente registrado">
@@ -2035,59 +2019,36 @@ const DeliveryFormModal = ({
                       {formatPhoneDisplay(selectedUser.phone)}
                     </p>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    {[selectedUser.state, selectedUser.country].filter(Boolean).join(", ") || "—"}
-                    {selectedUser.documentId ? ` · ${selectedUser.documentId}` : ""}
-                  </p>
                   <p className="text-[11px] text-muted-foreground pt-1">
-                    Sus datos personales se toman del perfil.
+                    Nombre, email y teléfono se toman de su perfil.
                   </p>
                 </div>
               )}
             </>
           )}
 
-          {/* Modo MANUAL (o edición): todos los datos a mano */}
+          {/* Modo MANUAL (o edición): nombre completo, email y teléfono */}
           {showManualFields && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Nombre">
-                  <input value={form.firstName} onChange={(e) => set("firstName", e.target.value)} required className="input-techno" placeholder="Juan" />
-                </FormField>
-                <FormField label="Apellido">
-                  <input value={form.lastName} onChange={(e) => set("lastName", e.target.value)} required className="input-techno" placeholder="Pérez" />
-                </FormField>
-              </div>
-
-              <FormField label="Fecha de nacimiento">
+              <FormField label="Nombre completo">
                 <input
-                  type="date"
-                  value={form.birthDate}
-                  onChange={(e) => set("birthDate", e.target.value)}
-                  max={new Date().toISOString().split("T")[0]}
+                  value={form.fullName}
+                  onChange={(e) => set("fullName", e.target.value)}
                   required
                   className="input-techno"
+                  placeholder="Juan Pérez"
                 />
               </FormField>
 
-              <LocationSelect
-                country={form.country}
-                state={form.state}
-                onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
-                onStateChange={(s) => set("state", s)}
-                required
-              />
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label={documentLabelByCountry(form.country)}>
+                <FormField label="Email">
                   <input
-                    value={form.documentId}
-                    onChange={(e) => set("documentId", e.target.value)}
-                    inputMode="numeric"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => set("email", e.target.value)}
                     required
                     className="input-techno"
-                    placeholder={documentPlaceholderByCountry(form.country)}
-                    maxLength={20}
+                    placeholder="cliente@email.com"
                   />
                 </FormField>
                 <div>
@@ -2095,18 +2056,14 @@ const DeliveryFormModal = ({
                     Teléfono
                   </span>
                   <PhoneInput
-                    country={form.country}
+                    country={form.phoneCountry}
                     value={form.phone}
-                    onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
+                    onCountryChange={(c) => set("phoneCountry", c)}
                     onChange={(v) => set("phone", v)}
                     required
                   />
                 </div>
               </div>
-
-              <FormField label="Email (destino de las entradas)">
-                <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} required className="input-techno" placeholder="cliente@email.com" />
-              </FormField>
             </>
           )}
 
@@ -2122,7 +2079,7 @@ const DeliveryFormModal = ({
                 className="input-techno"
               />
             </FormField>
-            <FormField label="Valor total pagado ($)">
+            <FormField label="Total de la compra ($)">
               <input
                 type="number"
                 min={0}
@@ -2137,7 +2094,7 @@ const DeliveryFormModal = ({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Total a cobrar registrado: <b className="text-foreground">{fmtMoney(total)}</b>
+            Total registrado: <b className="text-foreground">{fmtMoney(total)}</b>
           </p>
 
           <FormField label="Notas (opcional)">
