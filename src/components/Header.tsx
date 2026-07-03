@@ -5,7 +5,7 @@ import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo2 from "@/assets/whatsapp-logo2.png";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConfirm } from "@/components/ConfirmDialog";
-import { ProfileAvatar } from "@/pages/Profile";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 
 
 const Header = () => {

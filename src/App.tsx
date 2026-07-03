@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 import ScrollToTop from "@/components/ScrollToTop";
 import LoadingScreen from "@/components/LoadingScreen";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 
 // Páginas secundarias: code-splitting para que NO entren en el bundle inicial
@@ -34,6 +35,7 @@ const App = () => (
         <ScrollToTop />
         <AuthProvider>
           <ConfirmProvider>
+          <ErrorBoundary>
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
               <Route path="/" element={<Index />} />
@@ -50,6 +52,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
+          </ErrorBoundary>
           </ConfirmProvider>
         </AuthProvider>
       </BrowserRouter>

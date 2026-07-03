@@ -246,18 +246,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // IMPORTANTE: la callback debe ser síncrona. Cualquier llamada async a
     // Supabase desde acá puede causar deadlock con el lock interno de auth.
     // Por eso diferimos con setTimeout(0).
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      if (!session?.user) {
+      // Sólo "deslogueamos" en la UI ante un sign-out real (o sesión ausente).
+      if (event === "SIGNED_OUT" || !session?.user) {
         setCurrentUser(null);
         setUsers([]);
         return;
       }
+      // TOKEN_REFRESHED se dispara solo (~cada hora) al renovar el token: la
+      // sesión sigue viva, así que NO recargamos el perfil. Recargarlo acá era
+      // lo que deslogueaba al usuario si esa consulta fallaba de forma transitoria.
+      if (event === "TOKEN_REFRESHED") return;
       const userId = session.user.id;
       setTimeout(() => {
         if (!mounted) return;
         loadProfile(userId).then((profile) => {
-          if (mounted) setCurrentUser(profile);
+          // Si el perfil no cargó (red intermitente), mantenemos el usuario
+          // actual en vez de mandarlo a null y sacarlo de la sesión.
+          if (mounted && profile) setCurrentUser(profile);
         });
       }, 0);
     });
