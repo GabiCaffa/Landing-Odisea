@@ -1597,6 +1597,8 @@ const DeliveriesAdmin = () => {
           onClose={() => setModalOpen(false)}
           onSaved={() => {
             setModalOpen(false);
+            // Un cliente nuevo nace "pendiente": mostramos esa lista para que se vea.
+            if (!editing) setStatusFilter("pending");
             reload();
           }}
         />
@@ -1639,33 +1641,37 @@ const DeliveryFormModal = ({
     e.preventDefault();
     if (!form.eventId) return toast.error("Elegí el evento");
     if (!form.firstName.trim() || !form.lastName.trim()) return toast.error("Completá nombre y apellido");
+    if (!form.birthDate) return toast.error("Indicá la fecha de nacimiento");
+    if (!form.state.trim()) return toast.error("Indicá la provincia o departamento");
+
     const email = form.email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast.error("Email inválido");
 
     const quantity = parseInt(form.quantity, 10);
     if (!Number.isFinite(quantity) || quantity < 1) return toast.error("La cantidad debe ser 1 o más");
-    const value = parseFloat(form.value || "0");
+
+    if (!form.value.trim()) return toast.error("Indicá el valor total pagado");
+    const value = parseFloat(form.value);
     if (!Number.isFinite(value) || value < 0) return toast.error("El valor total no es válido");
 
     const doc = form.documentId.trim();
-    if (doc && !validateDocumentByCountry(doc, form.country)) {
+    if (!doc) return toast.error(`Indicá ${documentLabelByCountry(form.country)}`);
+    if (!validateDocumentByCountry(doc, form.country)) {
       return toast.error(`${documentLabelByCountry(form.country)} inválido`);
     }
 
-    let phoneE164: string | null = null;
-    if (form.phone.trim()) {
-      phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
-      if (!phoneE164) return toast.error("Teléfono inválido");
-    }
+    if (!form.phone.trim()) return toast.error("Indicá el teléfono");
+    const phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
+    if (!phoneE164) return toast.error("Teléfono inválido");
 
     const input: DeliveryInput = {
       eventId: form.eventId,
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
-      birthDate: form.birthDate || null,
-      country: form.country || null,
-      state: form.state.trim() || null,
-      documentId: doc || null,
+      birthDate: form.birthDate,
+      country: form.country,
+      state: form.state.trim(),
+      documentId: doc,
       phone: phoneE164,
       email,
       quantity,
@@ -1732,6 +1738,7 @@ const DeliveryFormModal = ({
               value={form.birthDate}
               onChange={(e) => set("birthDate", e.target.value)}
               max={new Date().toISOString().split("T")[0]}
+              required
               className="input-techno"
             />
           </FormField>
@@ -1741,6 +1748,7 @@ const DeliveryFormModal = ({
             state={form.state}
             onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
             onStateChange={(s) => set("state", s)}
+            required
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1749,6 +1757,7 @@ const DeliveryFormModal = ({
                 value={form.documentId}
                 onChange={(e) => set("documentId", e.target.value)}
                 inputMode="numeric"
+                required
                 className="input-techno"
                 placeholder={documentPlaceholderByCountry(form.country)}
                 maxLength={20}
@@ -1763,6 +1772,7 @@ const DeliveryFormModal = ({
                 value={form.phone}
                 onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
                 onChange={(v) => set("phone", v)}
+                required
               />
             </div>
           </div>
@@ -1789,6 +1799,7 @@ const DeliveryFormModal = ({
                 step="0.01"
                 value={form.value}
                 onChange={(e) => set("value", e.target.value)}
+                required
                 className="input-techno"
                 placeholder="0"
               />
