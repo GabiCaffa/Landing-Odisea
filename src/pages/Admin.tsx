@@ -1324,6 +1324,13 @@ const UsersAdmin = () => {
 const fmtMoney = (n: number) =>
   `$${n.toLocaleString("es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
+// ¿La entrega matchea el término de búsqueda? (nombre, email, documento, teléfono)
+const deliveryMatches = (d: TicketDelivery, term: string) => {
+  if (!term) return true;
+  const hay = `${d.firstName} ${d.lastName} ${d.email} ${d.documentId ?? ""} ${d.phone ?? ""}`.toLowerCase();
+  return hay.includes(term);
+};
+
 // Badge para marcar que la entrega es de un cliente registrado (datos del perfil).
 const RegBadge = () => (
   <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-celeste-deep bg-celeste/10 border border-celeste/30 rounded-full px-1.5 py-0.5 whitespace-nowrap">
@@ -1426,18 +1433,17 @@ const DeliveriesAdmin = () => {
     };
   }, []);
 
-  const pendingCount = deliveries.filter((d) => d.status === "pending").length;
-  const sentCount = deliveries.filter((d) => d.status === "sent").length;
+  // Los contadores de cada pestaña reflejan la búsqueda: al tipear ves cuántos
+  // coinciden en "Por enviar" y en "Enviadas" al mismo tiempo.
+  const term = search.trim().toLowerCase();
+  const pendingCount = deliveries.filter((d) => d.status === "pending" && deliveryMatches(d, term)).length;
+  const sentCount = deliveries.filter((d) => d.status === "sent" && deliveryMatches(d, term)).length;
 
   // Filtramos por estado + búsqueda y agrupamos por evento (ordenados por fecha).
   const groups = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const rows = deliveries.filter((d) => {
-      if (d.status !== statusFilter) return false;
-      if (!term) return true;
-      const hay = `${d.firstName} ${d.lastName} ${d.email} ${d.documentId ?? ""} ${d.phone ?? ""}`.toLowerCase();
-      return hay.includes(term);
-    });
+    const rows = deliveries.filter(
+      (d) => d.status === statusFilter && deliveryMatches(d, term)
+    );
     const byEvent = new Map<string, TicketDelivery[]>();
     for (const d of rows) {
       const list = byEvent.get(d.eventId) ?? [];
@@ -1457,7 +1463,7 @@ const DeliveriesAdmin = () => {
         };
       })
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
-  }, [deliveries, statusFilter, search, events]);
+  }, [deliveries, statusFilter, term, events]);
 
   const openNew = () => {
     setEditing(null);
@@ -1471,11 +1477,13 @@ const DeliveriesAdmin = () => {
   const handleMarkSent = async (d: TicketDelivery) => {
     const result = await setDeliveryStatus(d.id, "sent");
     if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
+    await reload();
     toast.success("Marcada como enviada");
   };
   const handleMarkPending = async (d: TicketDelivery) => {
     const result = await setDeliveryStatus(d.id, "pending");
     if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
+    await reload();
     toast.success("Devuelta a pendientes");
   };
   const handleDelete = async (d: TicketDelivery) => {
@@ -1488,6 +1496,7 @@ const DeliveriesAdmin = () => {
     if (!ok) return;
     const result = await deleteDelivery(d.id);
     if (!result.ok) return toast.error(result.error ?? "No se pudo eliminar");
+    await reload();
     toast.success("Cliente eliminado");
   };
 
