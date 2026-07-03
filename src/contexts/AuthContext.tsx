@@ -429,7 +429,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteEvent: AuthContextValue["deleteEvent"] = async (id) => {
     const { error } = await supabase.from("events").delete().eq("id", id);
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      // FK restrict desde ticket_deliveries: el evento tiene entregas cargadas.
+      if (error.code === "23503" || error.message.toLowerCase().includes("foreign key")) {
+        return {
+          ok: false,
+          error:
+            "No se puede borrar: este evento tiene clientes cargados en Entregas. Vaciá su lista primero.",
+        };
+      }
+      return { ok: false, error: error.message };
+    }
     return { ok: true };
   };
 

@@ -90,9 +90,18 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 
 `schema.sql` (base) → `profile_features.sql` → `v3_profile_and_promos.sql` →
 `v4_sale_ends_at.sql` → `v5_fix_registration.sql` → `v6_lock_admin.sql` →
-`v7_profile_on_confirm.sql` → `v8_cleanup_unconfirmed.sql`.
+`v7_profile_on_confirm.sql` → `v8_cleanup_unconfirmed.sql` →
+`v9_ticket_deliveries.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
+
+**v9 — Entregas de entradas:** tabla `ticket_deliveries` (sólo admin vía RLS) para
+llevar a mano a quién enviarle las entradas por mail y a quién ya se le enviaron,
+**agrupado por evento** (reemplaza el Excel). Sin relación con `profiles`. Datos del
+cliente (nombre, contacto, ubicación, documento) + `quantity` + `value` (total
+pagado) + estado `pending`/`sent`. FK a `events` con `on delete restrict` (no se
+puede borrar un evento con entregas cargadas). UI: pestaña **Entregas** en el panel
+admin (`DeliveriesAdmin` en `Admin.tsx`); acceso a datos en `src/lib/deliveries.ts`.
 
 ---
 

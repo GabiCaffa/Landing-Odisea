@@ -24,6 +24,11 @@ import {
   Crop,
   Move,
   Lock,
+  Send,
+  Mail,
+  CheckCircle2,
+  Undo2,
+  Calendar,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
@@ -38,11 +43,32 @@ import {
   formatEventDate,
   isOfficialAdmin,
 } from "@/contexts/AuthContext";
+import PhoneInput from "@/components/PhoneInput";
+import LocationSelect from "@/components/LocationSelect";
+import {
+  validateDocumentByCountry,
+  documentLabelByCountry,
+  documentPlaceholderByCountry,
+  normalizePhone,
+  formatPhoneDisplay,
+} from "@/lib/validators";
+import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
+import { CountryCode } from "libphonenumber-js";
+import {
+  TicketDelivery,
+  DeliveryInput,
+  fetchDeliveries,
+  createDelivery,
+  updateDelivery,
+  deleteDelivery,
+  setDeliveryStatus,
+} from "@/lib/deliveries";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
-type Tab = "dashboard" | "events" | "users";
+type Tab = "dashboard" | "events" | "users" | "deliveries";
 
 const Admin = () => {
   const { currentUser, logout, users, events, loading } = useAuth();
@@ -100,6 +126,12 @@ const Admin = () => {
             active={tab === "users"}
             onClick={() => setTab("users")}
           />
+          <SidebarLink
+            icon={<Send className="w-4 h-4" />}
+            label="Entregas"
+            active={tab === "deliveries"}
+            onClick={() => setTab("deliveries")}
+          />
 
           <Link
             to="/"
@@ -131,11 +163,13 @@ const Admin = () => {
               {tab === "dashboard" && "Resumen general"}
               {tab === "events" && "Gestión"}
               {tab === "users" && "Comunidad"}
+              {tab === "deliveries" && "Envío de entradas"}
             </p>
             <h1 className="title-sport text-3xl md:text-4xl tracking-wide font-black text-tinta">
               {tab === "dashboard" && "DASHBOARD"}
               {tab === "events" && "EVENTOS"}
               {tab === "users" && "USUARIOS"}
+              {tab === "deliveries" && "ENTREGAS"}
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -158,6 +192,7 @@ const Admin = () => {
         {tab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
         {tab === "events" && <EventsAdmin />}
         {tab === "users" && <UsersAdmin />}
+        {tab === "deliveries" && <DeliveriesAdmin />}
       </main>
     </div>
   );
@@ -1278,6 +1313,511 @@ const UsersAdmin = () => {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Entregas de entradas (carga manual, agrupadas por evento)
+// ────────────────────────────────────────────────────────────────────────────
+const fmtMoney = (n: number) =>
+  `$${n.toLocaleString("es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+
+const DeliveriesAdmin = () => {
+  const { events } = useAuth();
+  const confirm = useConfirm();
+  const [deliveries, setDeliveries] = useState<TicketDelivery[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<"pending" | "sent">("pending");
+  const [search, setSearch] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<TicketDelivery | null>(null);
+
+  const reload = async () => {
+    const data = await fetchDeliveries();
+    setDeliveries(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    reload();
+    const channel = supabase
+      .channel("ticket-deliveries-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ticket_deliveries" },
+        () => reload()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const pendingCount = deliveries.filter((d) => d.status === "pending").length;
+  const sentCount = deliveries.filter((d) => d.status === "sent").length;
+
+  // Filtramos por estado + búsqueda y agrupamos por evento (ordenados por fecha).
+  const groups = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const rows = deliveries.filter((d) => {
+      if (d.status !== statusFilter) return false;
+      if (!term) return true;
+      const hay = `${d.firstName} ${d.lastName} ${d.email} ${d.documentId ?? ""} ${d.phone ?? ""}`.toLowerCase();
+      return hay.includes(term);
+    });
+    const byEvent = new Map<string, TicketDelivery[]>();
+    for (const d of rows) {
+      const list = byEvent.get(d.eventId) ?? [];
+      list.push(d);
+      byEvent.set(d.eventId, list);
+    }
+    return Array.from(byEvent.entries())
+      .map(([eventId, list]) => {
+        const event = events.find((e) => e.id === eventId);
+        return {
+          eventId,
+          eventName: event?.name ?? "Evento eliminado",
+          eventDate: event?.date ?? "",
+          rows: list,
+          totalTickets: list.reduce((a, d) => a + d.quantity, 0),
+          totalValue: list.reduce((a, d) => a + d.value, 0),
+        };
+      })
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+  }, [deliveries, statusFilter, search, events]);
+
+  const openNew = () => {
+    setEditing(null);
+    setModalOpen(true);
+  };
+  const openEdit = (d: TicketDelivery) => {
+    setEditing(d);
+    setModalOpen(true);
+  };
+
+  const handleMarkSent = async (d: TicketDelivery) => {
+    const result = await setDeliveryStatus(d.id, "sent");
+    if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
+    toast.success("Marcada como enviada");
+  };
+  const handleMarkPending = async (d: TicketDelivery) => {
+    const result = await setDeliveryStatus(d.id, "pending");
+    if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
+    toast.success("Devuelta a pendientes");
+  };
+  const handleDelete = async (d: TicketDelivery) => {
+    const ok = await confirm({
+      title: "Eliminar cliente",
+      description: `¿Eliminar a ${d.firstName} ${d.lastName} de la lista? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
+    const result = await deleteDelivery(d.id);
+    if (!result.ok) return toast.error(result.error ?? "No se pudo eliminar");
+    toast.success("Cliente eliminado");
+  };
+
+  if (loading) return <div className="py-12 text-center text-muted-foreground text-sm">Cargando entregas...</div>;
+
+  return (
+    <div className="space-y-5">
+      {/* Toolbar */}
+      <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+        <div className="inline-flex rounded-lg border border-border overflow-hidden self-start">
+          <button
+            onClick={() => setStatusFilter("pending")}
+            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
+              statusFilter === "pending"
+                ? "bg-foreground text-background"
+                : "bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            Por enviar ({pendingCount})
+          </button>
+          <button
+            onClick={() => setStatusFilter("sent")}
+            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
+              statusFilter === "sent"
+                ? "bg-foreground text-background"
+                : "bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            Enviadas ({sentCount})
+          </button>
+        </div>
+
+        <div className="flex flex-1 gap-3 lg:justify-end">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nombre, email, documento..."
+              className="input-techno pl-10"
+            />
+          </div>
+          <button onClick={openNew} className="btn-celeste whitespace-nowrap inline-flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Agregar
+          </button>
+        </div>
+      </div>
+
+      {/* Grupos por evento */}
+      {groups.length === 0 ? (
+        <div className="bg-card border border-border py-16 text-center text-muted-foreground text-sm">
+          {statusFilter === "pending"
+            ? "No hay clientes por enviar. Agregá uno con el botón de arriba."
+            : "Todavía no marcaste ninguna entrega como enviada."}
+        </div>
+      ) : (
+        groups.map((g) => (
+          <div key={g.eventId} className="bg-card border border-border overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-secondary/50 border-b border-border">
+              <div className="flex items-center gap-2 min-w-0">
+                <Calendar className="w-4 h-4 text-celeste-deep shrink-0" />
+                <span className="font-bold truncate">{g.eventName}</span>
+                {g.eventDate && (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    · {formatEventDate(g.eventDate)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground whitespace-nowrap">
+                <span><b className="text-foreground">{g.rows.length}</b> clientes</span>
+                <span><b className="text-foreground">{g.totalTickets}</b> entradas</span>
+                <span><b className="text-foreground">{fmtMoney(g.totalValue)}</b> total</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[820px]">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <Th>Cliente</Th>
+                    <Th>Contacto</Th>
+                    <Th>Ubicación</Th>
+                    <Th>Entradas</Th>
+                    <Th>Total</Th>
+                    {statusFilter === "sent" && <Th>Enviada</Th>}
+                    <Th>Acciones</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g.rows.map((d) => (
+                    <tr key={d.id} className="border-b border-border/50 hover:bg-secondary/30">
+                      <Td>
+                        <p className="font-semibold">{d.firstName} {d.lastName}</p>
+                        {d.documentId && (
+                          <p className="text-xs text-muted-foreground font-mono">{d.documentId}</p>
+                        )}
+                      </Td>
+                      <Td>
+                        <p className="text-xs font-mono">{d.email}</p>
+                        {d.phone && (
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {formatPhoneDisplay(d.phone)}
+                          </p>
+                        )}
+                      </Td>
+                      <Td className="text-xs text-muted-foreground">
+                        {[d.state, d.country].filter(Boolean).join(", ") || "—"}
+                      </Td>
+                      <Td className="font-semibold">{d.quantity}</Td>
+                      <Td className="font-semibold">{fmtMoney(d.value)}</Td>
+                      {statusFilter === "sent" && (
+                        <Td className="text-xs text-muted-foreground">
+                          {d.sentAt ? formatEventDate(d.sentAt.slice(0, 10)) : "—"}
+                        </Td>
+                      )}
+                      <Td>
+                        <div className="flex items-center gap-1">
+                          {d.status === "pending" ? (
+                            <button
+                              onClick={() => handleMarkSent(d)}
+                              className="p-2 hover:bg-green-600 hover:text-white transition-colors"
+                              title="Marcar como enviada"
+                              aria-label="Marcar como enviada"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleMarkPending(d)}
+                              className="p-2 hover:bg-secondary transition-colors"
+                              title="Volver a pendientes"
+                              aria-label="Volver a pendientes"
+                            >
+                              <Undo2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <a
+                            href={`mailto:${d.email}?subject=${encodeURIComponent(
+                              `Tus entradas · ${g.eventName}`
+                            )}`}
+                            className="p-2 hover:bg-secondary transition-colors"
+                            title="Escribir email"
+                            aria-label="Escribir email"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                          </a>
+                          <button
+                            onClick={() => openEdit(d)}
+                            className="p-2 hover:bg-secondary transition-colors"
+                            title="Editar"
+                            aria-label="Editar"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(d)}
+                            className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                            title="Eliminar"
+                            aria-label="Eliminar"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))
+      )}
+
+      {modalOpen && (
+        <DeliveryFormModal
+          events={events}
+          editing={editing}
+          onClose={() => setModalOpen(false)}
+          onSaved={() => {
+            setModalOpen(false);
+            reload();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+const DeliveryFormModal = ({
+  events,
+  editing,
+  onClose,
+  onSaved,
+}: {
+  events: AdminEvent[];
+  editing: TicketDelivery | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) => {
+  const [form, setForm] = useState({
+    eventId: editing?.eventId ?? (events[0]?.id ?? ""),
+    firstName: editing?.firstName ?? "",
+    lastName: editing?.lastName ?? "",
+    birthDate: editing?.birthDate ?? "",
+    country: editing?.country ?? DEFAULT_COUNTRY_CODE,
+    state: editing?.state ?? "",
+    documentId: editing?.documentId ?? "",
+    phone: editing?.phone ? formatPhoneDisplay(editing.phone).replace(/^\+\d+\s*/, "") : "",
+    email: editing?.email ?? "",
+    quantity: String(editing?.quantity ?? 1),
+    value: editing ? String(editing.value) : "",
+    notes: editing?.notes ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const set = (field: keyof typeof form, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.eventId) return toast.error("Elegí el evento");
+    if (!form.firstName.trim() || !form.lastName.trim()) return toast.error("Completá nombre y apellido");
+    const email = form.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast.error("Email inválido");
+
+    const quantity = parseInt(form.quantity, 10);
+    if (!Number.isFinite(quantity) || quantity < 1) return toast.error("La cantidad debe ser 1 o más");
+    const value = parseFloat(form.value || "0");
+    if (!Number.isFinite(value) || value < 0) return toast.error("El valor total no es válido");
+
+    const doc = form.documentId.trim();
+    if (doc && !validateDocumentByCountry(doc, form.country)) {
+      return toast.error(`${documentLabelByCountry(form.country)} inválido`);
+    }
+
+    let phoneE164: string | null = null;
+    if (form.phone.trim()) {
+      phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
+      if (!phoneE164) return toast.error("Teléfono inválido");
+    }
+
+    const input: DeliveryInput = {
+      eventId: form.eventId,
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      birthDate: form.birthDate || null,
+      country: form.country || null,
+      state: form.state.trim() || null,
+      documentId: doc || null,
+      phone: phoneE164,
+      email,
+      quantity,
+      value,
+      notes: form.notes.trim() || null,
+    };
+
+    setSaving(true);
+    const result = editing
+      ? await updateDelivery(editing.id, input)
+      : await createDelivery(input);
+    setSaving(false);
+    if (!result.ok) return toast.error(result.error ?? "No se pudo guardar");
+    toast.success(editing ? "Cliente actualizado" : "Cliente agregado");
+    onSaved();
+  };
+
+  const total = (() => {
+    const v = parseFloat(form.value || "0");
+    return Number.isFinite(v) ? v : 0;
+  })();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl bg-background border border-border max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background z-10">
+          <h2 className="title-sport text-2xl font-black tracking-wide">
+            {editing ? "EDITAR CLIENTE" : "NUEVO CLIENTE"}
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <FormField label="Evento">
+            <select
+              value={form.eventId}
+              onChange={(e) => set("eventId", e.target.value)}
+              required
+              className="input-techno"
+            >
+              {events.length === 0 && <option value="">No hay eventos creados</option>}
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.name} · {formatEventDate(ev.date)}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Nombre">
+              <input value={form.firstName} onChange={(e) => set("firstName", e.target.value)} required className="input-techno" placeholder="Juan" />
+            </FormField>
+            <FormField label="Apellido">
+              <input value={form.lastName} onChange={(e) => set("lastName", e.target.value)} required className="input-techno" placeholder="Pérez" />
+            </FormField>
+          </div>
+
+          <FormField label="Fecha de nacimiento">
+            <input
+              type="date"
+              value={form.birthDate}
+              onChange={(e) => set("birthDate", e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
+              className="input-techno"
+            />
+          </FormField>
+
+          <LocationSelect
+            country={form.country}
+            state={form.state}
+            onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
+            onStateChange={(s) => set("state", s)}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label={documentLabelByCountry(form.country)}>
+              <input
+                value={form.documentId}
+                onChange={(e) => set("documentId", e.target.value)}
+                inputMode="numeric"
+                className="input-techno"
+                placeholder={documentPlaceholderByCountry(form.country)}
+                maxLength={20}
+              />
+            </FormField>
+            <div>
+              <span className="block text-xs tracking-[0.2em] uppercase text-muted-foreground mb-2">
+                Teléfono
+              </span>
+              <PhoneInput
+                country={form.country}
+                value={form.phone}
+                onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
+                onChange={(v) => set("phone", v)}
+              />
+            </div>
+          </div>
+
+          <FormField label="Email (destino de las entradas)">
+            <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} required className="input-techno" placeholder="cliente@email.com" />
+          </FormField>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Cantidad de entradas">
+              <input
+                type="number"
+                min={1}
+                value={form.quantity}
+                onChange={(e) => set("quantity", e.target.value)}
+                required
+                className="input-techno"
+              />
+            </FormField>
+            <FormField label="Valor total pagado ($)">
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.value}
+                onChange={(e) => set("value", e.target.value)}
+                className="input-techno"
+                placeholder="0"
+              />
+            </FormField>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Total a cobrar registrado: <b className="text-foreground">{fmtMoney(total)}</b>
+          </p>
+
+          <FormField label="Notas (opcional)">
+            <textarea
+              value={form.notes}
+              onChange={(e) => set("notes", e.target.value)}
+              rows={2}
+              className="input-techno resize-none"
+              placeholder="Comentarios internos..."
+            />
+          </FormField>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-techno-outline flex-1">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving} className="btn-celeste flex-1 disabled:opacity-60">
+              {saving ? "Guardando..." : editing ? "Guardar cambios" : "Agregar cliente"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
