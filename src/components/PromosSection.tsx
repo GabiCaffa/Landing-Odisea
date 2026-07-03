@@ -49,7 +49,7 @@ const promos = [
   {
     number: "03",
     tag: "EXCLUSIVO WHATSAPP",
-    title: "Precio DIrecto",
+    title: "Precio Directo",
     description:
       "Comprá mediante nuestro canal de ventas y accedé al valor vigente de preventa. Atención personalizada, pago por transferencia y confirmación rápida.",
     cta: "Compra Directa",
