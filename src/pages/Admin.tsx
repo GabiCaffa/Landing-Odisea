@@ -64,7 +64,6 @@ import {
   updateDelivery,
   deleteDelivery,
   setDeliveryStatus,
-  sendTicketConfirmation,
 } from "@/lib/deliveries";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -1365,7 +1364,6 @@ const RegBadge = () => (
 const DeliveryActions = ({
   d,
   eventName,
-  onSendEmail,
   onSent,
   onPending,
   onEdit,
@@ -1373,7 +1371,6 @@ const DeliveryActions = ({
 }: {
   d: TicketDelivery;
   eventName: string;
-  onSendEmail: (d: TicketDelivery) => void;
   onSent: (d: TicketDelivery) => void;
   onPending: (d: TicketDelivery) => void;
   onEdit: (d: TicketDelivery) => void;
@@ -1381,24 +1378,14 @@ const DeliveryActions = ({
 }) => (
   <div className="flex items-center gap-1">
     {d.status === "pending" ? (
-      <>
-        <button
-          onClick={() => onSendEmail(d)}
-          className="p-2 hover:bg-celeste hover:text-white transition-colors"
-          title="Enviar confirmación por email (y marcar enviada)"
-          aria-label="Enviar confirmación por email"
-        >
-          <Send className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => onSent(d)}
-          className="p-2 hover:bg-green-600 hover:text-white transition-colors"
-          title="Marcar como enviada (sin mail)"
-          aria-label="Marcar como enviada"
-        >
-          <CheckCircle2 className="w-4 h-4" />
-        </button>
-      </>
+      <button
+        onClick={() => onSent(d)}
+        className="p-2 hover:bg-green-600 hover:text-white transition-colors"
+        title="Marcar como enviada"
+        aria-label="Marcar como enviada"
+      >
+        <CheckCircle2 className="w-4 h-4" />
+      </button>
     ) : (
       <button
         onClick={() => onPending(d)}
@@ -1558,20 +1545,6 @@ const DeliveriesAdmin = () => {
     setModalOpen(true);
   };
 
-  const handleSendEmail = async (d: TicketDelivery) => {
-    const ok = await confirm({
-      title: "Enviar confirmación",
-      description: `¿Enviar el email de confirmación a ${d.email}? Al enviarse, la entrega se marca como enviada.`,
-      confirmText: "Enviar email",
-    });
-    if (!ok) return;
-    const toastId = toast.loading("Enviando email...");
-    const result = await sendTicketConfirmation(d.id);
-    toast.dismiss(toastId);
-    if (!result.ok) return toast.error(result.error ?? "No se pudo enviar");
-    await reload();
-    toast.success("Email enviado · marcada como enviada");
-  };
   const handleMarkSent = async (d: TicketDelivery) => {
     const result = await setDeliveryStatus(d.id, "sent");
     if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
@@ -1719,7 +1692,6 @@ const DeliveriesAdmin = () => {
                     <DeliveryActions
                       d={d}
                       eventName={g.eventName}
-                      onSendEmail={handleSendEmail}
                       onSent={handleMarkSent}
                       onPending={handleMarkPending}
                       onEdit={openEdit}
@@ -1778,7 +1750,6 @@ const DeliveriesAdmin = () => {
                         <DeliveryActions
                           d={d}
                           eventName={g.eventName}
-                          onSendEmail={handleSendEmail}
                           onSent={handleMarkSent}
                           onPending={handleMarkPending}
                           onEdit={openEdit}

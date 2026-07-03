@@ -17,3 +17,4 @@ alter table public.ticket_deliveries
 create index if not exists deliveries_user_idx on public.ticket_deliveries(user_id);
 
 -- ════════════════════════════════════════════════════════════════════════════
+

@@ -126,27 +126,6 @@ export async function deleteDelivery(
   return { ok: true };
 }
 
-/**
- * Envía por email la confirmación de compra al cliente (Edge Function
- * send-ticket-confirmation, que usa Resend) y marca la entrega como enviada.
- * Requiere que la función esté desplegada y RESEND_API_KEY configurada.
- */
-export async function sendTicketConfirmation(
-  deliveryId: string
-): Promise<{ ok: boolean; error?: string }> {
-  const { data, error } = await supabase.functions.invoke("send-ticket-confirmation", {
-    body: { deliveryId },
-  });
-  if (error) {
-    return {
-      ok: false,
-      error: "No se pudo contactar el servicio de envío (¿la función está desplegada?)",
-    };
-  }
-  if (!data?.ok) return { ok: false, error: data?.error ?? "No se pudo enviar el email" };
-  return { ok: true };
-}
-
 /** Marca una entrega como enviada (sella sent_at) o la devuelve a pendiente. */
 export async function setDeliveryStatus(
   id: string,

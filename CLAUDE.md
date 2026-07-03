@@ -108,14 +108,9 @@ cargadas). UI: pestaña **Entregas** en el panel admin (`DeliveriesAdmin` en
 usuario registrado, el form permite elegirlo y copia sus datos del perfil (badge
 "Registrado"); si no, carga manual. La lista de Entregas es **mobile-first**
 (tarjetas en celular, tabla en desktop). Extras del módulo: exportar CSV de la lista
-visible, aviso de duplicados (mismo email+evento) y resumen de recaudación.
-
-**Envío de entradas por email (Edge Function):** `supabase/functions/send-ticket-confirmation/`
-envía un mail branded (evento, fecha, cantidad, total) vía **Resend API** y marca la
-entrega como enviada; sólo admin (valida JWT). Cliente: `sendTicketConfirmation()` en
-`src/lib/deliveries.ts`, botón "avión" en las entregas pendientes. Setup (Resend API
-key + `supabase functions deploy` + secreto `RESEND_API_KEY`): **`supabase/SEND_TICKETS_SETUP.md`**.
-Es distinto del SMTP de Auth (usa API key, no SMTP).
+visible, aviso de duplicados (mismo email+evento) y resumen de recaudación. El envío
+de las entradas al cliente es **manual** (botón ✉️ que abre el correo; se marca como
+enviada a mano).
 
 ---
 
