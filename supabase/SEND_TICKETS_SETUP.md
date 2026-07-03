@@ -12,19 +12,18 @@ entrega como enviada. Sólo un admin puede invocarla (valida el JWT).
 
 ## Paso 1 · API key de Resend
 
-1. Entrá a https://resend.com → **API Keys** → **Create API Key** (permiso de
-   envío alcanza). Copiá la clave (empieza con `re_...`).
-2. El dominio `odiseaoficial.com` ya está verificado en Resend (lo hiciste para
-   el SMTP), así que el remitente `no-reply@odiseaoficial.com` funciona. Si no,
-   verificá el dominio primero.
+Podés **reutilizar la API key que ya tenés** (la misma clave `re_...` sirve para
+el SMTP y para la API REST que usa esta función). Si no la tenés a mano:
+https://resend.com → **API Keys**. El dominio `odiseaoficial.com` ya está
+verificado, así que el remitente `no-reply@odiseaoficial.com` funciona.
 
-> La **API key** es distinta de las credenciales SMTP. Acá se usa la API key.
+## Paso 2 · CLI de Supabase (ya instalada en el proyecto)
 
-## Paso 2 · Instalar la CLI de Supabase (si no la tenés)
+La CLI ya quedó como dependencia de desarrollo: se usa con `npx supabase`
+(NO se instala global). Primero autorizá tu cuenta:
 
 ```bash
-npm install -g supabase
-supabase login        # abre el navegador para autorizar
+npx supabase login        # abre el navegador para autorizar
 ```
 
 ## Paso 3 · Vincular el proyecto
@@ -32,17 +31,17 @@ supabase login        # abre el navegador para autorizar
 Desde la raíz del repo (`Landing-Odisea`):
 
 ```bash
-supabase link --project-ref <TU_PROJECT_REF>
+npx supabase link --project-ref <TU_PROJECT_REF>
 ```
 
 El `project-ref` está en Supabase → Settings → General → *Reference ID*
-(o en la URL del dashboard).
+(o en la URL del dashboard: `.../project/<REF>`).
 
 ## Paso 4 · Cargar el secreto y desplegar
 
 ```bash
-supabase secrets set RESEND_API_KEY=re_tu_clave_aca
-supabase functions deploy send-ticket-confirmation
+npx supabase secrets set RESEND_API_KEY=re_tu_clave_aca
+npx supabase functions deploy send-ticket-confirmation
 ```
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` ya vienen
@@ -60,7 +59,7 @@ o key inválida).
 ## Notas
 
 - Cambiar el diseño del mail: editar `buildHtml()` en la función y volver a
-  correr `supabase functions deploy send-ticket-confirmation`.
+  correr `npx supabase functions deploy send-ticket-confirmation`.
 - Ver logs de envíos: Supabase Dashboard → Edge Functions → send-ticket-confirmation → Logs.
 - El botón del sobre (Mail) sigue disponible como envío **manual** (abre tu
   cliente de correo), por si preferís mandarlo a mano en algún caso.
