@@ -12,6 +12,8 @@ export type DeliveryStatus = "pending" | "sent";
 export interface TicketDelivery {
   id: string;
   eventId: string;
+  /** Si la compra es de un usuario registrado, su id de perfil. null si es manual. */
+  userId?: string;
   firstName: string;
   lastName: string;
   birthDate?: string;
@@ -31,6 +33,7 @@ export interface TicketDelivery {
 /** Campos editables al crear/actualizar una entrega. */
 export interface DeliveryInput {
   eventId: string;
+  userId?: string | null;
   firstName: string;
   lastName: string;
   birthDate?: string | null;
@@ -48,6 +51,7 @@ function fromDb(row: any): TicketDelivery {
   return {
     id: row.id,
     eventId: row.event_id,
+    userId: row.user_id ?? undefined,
     firstName: row.first_name,
     lastName: row.last_name,
     birthDate: row.birth_date ?? undefined,
@@ -68,6 +72,7 @@ function fromDb(row: any): TicketDelivery {
 function toDb(input: Partial<DeliveryInput>): Record<string, any> {
   const out: Record<string, any> = {};
   if (input.eventId !== undefined) out.event_id = input.eventId;
+  if (input.userId !== undefined) out.user_id = input.userId || null;
   if (input.firstName !== undefined) out.first_name = input.firstName;
   if (input.lastName !== undefined) out.last_name = input.lastName;
   if (input.birthDate !== undefined) out.birth_date = input.birthDate || null;
