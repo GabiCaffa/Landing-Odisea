@@ -29,6 +29,8 @@ import {
   CheckCircle2,
   Undo2,
   Calendar,
+  Download,
+  DollarSign,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
@@ -1331,6 +1333,25 @@ const deliveryMatches = (d: TicketDelivery, term: string) => {
   return hay.includes(term);
 };
 
+// Tarjeta compacta de estadística para el resumen de Entregas.
+const MiniStat = ({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) => (
+  <div className="bg-card border border-border p-3 md:p-4">
+    <div className="flex items-center gap-2 text-muted-foreground mb-1">
+      {icon}
+      <span className="text-[11px] tracking-wider uppercase truncate">{label}</span>
+    </div>
+    <p className="text-lg md:text-2xl font-black text-tinta truncate">{value}</p>
+  </div>
+);
+
 // Badge para marcar que la entrega es de un cliente registrado (datos del perfil).
 const RegBadge = () => (
   <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-celeste-deep bg-celeste/10 border border-celeste/30 rounded-full px-1.5 py-0.5 whitespace-nowrap">
@@ -1465,6 +1486,56 @@ const DeliveriesAdmin = () => {
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
   }, [deliveries, statusFilter, term, events]);
 
+  // Resumen general (todas las entregas, sin importar pestaña ni búsqueda).
+  const summary = useMemo(
+    () => ({
+      totalTickets: deliveries.reduce((a, d) => a + d.quantity, 0),
+      totalValue: deliveries.reduce((a, d) => a + d.value, 0),
+      pending: deliveries.filter((d) => d.status === "pending").length,
+      sent: deliveries.filter((d) => d.status === "sent").length,
+    }),
+    [deliveries]
+  );
+
+  // Exporta a CSV la lista visible (pestaña actual + búsqueda), lista para Excel.
+  const exportCsv = () => {
+    const rows = groups.flatMap((g) => g.rows.map((d) => ({ d, eventName: g.eventName })));
+    if (rows.length === 0) {
+      toast.error("No hay nada para exportar en esta lista");
+      return;
+    }
+    const headers = [
+      "Evento", "Nombre", "Apellido", "Email", "Teléfono", "Documento",
+      "Departamento", "País", "Nacimiento", "Entradas", "Valor total",
+      "Estado", "Enviada", "Registrado", "Notas",
+    ];
+    const esc = (v: unknown) => {
+      const s = String(v ?? "");
+      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = rows.map(({ d, eventName }) =>
+      [
+        eventName, d.firstName, d.lastName, d.email,
+        d.phone ? formatPhoneDisplay(d.phone) : "",
+        d.documentId ?? "", d.state ?? "", d.country ?? "", d.birthDate ?? "",
+        d.quantity, d.value,
+        d.status === "sent" ? "Enviada" : "Pendiente",
+        d.sentAt ? d.sentAt.slice(0, 10) : "",
+        d.userId ? "Sí" : "No",
+        d.notes ?? "",
+      ].map(esc).join(",")
+    );
+    // BOM (﻿) para que Excel abra el UTF-8 con acentos correctos.
+    const csv = "﻿" + [headers.join(","), ...lines].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `odisea-entregas-${statusFilter === "pending" ? "por-enviar" : "enviadas"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const openNew = () => {
     setEditing(null);
     setModalOpen(true);
@@ -1504,6 +1575,14 @@ const DeliveriesAdmin = () => {
 
   return (
     <div className="space-y-5">
+      {/* Resumen general */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MiniStat icon={<DollarSign className="w-4 h-4" />} label="Recaudado" value={fmtMoney(summary.totalValue)} />
+        <MiniStat icon={<Ticket className="w-4 h-4" />} label="Entradas" value={String(summary.totalTickets)} />
+        <MiniStat icon={<Send className="w-4 h-4" />} label="Por enviar" value={String(summary.pending)} />
+        <MiniStat icon={<CheckCircle2 className="w-4 h-4" />} label="Enviadas" value={String(summary.sent)} />
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
         <div className="inline-flex rounded-lg border border-border overflow-hidden self-start">
@@ -1539,6 +1618,13 @@ const DeliveriesAdmin = () => {
               className="input-techno pl-10"
             />
           </div>
+          <button
+            onClick={exportCsv}
+            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2"
+            title="Exportar la lista visible a CSV (Excel)"
+          >
+            <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar</span>
+          </button>
           <button onClick={openNew} className="btn-celeste whitespace-nowrap inline-flex items-center gap-2">
             <Plus className="w-4 h-4" /> Agregar
           </button>
@@ -1683,6 +1769,7 @@ const DeliveriesAdmin = () => {
         <DeliveryFormModal
           events={events}
           users={users}
+          existing={deliveries}
           editing={editing}
           onClose={() => setModalOpen(false)}
           onSaved={() => {
@@ -1700,16 +1787,19 @@ const DeliveriesAdmin = () => {
 const DeliveryFormModal = ({
   events,
   users,
+  existing,
   editing,
   onClose,
   onSaved,
 }: {
   events: AdminEvent[];
   users: User[];
+  existing: TicketDelivery[];
   editing: TicketDelivery | null;
   onClose: () => void;
   onSaved: () => void;
 }) => {
+  const confirm = useConfirm();
   // "registered": elegís un usuario ya registrado y sólo cargás las entradas.
   // "manual": tipeás todos los datos a mano. Al editar siempre usamos manual.
   const [mode, setMode] = useState<"registered" | "manual">(
@@ -1816,6 +1906,23 @@ const DeliveryFormModal = ({
         value,
         notes: form.notes.trim() || null,
       };
+    }
+
+    // Aviso de duplicado: mismo email en el mismo evento (solo al crear).
+    if (!editing) {
+      const dup = existing.find(
+        (x) => x.eventId === input.eventId && x.email.toLowerCase() === input.email.toLowerCase()
+      );
+      if (dup) {
+        const ok = await confirm({
+          title: "Posible duplicado",
+          description: `Ya hay una entrega para ${input.email} en este evento (${dup.quantity} entrada/s, ${
+            dup.status === "sent" ? "ya enviada" : "pendiente"
+          }). ¿Querés cargarla igual?`,
+          confirmText: "Cargar igual",
+        });
+        if (!ok) return;
+      }
     }
 
     setSaving(true);
