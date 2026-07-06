@@ -131,9 +131,6 @@ const TicketPurchaseModal = ({
     if (currentUser) {
       msg += `Documento: ${currentUser.documentId}\n`;
     }
-    if (birthdayApplied) {
-      msg += `\n🎂 Aplico promo CUMPLEAÑOS\n`;
-    }
     msg += `\nVoy a realizar la transferencia a:\n`;
     msg += `GABRIEL CAFFAREL DALMAU\n`;
     msg += `Banco: ITAÚ\n`;
