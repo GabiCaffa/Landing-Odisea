@@ -1,28 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import TicketPurchaseModal from "./TicketPurchaseModal";
 
-// ── Eventos disponibles (sincronizado con EventsSection) ──────────────────────
-const EVENTS = [
-  {
-    name: "ODISEA NUEVA HELVECIA",
-    date: "13 JUNIO 2026",
-    location: "Club Artesano",
-    tickets: [{ name: "general", price: 400 }],
-  },
-  {
-    name: "ODISEA COLONIA",
-    date: "20 JUNIO 2026",
-    location: "Colonia Soho",
-    tickets: [{ name: "general", price: 300 }],
-  },
-  {
-    name: "ODISEA CARMELO",
-    date: "20 JUNIO 2026",
-    location: "Club Union Carmelo",
-    tickets: [{ name: "general", price: 250 }],
-  },
-];
+// Evento que consume el selector / modal de compra (derivado de los eventos reales).
+type PickerEvent = {
+  name: string;
+  date: string;
+  location: string;
+  tickets: { name: string; price: number }[];
+};
 
 // ── Datos de las 3 promos ─────────────────────────────────────────────────────
 const promos = [
@@ -61,15 +48,33 @@ const promos = [
 // ── Sección principal ─────────────────────────────────────────────────────────
 const PromosSection = () => {
   const { ref: headerRef, isVisible: headerVisible } = useScrollReveal({ threshold: 0.3 });
+  const { events } = useAuth();
+
+  // Eventos comprables vía "Precio Directo": los activos (no agotados/finalizados),
+  // tomados de la base y ordenados por fecha. Reemplaza la lista estática vieja.
+  const purchasableEvents = useMemo<PickerEvent[]>(
+    () =>
+      events
+        .filter((e) => e.status === "activo")
+        .slice()
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((e) => ({
+          name: e.name,
+          date: formatEventDate(e.date),
+          location: e.location,
+          tickets: [{ name: "general", price: e.price }],
+        })),
+    [events]
+  );
 
   // Estado del modal compartido entre la card 03 y el modal real
-  const [selectedEvent, setSelectedEvent] = useState<(typeof EVENTS)[number] | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<PickerEvent | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
 
   const openEventPicker = () => setShowEventPicker(true);
 
-  const selectEvent = (event: (typeof EVENTS)[number]) => {
+  const selectEvent = (event: PickerEvent) => {
     setSelectedEvent(event);
     setShowEventPicker(false);
     setIsModalOpen(true);
@@ -115,7 +120,7 @@ const PromosSection = () => {
       {/* Event picker overlay */}
       {showEventPicker && (
         <EventPickerOverlay
-          events={EVENTS}
+          events={purchasableEvents}
           onSelect={selectEvent}
           onClose={() => setShowEventPicker(false)}
         />
@@ -142,8 +147,8 @@ const EventPickerOverlay = ({
   onSelect,
   onClose,
 }: {
-  events: typeof EVENTS;
-  onSelect: (e: (typeof EVENTS)[number]) => void;
+  events: PickerEvent[];
+  onSelect: (e: PickerEvent) => void;
   onClose: () => void;
 }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -169,6 +174,11 @@ const EventPickerOverlay = ({
 
       {/* Event list */}
       <div className="p-4 space-y-2">
+        {events.length === 0 && (
+          <p className="text-center text-sm text-muted-foreground py-8">
+            No hay eventos disponibles en este momento.
+          </p>
+        )}
         {events.map((event) => (
           <button
             key={event.name}
