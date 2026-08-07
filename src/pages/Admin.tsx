@@ -52,6 +52,7 @@ import {
 } from "@/contexts/AuthContext";
 import PhoneInput from "@/components/PhoneInput";
 import LocationSelect from "@/components/LocationSelect";
+import UserSearchSelect from "@/components/UserSearchSelect";
 import {
   normalizePhone,
   formatPhoneDisplay,
@@ -1857,13 +1858,6 @@ const DeliveryFormModal = ({
   const set = (field: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  const sortedUsers = useMemo(
-    () =>
-      [...users].sort((a, b) =>
-        `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
-      ),
-    [users]
-  );
   const selectedUser = users.find((u) => u.id === form.userId) ?? null;
   const selectedEvent = events.find((ev) => ev.id === form.eventId) ?? null;
 
@@ -2031,43 +2025,32 @@ const DeliveryFormModal = ({
           {/* Modo REGISTRADO: elegir usuario + resumen (solo lectura) */}
           {!showManualFields && (
             <>
-              <FormField label="Cliente registrado">
-                <select
+              <div>
+                <span className="block text-xs tracking-[0.2em] uppercase text-muted-foreground mb-2">
+                  Cliente registrado
+                </span>
+                <UserSearchSelect
+                  users={users}
                   value={form.userId}
-                  onChange={(e) => set("userId", e.target.value)}
-                  required
-                  className="input-techno"
-                >
-                  <option value="">Elegí un cliente...</option>
-                  {sortedUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.firstName} {u.lastName} — {u.email}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
+                  onChange={(id) => set("userId", id)}
+                  placeholder="Buscá el cliente por nombre, email o documento..."
+                />
+              </div>
 
-              {sortedUsers.length === 0 && (
+              {users.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   No hay usuarios registrados todavía. Usá “Carga manual”.
                 </p>
               )}
 
+              {/* El buscador ya muestra nombre y email del elegido; acá va el resto. */}
               {selectedUser && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm space-y-1">
-                  <p className="font-semibold">
-                    {selectedUser.firstName} {selectedUser.lastName}
-                  </p>
-                  <p className="text-xs font-mono text-muted-foreground break-all">{selectedUser.email}</p>
-                  {selectedUser.phone && (
-                    <p className="text-xs font-mono text-muted-foreground">
-                      {formatPhoneDisplay(selectedUser.phone)}
-                    </p>
-                  )}
-                  <p className="text-[11px] text-muted-foreground pt-1">
-                    Nombre, email y teléfono se toman de su perfil.
-                  </p>
-                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {selectedUser.phone
+                    ? `Tel. ${formatPhoneDisplay(selectedUser.phone)} · `
+                    : ""}
+                  Nombre, email y teléfono se toman de su perfil.
+                </p>
               )}
             </>
           )}
@@ -2801,6 +2784,7 @@ const BirthdayFormModal = ({
   const [photoPath, setPhotoPath] = useState(originalPath);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // Archivos subidos en esta sesión del modal: si se cancela, se limpian.
   const uploadedRef = useRef<string[]>([]);
@@ -2821,14 +2805,6 @@ const BirthdayFormModal = ({
       alive = false;
     };
   }, [originalPath]);
-
-  const sortedUsers = useMemo(
-    () =>
-      [...users].sort((a, b) =>
-        `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
-      ),
-    [users]
-  );
 
   const age = form.birthDate ? ageFromBirthDate(form.birthDate) : null;
   const isMinor = age !== null && age < 18;
@@ -2863,10 +2839,9 @@ const BirthdayFormModal = ({
     setForm((p) => ({ ...p, userId: "" })); // al pasar a manual se corta el vínculo
   };
 
-  const handlePickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // permite volver a elegir el mismo archivo
-    if (!file) return;
+  // Única vía de subida: la usan el explorador de archivos, el arrastrar-soltar
+  // y el pegado desde el portapapeles.
+  const uploadPhoto = async (file: File) => {
     if (!file.type.startsWith("image/")) return toast.error("Tiene que ser una imagen");
     setUploading(true);
     const result = await uploadIdPhoto(file);
@@ -2881,6 +2856,54 @@ const BirthdayFormModal = ({
     setPhotoPreview(URL.createObjectURL(file));
     toast.success("Foto cargada");
   };
+
+  const handlePickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo
+    if (file) await uploadPhoto(file);
+  };
+
+  // Arrastrar y soltar: se puede tirar la foto de la cédula sobre el recuadro
+  // sin pasar por el explorador de archivos.
+  const handleDragOver = (e: React.DragEvent) => {
+    if (uploading) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Ignoramos los "leave" hacia un hijo del propio recuadro.
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    if (uploading) return;
+    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+    if (!file) return toast.error("Soltá un archivo de imagen");
+    await uploadPhoto(file);
+  };
+
+  // Pegar (Ctrl+V) una captura o una foto copiada, sin guardarla antes en disco.
+  const uploadRef = useRef(uploadPhoto);
+  useEffect(() => {
+    uploadRef.current = uploadPhoto;
+  });
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const file = Array.from(e.clipboardData?.files ?? []).find((f) =>
+        f.type.startsWith("image/")
+      );
+      if (!file) return;
+      e.preventDefault();
+      void uploadRef.current(file);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
 
   const handleRemovePhoto = async () => {
     // La foto ya guardada se borra del bucket sólo cuando se guarda el cambio.
@@ -3031,22 +3054,14 @@ const BirthdayFormModal = ({
           {/* Selector de usuario registrado: autocompleta los datos del perfil */}
           {!editing && mode === "registered" && (
             <>
-              <FormField label="Traer datos de un usuario">
-                <select
-                  value={form.userId}
-                  onChange={(e) => pickUser(e.target.value)}
-                  className="input-techno"
-                >
-                  <option value="">Elegí un usuario...</option>
-                  {sortedUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.firstName} {u.lastName} — {u.email}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
+              <div>
+                <span className="block text-xs tracking-[0.2em] uppercase text-muted-foreground mb-2">
+                  Traer datos de un usuario
+                </span>
+                <UserSearchSelect users={users} value={form.userId} onChange={pickUser} />
+              </div>
               <p className="text-xs text-muted-foreground">
-                {sortedUsers.length === 0
+                {users.length === 0
                   ? "No hay usuarios registrados todavía. Usá “Carga manual”."
                   : "Se completan nombre, documento, fecha de nacimiento y contacto desde su perfil. Podés ajustarlos."}
               </p>
@@ -3165,7 +3180,15 @@ const BirthdayFormModal = ({
             <span className="block text-xs tracking-[0.2em] uppercase text-muted-foreground mb-2">
               Foto del documento (frente)
             </span>
-            <div className="border border-border p-3 space-y-3">
+            <div
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border p-3 space-y-3 transition-colors ${
+                dragging ? "border-celeste bg-celeste/5" : "border-border"
+              }`}
+            >
               {photoPreview ? (
                 <img
                   src={photoPreview}
@@ -3173,10 +3196,19 @@ const BirthdayFormModal = ({
                   className="w-full max-h-56 object-contain bg-secondary"
                 />
               ) : (
-                <div className="h-28 flex flex-col items-center justify-center gap-1 bg-secondary/50 text-muted-foreground text-xs">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="w-full h-28 flex flex-col items-center justify-center gap-1 border border-dashed border-border bg-secondary/50 text-muted-foreground text-xs hover:bg-secondary transition-colors disabled:opacity-60"
+                >
                   <ImageIcon className="w-5 h-5" />
-                  Sin foto cargada
-                </div>
+                  {uploading
+                    ? "Subiendo..."
+                    : dragging
+                      ? "Soltá la foto acá"
+                      : "Arrastrá la foto acá o hacé clic"}
+                </button>
               )}
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
@@ -3206,6 +3238,7 @@ const BirthdayFormModal = ({
                 className="hidden"
               />
               <p className="text-[11px] text-muted-foreground">
+                Arrastrala sobre el recuadro, pegala con Ctrl+V o elegila del explorador.
                 Una sola foto, sólo el frente. Se guarda en un depósito privado: nadie
                 puede verla sin sesión de staff.
               </p>

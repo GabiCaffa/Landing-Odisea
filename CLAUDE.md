@@ -106,8 +106,8 @@ cargadas). UI: pestaña **Entregas** en el panel admin (`DeliveriesAdmin` en
 
 **v10 — Link a cliente registrado:** columna opcional `user_id` en
 `ticket_deliveries` (FK a `profiles`, `on delete set null`). Si el que compra ya es
-usuario registrado, el form permite elegirlo y copia sus datos del perfil (badge
-"Registrado"); si no, carga manual. La lista de Entregas es **mobile-first**
+usuario registrado, el form permite elegirlo con `UserSearchSelect` (typeahead, ver v12)
+y copia sus datos del perfil (badge "Registrado"); si no, carga manual. La lista de Entregas es **mobile-first**
 (tarjetas en celular, tabla en desktop). Extras del módulo: exportar CSV de la lista
 visible, aviso de duplicados (mismo email+evento) y resumen de recaudación. El envío
 de las entradas al cliente es **manual** (botón ✉️ que abre el correo; se marca como
@@ -138,6 +138,11 @@ un documento de identidad por link permanente. UI: pestaña **Cumpleaños** en e
 **admin y operador** (`OPERATOR_TABS`); acceso a datos en `src/lib/birthdays.ts`. Lista
 mobile-first agrupada por evento, ordenada por cumple más próximo, con buscador,
 contador "cumple en N días", export CSV (sin la foto) y aviso de documento repetido.
+En el form, elegir un usuario registrado usa `UserSearchSelect`
+(`src/components/UserSearchSelect.tsx`): typeahead que filtra por nombre/email/documento/
+teléfono ignorando tildes, con navegación por teclado (reemplaza al `<select>` nativo,
+inusable con muchos usuarios). La foto del documento se puede **arrastrar y soltar**
+sobre el recuadro o **pegar con Ctrl+V**, además del explorador de archivos.
 
 ---
 
