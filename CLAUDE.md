@@ -91,7 +91,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `schema.sql` (base) → `profile_features.sql` → `v3_profile_and_promos.sql` →
 `v4_sale_ends_at.sql` → `v5_fix_registration.sql` → `v6_lock_admin.sql` →
 `v7_profile_on_confirm.sql` → `v8_cleanup_unconfirmed.sql` →
-`v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql`.
+`v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql` →
+`v12_birthday_signups.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -119,6 +120,24 @@ panel pero **sólo ve/gestiona Entregas** (no eventos ni usuarios). DB: helper
 `Admin.tsx` deja pasar a staff y fuerza la pestaña Entregas para el operador; el rol se
 asigna desde la pestaña Usuarios (selector user/operador). El admin sigue siendo único
 (`lisoftuy@gmail.com`).
+
+**v12 — Promo cumpleaños:** tabla `birthday_signups` (RLS `is_staff()`) para registrar
+a quién le corresponde el beneficio de cumpleaños y a quién ya se le dio el regalo.
+La persona puede ser un **usuario registrado** (`user_id` opcional a `profiles`; el form
+trae sus datos del perfil y quedan editables) o **alguien de afuera** (carga manual).
+Campos: nombre, apellido, documento + país/depto, **fecha de nacimiento**, email y
+teléfono (opcionales), notas, `event_id` **opcional** (`on delete set null`) y el toggle
+`gift_given` + `gift_given_at`. **Mayoría de edad (18+) validada dos veces:** en el form
+y con un trigger en la DB (`enforce_birthday_signup_adult`; trigger y no CHECK porque
+`current_date` no es inmutable). Otro trigger mantiene coherente `gift_given_at`.
+**Foto del frente del documento:** bucket **privado** `id-photos` (`public = false`,
+políticas de `storage.objects` para staff); se guarda la **ruta** en `id_photo_path`, no
+una URL pública, y el panel la muestra con **URLs firmadas de 5 min** — nunca se expone
+un documento de identidad por link permanente. UI: pestaña **Cumpleaños** en el panel
+(`BirthdaysAdmin` + `BirthdayFormModal` + `IdPhotoModal` en `Admin.tsx`), accesible a
+**admin y operador** (`OPERATOR_TABS`); acceso a datos en `src/lib/birthdays.ts`. Lista
+mobile-first agrupada por evento, ordenada por cumple más próximo, con buscador,
+contador "cumple en N días", export CSV (sin la foto) y aviso de documento repetido.
 
 ---
 

@@ -32,6 +32,9 @@ import {
   Download,
   DollarSign,
   MapPin,
+  Cake,
+  Gift,
+  Eye,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
@@ -48,7 +51,16 @@ import {
   isStaffRole,
 } from "@/contexts/AuthContext";
 import PhoneInput from "@/components/PhoneInput";
-import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
+import LocationSelect from "@/components/LocationSelect";
+import {
+  normalizePhone,
+  formatPhoneDisplay,
+  validateDocumentByCountry,
+  documentLabelByCountry,
+  documentPlaceholderByCountry,
+  formatUruguayCedula,
+  calcAge as ageFromBirthDate,
+} from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import {
@@ -60,12 +72,27 @@ import {
   deleteDelivery,
   setDeliveryStatus,
 } from "@/lib/deliveries";
+import {
+  BirthdaySignup,
+  BirthdayInput,
+  fetchBirthdays,
+  createBirthday,
+  updateBirthday,
+  deleteBirthday,
+  setGiftGiven,
+  uploadIdPhoto,
+  removeIdPhoto,
+  getIdPhotoUrl,
+} from "@/lib/birthdays";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
-type Tab = "dashboard" | "events" | "users" | "deliveries";
+type Tab = "dashboard" | "events" | "users" | "deliveries" | "birthdays";
+
+/** Pestañas que puede usar el operador (el resto es sólo del admin). */
+const OPERATOR_TABS: Tab[] = ["deliveries", "birthdays"];
 
 const Admin = () => {
   const { currentUser, logout, users, events, loading } = useAuth();
@@ -77,9 +104,9 @@ const Admin = () => {
   if (!currentUser) return <Navigate to="/login" replace />;
   if (!isStaffRole(currentUser.role)) return <Navigate to="/" replace />;
 
-  // El operador sólo ve Entregas: forzamos esa pestaña sin importar el estado.
+  // El operador sólo ve Entregas y Cumpleaños: cualquier otra pestaña cae en Entregas.
   const isOperator = currentUser.role === "operador";
-  const activeTab: Tab = isOperator ? "deliveries" : tab;
+  const activeTab: Tab = isOperator && !OPERATOR_TABS.includes(tab) ? "deliveries" : tab;
 
   const handleLogout = async () => {
     const ok = await confirm({
@@ -137,6 +164,12 @@ const Admin = () => {
             active={activeTab === "deliveries"}
             onClick={() => setTab("deliveries")}
           />
+          <SidebarLink
+            icon={<Cake className="w-4 h-4" />}
+            label="Cumpleaños"
+            active={activeTab === "birthdays"}
+            onClick={() => setTab("birthdays")}
+          />
 
           <Link
             to="/"
@@ -169,12 +202,14 @@ const Admin = () => {
               {activeTab === "events" && "Gestión"}
               {activeTab === "users" && "Comunidad"}
               {activeTab === "deliveries" && "Envío de entradas"}
+              {activeTab === "birthdays" && "Promo cumpleaños"}
             </p>
             <h1 className="title-sport text-3xl md:text-4xl tracking-wide font-black text-tinta">
               {activeTab === "dashboard" && "DASHBOARD"}
               {activeTab === "events" && "EVENTOS"}
               {activeTab === "users" && "USUARIOS"}
               {activeTab === "deliveries" && "ENTREGAS"}
+              {activeTab === "birthdays" && "CUMPLEAÑOS"}
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -198,6 +233,7 @@ const Admin = () => {
         {activeTab === "events" && <EventsAdmin />}
         {activeTab === "users" && <UsersAdmin />}
         {activeTab === "deliveries" && <DeliveriesAdmin />}
+        {activeTab === "birthdays" && <BirthdaysAdmin />}
       </main>
     </div>
   );
@@ -2122,6 +2158,1107 @@ const DeliveryFormModal = ({
             </button>
             <button type="submit" disabled={saving} className="btn-celeste flex-1 disabled:opacity-60">
               {saving ? "Guardando..." : editing ? "Guardar cambios" : "Agregar cliente"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// CUMPLEAÑOS — promo de cumple: quién la reclamó y a quién ya se le dio el regalo
+// ════════════════════════════════════════════════════════════════════════════
+
+const MONTHS_CUMPLE = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** Día y mes del cumple, sin año ("14 de marzo"). */
+const birthdayLabel = (iso: string) => {
+  const [, m, d] = (iso ?? "").split("-").map(Number);
+  return m && d ? `${d} de ${MONTHS_CUMPLE[m - 1]}` : "—";
+};
+
+/**
+ * Días hasta el próximo cumple (0 = hoy). Cuenta en días calendario, no en
+ * horas, para que "hoy" no dé -1 según la hora en la que se mire el panel.
+ */
+const daysToNextBirthday = (iso: string) => {
+  const [, m, d] = (iso ?? "").split("-").map(Number);
+  if (!m || !d) return Infinity;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let next = new Date(today.getFullYear(), m - 1, d);
+  if (next < today) next = new Date(today.getFullYear() + 1, m - 1, d);
+  return Math.round((next.getTime() - today.getTime()) / 86400000);
+};
+
+/** Documento formateado sólo si sabemos el formato (cédula uruguaya). */
+const fmtDoc = (doc: string, country?: string) =>
+  country === "UY" ? formatUruguayCedula(doc) : doc;
+
+const birthdayMatches = (b: BirthdaySignup, term: string) => {
+  if (!term) return true;
+  const hay = `${b.firstName} ${b.lastName} ${b.email ?? ""} ${b.documentId} ${b.phone ?? ""}`.toLowerCase();
+  return hay.includes(term);
+};
+
+/** Cuenta regresiva al cumple, para ver de un vistazo a quién hay que atender. */
+const BirthdayCountdown = ({ birthDate }: { birthDate: string }) => {
+  const days = daysToNextBirthday(birthDate);
+  if (!Number.isFinite(days)) return null;
+  const soon = days <= 7;
+  return (
+    <span
+      className={`inline-flex items-center text-[10px] font-bold uppercase tracking-wider rounded-full px-1.5 py-0.5 whitespace-nowrap border ${
+        soon
+          ? "text-celeste-deep bg-celeste/10 border-celeste/30"
+          : "text-muted-foreground bg-secondary border-border"
+      }`}
+    >
+      {days === 0 ? "¡Hoy!" : days === 1 ? "Mañana" : `En ${days} días`}
+    </span>
+  );
+};
+
+// Botonera de un cumpleañero. Compartida por tarjetas (mobile) y tabla (desktop).
+const BirthdayActions = ({
+  b,
+  onGift,
+  onUngift,
+  onPhoto,
+  onEdit,
+  onDelete,
+}: {
+  b: BirthdaySignup;
+  onGift: (b: BirthdaySignup) => void;
+  onUngift: (b: BirthdaySignup) => void;
+  onPhoto: (b: BirthdaySignup) => void;
+  onEdit: (b: BirthdaySignup) => void;
+  onDelete: (b: BirthdaySignup) => void;
+}) => (
+  <div className="flex items-center gap-1">
+    {b.giftGiven ? (
+      <button
+        onClick={() => onUngift(b)}
+        className="p-2 hover:bg-secondary transition-colors"
+        title="Marcar regalo como NO entregado"
+        aria-label="Marcar regalo como no entregado"
+      >
+        <Undo2 className="w-4 h-4" />
+      </button>
+    ) : (
+      <button
+        onClick={() => onGift(b)}
+        className="p-2 hover:bg-green-600 hover:text-white transition-colors"
+        title="Marcar regalo como entregado"
+        aria-label="Marcar regalo como entregado"
+      >
+        <Gift className="w-4 h-4" />
+      </button>
+    )}
+    <button
+      onClick={() => onPhoto(b)}
+      disabled={!b.idPhotoPath}
+      className="p-2 hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      title={b.idPhotoPath ? "Ver foto del documento" : "Sin foto cargada"}
+      aria-label="Ver foto del documento"
+    >
+      <Eye className="w-4 h-4" />
+    </button>
+    {b.email && (
+      <a
+        href={`mailto:${b.email}?subject=${encodeURIComponent("Tu promo de cumpleaños · ODÍSEA")}`}
+        className="p-2 hover:bg-secondary transition-colors"
+        title="Escribir email"
+        aria-label="Escribir email"
+      >
+        <Mail className="w-4 h-4" />
+      </a>
+    )}
+    <button
+      onClick={() => onEdit(b)}
+      className="p-2 hover:bg-secondary transition-colors"
+      title="Editar"
+      aria-label="Editar"
+    >
+      <Pencil className="w-4 h-4" />
+    </button>
+    <button
+      onClick={() => onDelete(b)}
+      className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+      title="Eliminar"
+      aria-label="Eliminar"
+    >
+      <Trash2 className="w-4 h-4" />
+    </button>
+  </div>
+);
+
+const BirthdaysAdmin = () => {
+  const { events, users } = useAuth();
+  const confirm = useConfirm();
+  const [rows, setRows] = useState<BirthdaySignup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [giftFilter, setGiftFilter] = useState<"pending" | "given">("pending");
+  const [search, setSearch] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<BirthdaySignup | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<BirthdaySignup | null>(null);
+
+  const reload = async () => {
+    const data = await fetchBirthdays();
+    setRows(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    reload();
+    const channel = supabase
+      .channel("birthday-signups-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "birthday_signups" },
+        () => reload()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const term = search.trim().toLowerCase();
+  const pendingCount = rows.filter((b) => !b.giftGiven && birthdayMatches(b, term)).length;
+  const givenCount = rows.filter((b) => b.giftGiven && birthdayMatches(b, term)).length;
+
+  // Filtramos por estado del regalo + búsqueda y agrupamos por evento. Los que
+  // todavía no tienen evento asignado van juntos en un grupo al final.
+  const groups = useMemo(() => {
+    const wanted = giftFilter === "given";
+    const list = rows.filter((b) => b.giftGiven === wanted && birthdayMatches(b, term));
+    const byEvent = new Map<string, BirthdaySignup[]>();
+    for (const b of list) {
+      const key = b.eventId ?? "";
+      const arr = byEvent.get(key) ?? [];
+      arr.push(b);
+      byEvent.set(key, arr);
+    }
+    return Array.from(byEvent.entries())
+      .map(([eventId, list]) => {
+        const event = eventId ? events.find((e) => e.id === eventId) : null;
+        return {
+          eventId,
+          eventName: eventId ? event?.name ?? "Evento eliminado" : "Sin evento asignado",
+          eventDate: event?.date ?? "",
+          eventLocation: event?.location ?? "",
+          // Primero el cumple más cercano: es el orden en el que hay que atenderlos.
+          rows: [...list].sort(
+            (a, b) => daysToNextBirthday(a.birthDate) - daysToNextBirthday(b.birthDate)
+          ),
+        };
+      })
+      .sort((a, b) => {
+        if (!a.eventId) return 1; // "Sin evento" siempre último
+        if (!b.eventId) return -1;
+        return a.eventDate.localeCompare(b.eventDate);
+      });
+  }, [rows, giftFilter, term, events]);
+
+  // Resumen general (todos los cumpleañeros, sin importar pestaña ni búsqueda).
+  const summary = useMemo(
+    () => ({
+      total: rows.length,
+      pending: rows.filter((b) => !b.giftGiven).length,
+      given: rows.filter((b) => b.giftGiven).length,
+      thisWeek: rows.filter((b) => daysToNextBirthday(b.birthDate) <= 7).length,
+    }),
+    [rows]
+  );
+
+  // CSV de la lista visible. Nunca incluye la foto del documento: sólo si está
+  // cargada o no (el archivo es sensible y vive en el bucket privado).
+  const exportCsv = () => {
+    const flat = groups.flatMap((g) => g.rows.map((b) => ({ b, eventName: g.eventName })));
+    if (flat.length === 0) {
+      toast.error("No hay nada para exportar en esta lista");
+      return;
+    }
+    const headers = [
+      "Evento", "Nombre", "Apellido", "Documento", "Fecha de nacimiento", "Edad",
+      "Cumple", "Email", "Teléfono", "País", "Ciudad/Depto", "Regalo",
+      "Fecha del regalo", "Foto cargada", "Registrado", "Notas",
+    ];
+    const esc = (v: unknown) => {
+      const s = String(v ?? "");
+      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = flat.map(({ b, eventName }) =>
+      [
+        eventName, b.firstName, b.lastName, fmtDoc(b.documentId, b.country),
+        b.birthDate, ageFromBirthDate(b.birthDate), birthdayLabel(b.birthDate),
+        b.email ?? "", b.phone ? formatPhoneDisplay(b.phone) : "",
+        b.country ?? "", b.state ?? "",
+        b.giftGiven ? "Entregado" : "Pendiente",
+        b.giftGivenAt ? b.giftGivenAt.slice(0, 10) : "",
+        b.idPhotoPath ? "Sí" : "No",
+        b.userId ? "Sí" : "No",
+        b.notes ?? "",
+      ].map(esc).join(",")
+    );
+    const csv = "﻿" + [headers.join(","), ...lines].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `odisea-cumpleanos-${giftFilter === "pending" ? "sin-regalo" : "con-regalo"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openNew = () => {
+    setEditing(null);
+    setModalOpen(true);
+  };
+  const openEdit = (b: BirthdaySignup) => {
+    setEditing(b);
+    setModalOpen(true);
+  };
+
+  const handleGift = async (b: BirthdaySignup) => {
+    const result = await setGiftGiven(b.id, true);
+    if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
+    await reload();
+    toast.success("Regalo marcado como entregado");
+  };
+  const handleUngift = async (b: BirthdaySignup) => {
+    const result = await setGiftGiven(b.id, false);
+    if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
+    await reload();
+    toast.success("Regalo devuelto a pendientes");
+  };
+  const handleDelete = async (b: BirthdaySignup) => {
+    const ok = await confirm({
+      title: "Eliminar cumpleañero",
+      description: `¿Eliminar a ${b.firstName} ${b.lastName} de la lista? Se borra también la foto de su documento. Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
+    const result = await deleteBirthday(b);
+    if (!result.ok) return toast.error(result.error ?? "No se pudo eliminar");
+    await reload();
+    toast.success("Cumpleañero eliminado");
+  };
+
+  if (loading)
+    return <div className="py-12 text-center text-muted-foreground text-sm">Cargando cumpleaños...</div>;
+
+  return (
+    <div className="space-y-5">
+      {/* Resumen general */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MiniStat icon={<Cake className="w-4 h-4" />} label="Cargados" value={String(summary.total)} />
+        <MiniStat icon={<Gift className="w-4 h-4" />} label="Sin regalo" value={String(summary.pending)} />
+        <MiniStat icon={<CheckCircle2 className="w-4 h-4" />} label="Con regalo" value={String(summary.given)} />
+        <MiniStat icon={<Calendar className="w-4 h-4" />} label="Cumplen esta semana" value={String(summary.thisWeek)} />
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+        <div className="inline-flex rounded-lg border border-border overflow-hidden self-start">
+          <button
+            onClick={() => setGiftFilter("pending")}
+            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
+              giftFilter === "pending"
+                ? "bg-foreground text-background"
+                : "bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            Sin regalo ({pendingCount})
+          </button>
+          <button
+            onClick={() => setGiftFilter("given")}
+            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
+              giftFilter === "given"
+                ? "bg-foreground text-background"
+                : "bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            Regalo dado ({givenCount})
+          </button>
+        </div>
+
+        <div className="flex flex-1 gap-3 lg:justify-end">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nombre, documento, email..."
+              className="input-techno pl-10"
+            />
+          </div>
+          <button
+            onClick={exportCsv}
+            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2"
+            title="Exportar la lista visible a CSV (Excel)"
+          >
+            <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar</span>
+          </button>
+          <button onClick={openNew} className="btn-celeste whitespace-nowrap inline-flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Agregar
+          </button>
+        </div>
+      </div>
+
+      {/* Grupos por evento */}
+      {groups.length === 0 ? (
+        <div className="bg-card border border-border py-16 text-center text-muted-foreground text-sm">
+          {giftFilter === "pending"
+            ? "No hay cumpleañeros pendientes. Agregá uno con el botón de arriba."
+            : "Todavía no marcaste ningún regalo como entregado."}
+        </div>
+      ) : (
+        groups.map((g) => (
+          <div key={g.eventId || "sin-evento"} className="bg-card border border-border overflow-hidden">
+            <div className="px-4 py-3 bg-secondary/50 border-b border-border space-y-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <Calendar className="w-4 h-4 text-celeste-deep shrink-0" />
+                <span className="font-bold truncate">{g.eventName}</span>
+                {g.eventDate && (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    · {formatEventDate(g.eventDate)}
+                  </span>
+                )}
+              </div>
+              {g.eventLocation && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{g.eventLocation}</span>
+                </div>
+              )}
+              <div className="text-xs text-muted-foreground">
+                <b className="text-foreground">{g.rows.length}</b> cumpleañero/s
+              </div>
+            </div>
+
+            {/* Mobile: tarjetas apiladas */}
+            <div className="md:hidden divide-y divide-border">
+              {g.rows.map((b) => (
+                <div key={b.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold flex items-center gap-1.5 flex-wrap">
+                        <span className="truncate">{b.firstName} {b.lastName}</span>
+                        {b.userId && <RegBadge />}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {birthdayLabel(b.birthDate)} · {ageFromBirthDate(b.birthDate)} años
+                      </p>
+                    </div>
+                    <BirthdayCountdown birthDate={b.birthDate} />
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <p className="font-mono">{fmtDoc(b.documentId, b.country)}</p>
+                    {b.email && <p className="font-mono break-all">{b.email}</p>}
+                    {b.phone && <p className="font-mono">{formatPhoneDisplay(b.phone)}</p>}
+                    {!b.idPhotoPath && (
+                      <p className="text-charrua font-semibold">Falta la foto del documento</p>
+                    )}
+                    {b.giftGiven && b.giftGivenAt && (
+                      <p>Regalo entregado el {formatEventDate(b.giftGivenAt.slice(0, 10))}</p>
+                    )}
+                  </div>
+                  <div className="pt-1">
+                    <BirthdayActions
+                      b={b}
+                      onGift={handleGift}
+                      onUngift={handleUngift}
+                      onPhoto={setViewingPhoto}
+                      onEdit={openEdit}
+                      onDelete={handleDelete}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop: tabla */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm min-w-[880px]">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <Th>Cumpleañero</Th>
+                    <Th>Documento</Th>
+                    <Th>Cumple</Th>
+                    <Th>Contacto</Th>
+                    <Th>Foto</Th>
+                    {giftFilter === "given" && <Th>Regalo</Th>}
+                    <Th>Acciones</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g.rows.map((b) => (
+                    <tr key={b.id} className="border-b border-border/50 hover:bg-secondary/30">
+                      <Td>
+                        <p className="font-semibold flex items-center gap-2">
+                          {b.firstName} {b.lastName}
+                          {b.userId && <RegBadge />}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {ageFromBirthDate(b.birthDate)} años
+                        </p>
+                      </Td>
+                      <Td className="text-xs font-mono">{fmtDoc(b.documentId, b.country)}</Td>
+                      <Td>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs">{birthdayLabel(b.birthDate)}</span>
+                          <BirthdayCountdown birthDate={b.birthDate} />
+                        </div>
+                      </Td>
+                      <Td>
+                        {b.email && <p className="text-xs font-mono">{b.email}</p>}
+                        {b.phone && (
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {formatPhoneDisplay(b.phone)}
+                          </p>
+                        )}
+                        {!b.email && !b.phone && <span className="text-xs text-muted-foreground">—</span>}
+                      </Td>
+                      <Td>
+                        {b.idPhotoPath ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-green-700">
+                            <ImageIcon className="w-3.5 h-3.5" /> Sí
+                          </span>
+                        ) : (
+                          <span className="text-xs text-charrua font-semibold">Falta</span>
+                        )}
+                      </Td>
+                      {giftFilter === "given" && (
+                        <Td className="text-xs text-muted-foreground">
+                          {b.giftGivenAt ? formatEventDate(b.giftGivenAt.slice(0, 10)) : "—"}
+                        </Td>
+                      )}
+                      <Td>
+                        <BirthdayActions
+                          b={b}
+                          onGift={handleGift}
+                          onUngift={handleUngift}
+                          onPhoto={setViewingPhoto}
+                          onEdit={openEdit}
+                          onDelete={handleDelete}
+                        />
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))
+      )}
+
+      {modalOpen && (
+        <BirthdayFormModal
+          events={events}
+          users={users}
+          existing={rows}
+          editing={editing}
+          onClose={() => setModalOpen(false)}
+          onSaved={() => {
+            setModalOpen(false);
+            // Un cumpleañero nuevo nace sin regalo: mostramos esa lista.
+            if (!editing) setGiftFilter("pending");
+            reload();
+          }}
+        />
+      )}
+
+      {viewingPhoto && (
+        <IdPhotoModal row={viewingPhoto} onClose={() => setViewingPhoto(null)} />
+      )}
+    </div>
+  );
+};
+
+/**
+ * Visor de la foto del documento. El bucket es privado: pedimos una URL firmada
+ * al abrir (vence en 5 minutos) en vez de guardar un link permanente.
+ */
+const IdPhotoModal = ({ row, onClose }: { row: BirthdaySignup; onClose: () => void }) => {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!row.idPhotoPath) return;
+      const result = await getIdPhotoUrl(row.idPhotoPath);
+      if (!alive) return;
+      if (result.ok && result.url) setUrl(result.url);
+      else setError(result.error ?? "No se pudo abrir la foto");
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [row.idPhotoPath]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl bg-background border border-border h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 md:p-6 border-b border-border sticky top-0 bg-background z-10">
+          <div className="min-w-0">
+            <h2 className="title-sport text-lg md:text-xl font-black tracking-wide truncate">
+              {row.firstName} {row.lastName}
+            </h2>
+            <p className="text-xs font-mono text-muted-foreground">
+              {fmtDoc(row.documentId, row.country)}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 md:p-6 space-y-4">
+          {error ? (
+            <p className="text-sm text-charrua">{error}</p>
+          ) : !url ? (
+            <p className="text-sm text-muted-foreground text-center py-12">Abriendo foto...</p>
+          ) : (
+            <>
+              <img
+                src={url}
+                alt={`Documento de ${row.firstName} ${row.lastName}`}
+                className="w-full h-auto max-h-[60vh] object-contain bg-secondary border border-border"
+              />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-techno-outline flex-1 inline-flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" /> Abrir en pestaña nueva
+                </a>
+                <button onClick={onClose} className="btn-celeste flex-1">
+                  Cerrar
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Documento de identidad: el link es temporal (5 minutos) y sólo lo puede
+                generar el staff. No compartir ni descargar sin necesidad.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BirthdayFormModal = ({
+  events,
+  users,
+  existing,
+  editing,
+  onClose,
+  onSaved,
+}: {
+  events: AdminEvent[];
+  users: User[];
+  existing: BirthdaySignup[];
+  editing: BirthdaySignup | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) => {
+  const confirm = useConfirm();
+  // "registered": elegís un usuario ya registrado y se autocompletan sus datos
+  // (igual quedan editables). "manual": se carga todo a mano.
+  const [mode, setMode] = useState<"registered" | "manual">(
+    !editing && users.length > 0 ? "registered" : "manual"
+  );
+  const [form, setForm] = useState({
+    eventId: editing?.eventId ?? "",
+    userId: editing?.userId ?? "",
+    firstName: editing?.firstName ?? "",
+    lastName: editing?.lastName ?? "",
+    documentId: editing ? fmtDoc(editing.documentId, editing.country) : "",
+    birthDate: editing?.birthDate ?? "",
+    email: editing?.email ?? "",
+    country: editing?.country || DEFAULT_COUNTRY_CODE,
+    state: editing?.state ?? "",
+    phone: editing?.phone ? formatPhoneDisplay(editing.phone).replace(/^\+\d+\s*/, "") : "",
+    notes: editing?.notes ?? "",
+    giftGiven: editing?.giftGiven ?? false,
+  });
+  const [saving, setSaving] = useState(false);
+
+  // Foto del documento: se sube al elegirla y guardamos su ruta en el bucket.
+  const originalPath = editing?.idPhotoPath ?? "";
+  const [photoPath, setPhotoPath] = useState(originalPath);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  // Archivos subidos en esta sesión del modal: si se cancela, se limpian.
+  const uploadedRef = useRef<string[]>([]);
+  const savedRef = useRef(false);
+
+  const set = (field: keyof typeof form, value: string | boolean) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+  // Al editar, la foto ya guardada se muestra con una URL firmada.
+  useEffect(() => {
+    let alive = true;
+    if (!originalPath) return;
+    (async () => {
+      const result = await getIdPhotoUrl(originalPath);
+      if (alive && result.ok && result.url) setPhotoPreview(result.url);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [originalPath]);
+
+  const sortedUsers = useMemo(
+    () =>
+      [...users].sort((a, b) =>
+        `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+      ),
+    [users]
+  );
+
+  const age = form.birthDate ? ageFromBirthDate(form.birthDate) : null;
+  const isMinor = age !== null && age < 18;
+
+  // Tope del selector de fecha: hoy menos 18 años (no se puede elegir un menor).
+  const maxBirthDate = useMemo(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
+  // Trae los datos del perfil del usuario elegido (quedan editables).
+  const pickUser = (id: string) => {
+    const u = users.find((x) => x.id === id);
+    if (!u) return setForm((p) => ({ ...p, userId: "" }));
+    setForm((p) => ({
+      ...p,
+      userId: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      documentId: u.documentId ? fmtDoc(u.documentId, u.country ?? "UY") : "",
+      birthDate: u.birthDate ?? "",
+      email: u.email ?? "",
+      country: u.country || DEFAULT_COUNTRY_CODE,
+      state: u.state ?? "",
+      phone: u.phone ? formatPhoneDisplay(u.phone).replace(/^\+\d+\s*/, "") : "",
+    }));
+  };
+
+  const switchMode = (m: "registered" | "manual") => {
+    setMode(m);
+    setForm((p) => ({ ...p, userId: "" })); // al pasar a manual se corta el vínculo
+  };
+
+  const handlePickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Tiene que ser una imagen");
+    setUploading(true);
+    const result = await uploadIdPhoto(file);
+    setUploading(false);
+    if (!result.ok || !result.path) {
+      return toast.error(result.error ?? "No se pudo subir la foto");
+    }
+    // Si ya habíamos subido otra en esta sesión, la de antes queda huérfana: la borramos.
+    if (photoPath && photoPath !== originalPath) await removeIdPhoto(photoPath);
+    uploadedRef.current.push(result.path);
+    setPhotoPath(result.path);
+    setPhotoPreview(URL.createObjectURL(file));
+    toast.success("Foto cargada");
+  };
+
+  const handleRemovePhoto = async () => {
+    // La foto ya guardada se borra del bucket sólo cuando se guarda el cambio.
+    if (photoPath && photoPath !== originalPath) await removeIdPhoto(photoPath);
+    setPhotoPath("");
+    setPhotoPreview(null);
+  };
+
+  // Cancelar: lo subido en esta sesión no quedó referenciado por ninguna ficha,
+  // así que lo borramos del bucket para no dejar fotos de documentos huérfanas.
+  const handleClose = async () => {
+    if (!savedRef.current) {
+      for (const p of uploadedRef.current) await removeIdPhoto(p);
+    }
+    onClose();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const firstName = form.firstName.trim();
+    const lastName = form.lastName.trim();
+    if (!firstName) return toast.error("Indicá el nombre");
+    if (!lastName) return toast.error("Indicá el apellido");
+
+    if (!form.birthDate) return toast.error("Indicá la fecha de nacimiento");
+    if (ageFromBirthDate(form.birthDate) < 18) {
+      return toast.error("El cumpleañero tiene que ser mayor de 18 años");
+    }
+
+    if (!form.country) return toast.error("Elegí el país");
+
+    // Documento: guardamos sólo dígitos (y la K del RUT chileno).
+    const documentId = form.documentId.replace(/[^\dkK]/g, "").toUpperCase();
+    if (!documentId) return toast.error("Indicá el número de documento");
+    if (!validateDocumentByCountry(documentId, form.country)) {
+      return toast.error(`${documentLabelByCountry(form.country)} inválido`);
+    }
+
+    // Email y teléfono son opcionales, pero si vienen tienen que ser válidos.
+    const email = form.email.trim().toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return toast.error("Email inválido");
+    }
+    let phoneE164: string | null = null;
+    if (form.phone.trim()) {
+      phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
+      if (!phoneE164) return toast.error("Teléfono inválido");
+    }
+
+    // Aviso de repetido: mismo documento ya cargado (no bloquea, avisa).
+    const dup = existing.find(
+      (x) => x.id !== editing?.id && x.documentId.toUpperCase() === documentId
+    );
+    if (dup) {
+      const ok = await confirm({
+        title: "Ya está cargado",
+        description: `${dup.firstName} ${dup.lastName} ya figura con ese documento (${
+          dup.giftGiven ? "regalo entregado" : "regalo pendiente"
+        }). ¿Querés cargarlo igual?`,
+        confirmText: "Cargar igual",
+      });
+      if (!ok) return;
+    }
+
+    // La foto del documento es lo que valida la identidad: si falta, avisamos.
+    if (!photoPath) {
+      const ok = await confirm({
+        title: "Sin foto del documento",
+        description:
+          "No cargaste la foto del frente del documento. Podés agregarla después editando la ficha. ¿Guardar así?",
+        confirmText: "Guardar sin foto",
+      });
+      if (!ok) return;
+    }
+
+    const input: BirthdayInput = {
+      eventId: form.eventId || null,
+      userId: form.userId || null,
+      firstName,
+      lastName,
+      documentId,
+      birthDate: form.birthDate,
+      email: email || null,
+      phone: phoneE164,
+      country: form.country,
+      state: form.state.trim() || null,
+      idPhotoPath: photoPath || null,
+      giftGiven: form.giftGiven,
+      notes: form.notes.trim() || null,
+    };
+
+    setSaving(true);
+    const result = editing
+      ? await updateBirthday(editing.id, input)
+      : await createBirthday(input);
+    setSaving(false);
+    if (!result.ok) return toast.error(result.error ?? "No se pudo guardar");
+
+    savedRef.current = true;
+    // La foto anterior ya no se usa: recién ahora es seguro borrarla del bucket.
+    if (originalPath && originalPath !== photoPath) await removeIdPhoto(originalPath);
+    toast.success(editing ? "Cumpleañero actualizado" : "Cumpleañero agregado");
+    onSaved();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl bg-background border border-border h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 md:p-6 border-b border-border sticky top-0 bg-background z-10">
+          <h2 className="title-sport text-xl md:text-2xl font-black tracking-wide">
+            {editing ? "EDITAR CUMPLEAÑERO" : "NUEVO CUMPLEAÑERO"}
+          </h2>
+          <button onClick={handleClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4">
+          {/* Toggle registrado/manual — sólo al agregar (no al editar) */}
+          {!editing && (
+            <div className="inline-flex w-full rounded-lg border border-border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => switchMode("registered")}
+                className={`flex-1 px-3 py-2.5 text-xs font-bold tracking-wider uppercase transition-colors ${
+                  mode === "registered"
+                    ? "bg-foreground text-background"
+                    : "bg-background text-muted-foreground hover:bg-secondary"
+                }`}
+              >
+                Usuario registrado
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode("manual")}
+                className={`flex-1 px-3 py-2.5 text-xs font-bold tracking-wider uppercase transition-colors ${
+                  mode === "manual"
+                    ? "bg-foreground text-background"
+                    : "bg-background text-muted-foreground hover:bg-secondary"
+                }`}
+              >
+                Carga manual
+              </button>
+            </div>
+          )}
+
+          {/* Selector de usuario registrado: autocompleta los datos del perfil */}
+          {!editing && mode === "registered" && (
+            <>
+              <FormField label="Traer datos de un usuario">
+                <select
+                  value={form.userId}
+                  onChange={(e) => pickUser(e.target.value)}
+                  className="input-techno"
+                >
+                  <option value="">Elegí un usuario...</option>
+                  {sortedUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName} — {u.email}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <p className="text-xs text-muted-foreground">
+                {sortedUsers.length === 0
+                  ? "No hay usuarios registrados todavía. Usá “Carga manual”."
+                  : "Se completan nombre, documento, fecha de nacimiento y contacto desde su perfil. Podés ajustarlos."}
+              </p>
+            </>
+          )}
+
+          {editing && form.userId && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <RegBadge /> Ficha vinculada a un usuario registrado.
+            </p>
+          )}
+
+          {/* Evento (opcional) */}
+          <FormField label="Evento (opcional)">
+            <select
+              value={form.eventId}
+              onChange={(e) => set("eventId", e.target.value)}
+              className="input-techno"
+            >
+              <option value="">Sin evento asignado</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.name} · {formatEventDate(ev.date)}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          {/* Datos personales */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Nombre">
+              <input
+                value={form.firstName}
+                onChange={(e) => set("firstName", e.target.value)}
+                required
+                className="input-techno"
+                placeholder="Juan"
+              />
+            </FormField>
+            <FormField label="Apellido">
+              <input
+                value={form.lastName}
+                onChange={(e) => set("lastName", e.target.value)}
+                required
+                className="input-techno"
+                placeholder="Pérez"
+              />
+            </FormField>
+          </div>
+
+          <LocationSelect
+            country={form.country}
+            state={form.state}
+            onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
+            onStateChange={(s) => setForm((p) => ({ ...p, state: s }))}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label={documentLabelByCountry(form.country)}>
+              <input
+                value={form.documentId}
+                onChange={(e) => set("documentId", e.target.value)}
+                required
+                className="input-techno"
+                placeholder={documentPlaceholderByCountry(form.country)}
+              />
+            </FormField>
+            <div>
+              <FormField label="Fecha de nacimiento">
+                <input
+                  type="date"
+                  value={form.birthDate}
+                  onChange={(e) => set("birthDate", e.target.value)}
+                  required
+                  max={maxBirthDate}
+                  min="1900-01-01"
+                  className="input-techno"
+                />
+              </FormField>
+              {age !== null && (
+                <p className={`mt-1.5 text-xs ${isMinor ? "text-charrua font-semibold" : "text-muted-foreground"}`}>
+                  {isMinor
+                    ? "Menor de edad: no puede acceder al beneficio"
+                    : `${age} años · cumple el ${birthdayLabel(form.birthDate)}`}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Contacto (opcional) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Email (opcional)">
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => set("email", e.target.value)}
+                className="input-techno"
+                placeholder="cliente@email.com"
+              />
+            </FormField>
+            <div>
+              <span className="block text-xs tracking-[0.2em] uppercase text-muted-foreground mb-2">
+                Teléfono (opcional)
+              </span>
+              <PhoneInput
+                country={form.country}
+                value={form.phone}
+                onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
+                onChange={(v) => set("phone", v)}
+              />
+            </div>
+          </div>
+
+          {/* Foto del frente del documento */}
+          <div>
+            <span className="block text-xs tracking-[0.2em] uppercase text-muted-foreground mb-2">
+              Foto del documento (frente)
+            </span>
+            <div className="border border-border p-3 space-y-3">
+              {photoPreview ? (
+                <img
+                  src={photoPreview}
+                  alt="Frente del documento"
+                  className="w-full max-h-56 object-contain bg-secondary"
+                />
+              ) : (
+                <div className="h-28 flex flex-col items-center justify-center gap-1 bg-secondary/50 text-muted-foreground text-xs">
+                  <ImageIcon className="w-5 h-5" />
+                  Sin foto cargada
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="btn-techno-outline flex-1 inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  <Upload className="w-4 h-4" />
+                  {uploading ? "Subiendo..." : photoPath ? "Cambiar foto" : "Subir foto"}
+                </button>
+                {photoPath && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    className="btn-techno-outline flex-1 inline-flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" /> Quitar
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePickPhoto}
+                className="hidden"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Una sola foto, sólo el frente. Se guarda en un depósito privado: nadie
+                puede verla sin sesión de staff.
+              </p>
+            </div>
+          </div>
+
+          {/* Toggle del regalo */}
+          <button
+            type="button"
+            onClick={() => set("giftGiven", !form.giftGiven)}
+            className={`w-full flex items-center justify-between gap-3 border px-4 py-3 transition-colors ${
+              form.giftGiven
+                ? "border-green-600/40 bg-green-600/10"
+                : "border-border bg-secondary/30 hover:bg-secondary/60"
+            }`}
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <Gift className="w-4 h-4" />
+              {form.giftGiven ? "Regalo entregado" : "Regalo pendiente"}
+            </span>
+            <span
+              className={`relative w-11 h-6 rounded-full transition-colors ${
+                form.giftGiven ? "bg-green-600" : "bg-muted-foreground/30"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                  form.giftGiven ? "translate-x-5" : ""
+                }`}
+              />
+            </span>
+          </button>
+
+          <FormField label="Notas (opcional)">
+            <textarea
+              value={form.notes}
+              onChange={(e) => set("notes", e.target.value)}
+              rows={2}
+              className="input-techno resize-none"
+              placeholder="Qué regalo, con quién viene, etc."
+            />
+          </FormField>
+
+          <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+            <button type="button" onClick={handleClose} className="btn-techno-outline flex-1">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || uploading || isMinor}
+              className="btn-celeste flex-1 disabled:opacity-60"
+            >
+              {saving ? "Guardando..." : editing ? "Guardar cambios" : "Agregar cumpleañero"}
             </button>
           </div>
         </form>
