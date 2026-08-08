@@ -3274,12 +3274,10 @@ const BirthdayFormModal = ({
   const age = form.birthDate ? ageFromBirthDate(form.birthDate) : null;
   const isMinor = age !== null && age < 18;
 
-  // Tope del selector de fecha: hoy menos 18 años (no se puede elegir un menor).
-  const maxBirthDate = useMemo(() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 18);
-    return d.toISOString().slice(0, 10);
-  }, []);
+  // Tope del selector de fecha: hoy. Se admite cargar a un menor (avisando al
+  // guardar), porque puede cumplir los 18 antes del evento; lo único imposible
+  // es haber nacido en el futuro.
+  const maxBirthDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   // Trae los datos del perfil del usuario elegido (quedan editables).
   const pickUser = (id: string) => {
@@ -3395,9 +3393,6 @@ const BirthdayFormModal = ({
     if (!lastName) return toast.error("Indicá el apellido");
 
     if (!form.birthDate) return toast.error("Indicá la fecha de nacimiento");
-    if (ageFromBirthDate(form.birthDate) < 18) {
-      return toast.error("El cumpleañero tiene que ser mayor de 18 años");
-    }
 
     if (!form.country) return toast.error("Elegí el país");
 
@@ -3417,6 +3412,21 @@ const BirthdayFormModal = ({
     if (form.phone.trim()) {
       phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
       if (!phoneE164) return toast.error("Teléfono inválido");
+    }
+
+    // Menor de edad: avisa pero no bloquea. Es habitual que cumpla los 18 entre
+    // la carga y la fecha del evento, y eso el sistema no lo puede decidir solo.
+    if (ageFromBirthDate(form.birthDate) < 18) {
+      const ok = await confirm({
+        title: "Es menor de edad",
+        description: `Hoy tiene ${ageFromBirthDate(
+          form.birthDate
+        )} años: cumple 18 el ${formatEventDate(
+          eighteenthBirthday(form.birthDate)
+        )}. Verificá que sea antes del evento. ¿Lo cargás igual?`,
+        confirmText: "Cargar igual",
+      });
+      if (!ok) return;
     }
 
     // Aviso de repetido: mismo documento ya cargado (no bloquea, avisa).
@@ -3609,7 +3619,9 @@ const BirthdayFormModal = ({
               {age !== null && (
                 <p className={`mt-1.5 text-xs ${isMinor ? "text-charrua font-semibold" : "text-muted-foreground"}`}>
                   {isMinor
-                    ? "Menor de edad: no puede acceder al beneficio"
+                    ? `Menor de edad: cumple 18 el ${formatEventDate(
+                        eighteenthBirthday(form.birthDate)
+                      )}`
                     : `${age} años · cumple el ${birthdayLabel(form.birthDate)}`}
                 </p>
               )}
@@ -3774,6 +3786,16 @@ const Th = ({ children }: { children: React.ReactNode }) => (
 const Td = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <td className={`px-4 py-3 align-middle ${className}`}>{children}</td>
 );
+
+/**
+ * Fecha exacta en la que cumple 18. Se usa en el aviso de menor de edad: lo que
+ * importa no es la edad de hoy sino si llega a los 18 antes del evento.
+ */
+const eighteenthBirthday = (birth: string) => {
+  const d = new Date(birth);
+  d.setFullYear(d.getFullYear() + 18);
+  return d.toISOString().slice(0, 10);
+};
 
 const calcAge = (birth: string) => {
   if (!birth) return "—";

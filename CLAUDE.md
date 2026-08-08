@@ -92,7 +92,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v4_sale_ends_at.sql` → `v5_fix_registration.sql` → `v6_lock_admin.sql` →
 `v7_profile_on_confirm.sql` → `v8_cleanup_unconfirmed.sql` →
 `v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql` →
-`v12_birthday_signups.sql` → `v13_payment_accounts.sql`.
+`v12_birthday_signups.sql` → `v13_payment_accounts.sql` →
+`v14_birthday_minor_warning.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -127,9 +128,9 @@ La persona puede ser un **usuario registrado** (`user_id` opcional a `profiles`;
 trae sus datos del perfil y quedan editables) o **alguien de afuera** (carga manual).
 Campos: nombre, apellido, documento + país/depto, **fecha de nacimiento**, email y
 teléfono (opcionales), notas, `event_id` **opcional** (`on delete set null`) y el toggle
-`gift_given` + `gift_given_at`. **Mayoría de edad (18+) validada dos veces:** en el form
-y con un trigger en la DB (`enforce_birthday_signup_adult`; trigger y no CHECK porque
-`current_date` no es inmutable). Otro trigger mantiene coherente `gift_given_at`.
+`gift_given` + `gift_given_at`. **Mayoría de edad:** validada en el form y con un trigger
+en la DB (trigger y no CHECK porque `current_date` no es inmutable). **v14 la convirtió
+en aviso, ver abajo.** Otro trigger mantiene coherente `gift_given_at`.
 **Foto del frente del documento:** bucket **privado** `id-photos` (`public = false`,
 políticas de `storage.objects` para staff); se guarda la **ruta** en `id_photo_path`, no
 una URL pública, y el panel la muestra con **URLs firmadas de 5 min** — nunca se expone
@@ -160,6 +161,15 @@ en el form de evento y columna "Cuenta" en la tabla de eventos; acceso a datos e
 consulta (`fetchAccountForEvent`, embed por la FK) y la usa tanto en el bloque visual como
 en el mensaje de WhatsApp. La migración siembra la Itaú actual, hace backfill de los eventos
 existentes y recién ahí aplica el `not null`.
+
+**v14 — Menor de edad en cumpleaños: aviso, no bloqueo.** v12 bloqueaba en tres capas
+(`max` del input de fecha, validación del submit y trigger `enforce_birthday_signup_adult`).
+No servía: es habitual que la persona cumpla 18 **entre la carga y el evento** (nace el
+13/08, el evento es el 24), y el sistema no puede decidirlo solo porque `event_id` es
+opcional en la ficha. Ahora se puede cargar igual, avisando dos veces —mensaje en rojo bajo
+la fecha con **la fecha exacta en que cumple 18** (helper `eighteenthBirthday`) y diálogo de
+confirmación al guardar, mismo patrón que el documento repetido y la foto faltante—. En la
+DB, el trigger de 18+ se reemplazó por uno que sólo rechaza **fechas de nacimiento futuras**.
 
 ---
 
