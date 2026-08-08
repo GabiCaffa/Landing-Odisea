@@ -92,7 +92,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v4_sale_ends_at.sql` → `v5_fix_registration.sql` → `v6_lock_admin.sql` →
 `v7_profile_on_confirm.sql` → `v8_cleanup_unconfirmed.sql` →
 `v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql` →
-`v12_birthday_signups.sql`.
+`v12_birthday_signups.sql` → `v13_payment_accounts.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -143,6 +143,23 @@ En el form, elegir un usuario registrado usa `UserSearchSelect`
 teléfono ignorando tildes, con navegación por teclado (reemplaza al `<select>` nativo,
 inusable con muchos usuarios). La foto del documento se puede **arrastrar y soltar**
 sobre el recuadro o **pegar con Ctrl+V**, además del explorador de archivos.
+
+**v13 — Cuentas de cobro por evento:** los datos para transferir estaban **hardcodeados**
+en `TicketPurchaseModal.tsx` (una sola cuenta Itaú). Ahora hay catálogo `payment_accounts`
+(label interno, titular, banco, tipo, nro de cuenta, documento, nota, `active`, `is_default`)
+y `events.payment_account_id` **not null** con `on delete restrict`: cada evento cobra en la
+cuenta que se le asigne y **no se puede publicar un evento sin cuenta**. Para retirar una
+cuenta se **desactiva** (borrarla falla si algún evento la usa → el error 23503 se traduce a
+un mensaje claro); así los eventos viejos conservan a qué cuenta se cobró. Un trigger
+mantiene una sola `is_default` (la que se propone al crear un evento). RLS: **lectura
+pública** (el comprador tiene que ver a dónde transferir — ese dato ya viajaba en el JS del
+sitio), escritura **sólo admin**: el operador no toca cuentas. UI: pestaña **Cuentas** en el
+panel (`AccountsAdmin` + `AccountFormModal` en `Admin.tsx`, sólo admin), selector obligatorio
+en el form de evento y columna "Cuenta" en la tabla de eventos; acceso a datos en
+`src/lib/paymentAccounts.ts`. El modal de compra resuelve la cuenta del evento en una sola
+consulta (`fetchAccountForEvent`, embed por la FK) y la usa tanto en el bloque visual como
+en el mensaje de WhatsApp. La migración siembra la Itaú actual, hace backfill de los eventos
+existentes y recién ahí aplica el `not null`.
 
 ---
 

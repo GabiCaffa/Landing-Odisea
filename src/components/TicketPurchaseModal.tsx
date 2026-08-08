@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE, getCountry } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
+import { PaymentAccount, fetchAccountForEvent } from "@/lib/paymentAccounts";
 import { toast } from "sonner";
 
 interface Ticket {
@@ -53,6 +54,9 @@ const TicketPurchaseModal = ({
   const [birthdayEligible, setBirthdayEligible] = useState(false);
   const [birthdayApplied, setBirthdayApplied] = useState(false);
 
+  // Cuenta de cobro del evento (la carga el admin desde el panel).
+  const [account, setAccount] = useState<PaymentAccount | null>(null);
+
   // Si el user ya está logueado, saltamos el prompt y prellenamos
   useEffect(() => {
     if (!isOpen) return;
@@ -82,6 +86,22 @@ const TicketPurchaseModal = ({
       active = false;
     };
   }, [isOpen, currentUser, eventId, checkBirthdayPromo]);
+
+  // Datos de transferencia del evento. Si el evento no tiene cuenta (o falla la
+  // consulta) no inventamos nada: se oculta el bloque y se pide por WhatsApp.
+  useEffect(() => {
+    if (!isOpen || !eventId) {
+      setAccount(null);
+      return;
+    }
+    let active = true;
+    fetchAccountForEvent(eventId).then((acc) => {
+      if (active) setAccount(acc);
+    });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, eventId]);
 
   if (!isOpen) return null;
 
@@ -131,11 +151,16 @@ const TicketPurchaseModal = ({
     if (currentUser) {
       msg += `Documento: ${currentUser.documentId}\n`;
     }
-    msg += `\nVoy a realizar la transferencia a:\n`;
-    msg += `GABRIEL CAFFAREL DALMAU\n`;
-    msg += `Banco: ITAÚ\n`;
-    msg += `Tipo de cuenta: CAJA DE AHORRO PESOS (UYU)\n`;
-    msg += `Nro de cuenta: 3483509\n`;
+    if (account) {
+      msg += `\nVoy a realizar la transferencia a:\n`;
+      msg += `${account.holderName}\n`;
+      msg += `Banco: ${account.bank}\n`;
+      if (account.accountType) msg += `Tipo de cuenta: ${account.accountType}\n`;
+      msg += `Nro de cuenta: ${account.accountNumber}\n`;
+      if (account.documentId) msg += `Documento del titular: ${account.documentId}\n`;
+    } else {
+      msg += `\n¿A qué cuenta hago la transferencia?\n`;
+    }
     msg += `Comprobante: `;
     return msg;
   };
@@ -325,12 +350,30 @@ const TicketPurchaseModal = ({
             {hasSelectedTickets && isFormValid && (
               <div className="p-4 bg-secondary/30 border border-border space-y-3">
                 <h4 className="font-medium text-base">Datos para transferencia</h4>
-                <div className="text-sm space-y-1">
-                  <p className="font-medium">GABRIEL CAFFAREL DALMAU</p>
-                  <p className="text-muted-foreground">Nro de cuenta 3483509</p>
-                  <p className="text-muted-foreground">BANCO ITAÚ</p>
-                  <p className="text-muted-foreground">CAJA AHORRO PESOS (UYU)</p>
-                </div>
+                {account ? (
+                  <div className="text-sm space-y-1">
+                    <p className="font-medium">{account.holderName}</p>
+                    <p className="text-muted-foreground">
+                      Nro de cuenta {account.accountNumber}
+                    </p>
+                    <p className="text-muted-foreground">BANCO {account.bank}</p>
+                    {account.accountType && (
+                      <p className="text-muted-foreground">{account.accountType}</p>
+                    )}
+                    {account.documentId && (
+                      <p className="text-muted-foreground">
+                        Documento del titular {account.documentId}
+                      </p>
+                    )}
+                    {account.notes && (
+                      <p className="text-muted-foreground pt-1">{account.notes}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Te pasamos los datos de la cuenta por WhatsApp al enviar el mensaje.
+                  </p>
+                )}
                 <div className="mt-4 pt-3 border-t border-border/50">
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     <strong>Importante:</strong> Transfiere el monto total de{" "}

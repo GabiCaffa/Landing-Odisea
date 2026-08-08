@@ -35,6 +35,8 @@ import {
   Cake,
   Gift,
   Eye,
+  CreditCard,
+  Star,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
@@ -85,12 +87,22 @@ import {
   removeIdPhoto,
   getIdPhotoUrl,
 } from "@/lib/birthdays";
+import {
+  PaymentAccount,
+  PaymentAccountInput,
+  fetchPaymentAccounts,
+  createPaymentAccount,
+  updatePaymentAccount,
+  deletePaymentAccount,
+  setDefaultAccount,
+  accountSummary,
+} from "@/lib/paymentAccounts";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
-type Tab = "dashboard" | "events" | "users" | "deliveries" | "birthdays";
+type Tab = "dashboard" | "events" | "accounts" | "users" | "deliveries" | "birthdays";
 
 /** Pestañas que puede usar el operador (el resto es sólo del admin). */
 const OPERATOR_TABS: Tab[] = ["deliveries", "birthdays"];
@@ -152,6 +164,12 @@ const Admin = () => {
                 onClick={() => setTab("events")}
               />
               <SidebarLink
+                icon={<CreditCard className="w-4 h-4" />}
+                label="Cuentas"
+                active={activeTab === "accounts"}
+                onClick={() => setTab("accounts")}
+              />
+              <SidebarLink
                 icon={<Users className="w-4 h-4" />}
                 label="Usuarios"
                 active={activeTab === "users"}
@@ -201,6 +219,7 @@ const Admin = () => {
             <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground">
               {activeTab === "dashboard" && "Resumen general"}
               {activeTab === "events" && "Gestión"}
+              {activeTab === "accounts" && "Cobros"}
               {activeTab === "users" && "Comunidad"}
               {activeTab === "deliveries" && "Envío de entradas"}
               {activeTab === "birthdays" && "Promo cumpleaños"}
@@ -208,6 +227,7 @@ const Admin = () => {
             <h1 className="title-sport text-3xl md:text-4xl tracking-wide font-black text-tinta">
               {activeTab === "dashboard" && "DASHBOARD"}
               {activeTab === "events" && "EVENTOS"}
+              {activeTab === "accounts" && "CUENTAS"}
               {activeTab === "users" && "USUARIOS"}
               {activeTab === "deliveries" && "ENTREGAS"}
               {activeTab === "birthdays" && "CUMPLEAÑOS"}
@@ -232,6 +252,7 @@ const Admin = () => {
 
         {activeTab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
         {activeTab === "events" && <EventsAdmin />}
+        {activeTab === "accounts" && <AccountsAdmin />}
         {activeTab === "users" && <UsersAdmin />}
         {activeTab === "deliveries" && <DeliveriesAdmin />}
         {activeTab === "birthdays" && <BirthdaysAdmin />}
@@ -445,6 +466,17 @@ const EventsAdmin = () => {
   const [editing, setEditing] = useState<AdminEvent | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
+  // Cuentas de cobro: para el selector del form y la columna "Cuenta".
+  const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
+
+  useEffect(() => {
+    fetchPaymentAccounts().then(setAccounts);
+  }, []);
+
+  const accountById = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a])),
+    [accounts]
+  );
 
   const filtered = useMemo(
     () =>
@@ -518,6 +550,7 @@ const EventsAdmin = () => {
               <Th>Fecha</Th>
               <Th>Lugar</Th>
               <Th>Precio</Th>
+              <Th>Cuenta</Th>
               <Th>Capacidad</Th>
               <Th>Estado</Th>
               <Th>Acciones</Th>
@@ -550,6 +583,20 @@ const EventsAdmin = () => {
                 <Td>{formatEventDate(e.date)}</Td>
                 <Td>{e.location}</Td>
                 <Td>${e.price}</Td>
+                <Td>
+                  {accountById.has(e.paymentAccountId) ? (
+                    <div>
+                      <p className="text-xs font-medium">
+                        {accountById.get(e.paymentAccountId)!.label}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {accountSummary(accountById.get(e.paymentAccountId)!)}
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </Td>
                 <Td>{e.capacity}</Td>
                 <Td><StatusBadge status={e.status} /></Td>
                 <Td>
@@ -577,7 +624,7 @@ const EventsAdmin = () => {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-muted-foreground text-sm">
+                <td colSpan={9} className="text-center py-12 text-muted-foreground text-sm">
                   Sin eventos para mostrar
                 </td>
               </tr>
@@ -589,6 +636,7 @@ const EventsAdmin = () => {
       {showForm && (
         <EventFormModal
           initial={editing}
+          accounts={accounts}
           onClose={() => {
             setShowForm(false);
             setEditing(null);
@@ -596,6 +644,384 @@ const EventsAdmin = () => {
           onSave={handleSave}
         />
       )}
+    </div>
+  );
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Cuentas de cobro (ABM) — a qué cuenta transfiere la gente en cada evento
+// ────────────────────────────────────────────────────────────────────────────
+const AccountsAdmin = () => {
+  const confirm = useConfirm();
+  const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<PaymentAccount | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const reload = async () => {
+    setLoading(true);
+    setAccounts(await fetchPaymentAccounts());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  const handleSave = async (data: PaymentAccountInput) => {
+    const result = editing
+      ? await updatePaymentAccount(editing.id, data)
+      : await createPaymentAccount(data);
+    if (!result.ok) {
+      toast.error(result.error ?? "No se pudo guardar la cuenta");
+      return;
+    }
+    toast.success(editing ? "Cuenta actualizada" : "Cuenta creada");
+    setShowForm(false);
+    setEditing(null);
+    reload();
+  };
+
+  const handleToggleActive = async (a: PaymentAccount) => {
+    if (a.isDefault && a.active) {
+      toast.error("No podés desactivar la cuenta por defecto. Marcá otra primero.");
+      return;
+    }
+    const result = await updatePaymentAccount(a.id, { active: !a.active });
+    if (!result.ok) {
+      toast.error(result.error ?? "No se pudo cambiar el estado");
+      return;
+    }
+    toast.success(a.active ? "Cuenta desactivada" : "Cuenta activada");
+    reload();
+  };
+
+  const handleSetDefault = async (a: PaymentAccount) => {
+    const result = await setDefaultAccount(a.id);
+    if (!result.ok) {
+      toast.error(result.error ?? "No se pudo marcar por defecto");
+      return;
+    }
+    toast.success(`"${a.label}" queda como cuenta por defecto`);
+    reload();
+  };
+
+  const handleDelete = async (a: PaymentAccount) => {
+    const ok = await confirm({
+      title: "Eliminar cuenta",
+      description: `¿Seguro que querés eliminar "${a.label}"? Si algún evento la usa, no se va a poder borrar: desactivala en ese caso.`,
+      confirmText: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
+    const result = await deletePaymentAccount(a.id);
+    if (!result.ok) {
+      toast.error(result.error ?? "No se pudo eliminar");
+      return;
+    }
+    toast.success("Cuenta eliminada");
+    reload();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground max-w-xl">
+          Cuentas a las que la gente transfiere. Cada evento usa una: es la que se muestra
+          en el modal de compra y se copia al mensaje de WhatsApp.
+        </p>
+        <button
+          onClick={() => {
+            setEditing(null);
+            setShowForm(true);
+          }}
+          className="btn-techno text-xs py-3 px-5 self-start sm:self-auto whitespace-nowrap"
+        >
+          <Plus className="w-4 h-4" />
+          Nueva cuenta
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground py-12 text-center">Cargando cuentas...</p>
+      ) : accounts.length === 0 ? (
+        <div className="bg-card border border-border py-12 text-center">
+          <CreditCard className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            No hay cuentas cargadas. Creá la primera para poder publicar eventos.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {accounts.map((a) => (
+            <div
+              key={a.id}
+              className={`bg-card border p-4 space-y-3 ${
+                a.active ? "border-border" : "border-border/50 opacity-60"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold truncate">{a.label}</p>
+                    {a.isDefault && (
+                      <span className="inline-flex items-center gap-1 text-[10px] tracking-wider uppercase border border-foreground px-1.5 py-0.5">
+                        <Star className="w-3 h-3" /> Por defecto
+                      </span>
+                    )}
+                    {!a.active && (
+                      <span className="text-[10px] tracking-wider uppercase border border-border px-1.5 py-0.5 text-muted-foreground">
+                        Inactiva
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{accountSummary(a)}</p>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      setEditing(a);
+                      setShowForm(true);
+                    }}
+                    className="p-2 hover:bg-foreground hover:text-background transition-colors"
+                    aria-label="Editar"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(a)}
+                    className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                    aria-label="Eliminar"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-sm space-y-0.5 border-t border-border/50 pt-3">
+                <p className="font-medium">{a.holderName}</p>
+                <p className="text-muted-foreground">Nro de cuenta {a.accountNumber}</p>
+                {a.accountType && <p className="text-muted-foreground">{a.accountType}</p>}
+                {a.documentId && (
+                  <p className="text-muted-foreground">Documento {a.documentId}</p>
+                )}
+                {a.notes && <p className="text-muted-foreground pt-1">{a.notes}</p>}
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                {!a.isDefault && (
+                  <button
+                    onClick={() => handleSetDefault(a)}
+                    className="inline-flex items-center gap-1.5 text-[11px] tracking-wider uppercase border border-border px-2.5 py-1.5 hover:bg-foreground hover:text-background transition-colors"
+                  >
+                    <Star className="w-3 h-3" /> Marcar por defecto
+                  </button>
+                )}
+                <button
+                  onClick={() => handleToggleActive(a)}
+                  className="inline-flex items-center gap-1.5 text-[11px] tracking-wider uppercase border border-border px-2.5 py-1.5 hover:bg-foreground hover:text-background transition-colors"
+                >
+                  {a.active ? <Undo2 className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+                  {a.active ? "Desactivar" : "Activar"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <AccountFormModal
+          initial={editing}
+          isFirst={accounts.length === 0}
+          onClose={() => {
+            setShowForm(false);
+            setEditing(null);
+          }}
+          onSave={handleSave}
+        />
+      )}
+    </div>
+  );
+};
+
+const AccountFormModal = ({
+  initial,
+  isFirst,
+  onClose,
+  onSave,
+}: {
+  initial: PaymentAccount | null;
+  /** La primera cuenta del sistema arranca marcada por defecto. */
+  isFirst: boolean;
+  onClose: () => void;
+  onSave: (data: PaymentAccountInput) => void | Promise<void>;
+}) => {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<PaymentAccountInput>({
+    label: initial?.label ?? "",
+    holderName: initial?.holderName ?? "",
+    bank: initial?.bank ?? "",
+    accountType: initial?.accountType ?? "",
+    accountNumber: initial?.accountNumber ?? "",
+    documentId: initial?.documentId ?? "",
+    notes: initial?.notes ?? "",
+    active: initial?.active ?? true,
+    isDefault: initial?.isDefault ?? isFirst,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.label.trim() || !form.holderName.trim() || !form.bank.trim() || !form.accountNumber.trim()) {
+      toast.error("Completá nombre, titular, banco y número de cuenta");
+      return;
+    }
+    if (form.isDefault && !form.active) {
+      toast.error("La cuenta por defecto no puede estar inactiva");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave({
+        ...form,
+        label: form.label.trim(),
+        holderName: form.holderName.trim(),
+        bank: form.bank.trim(),
+        accountNumber: form.accountNumber.trim(),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg bg-background border border-border max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background z-10">
+          <h2 className="title-sport text-2xl font-black tracking-wide">
+            {initial ? "EDITAR CUENTA" : "NUEVA CUENTA"}
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <FormField label="Nombre interno">
+            <input
+              type="text"
+              required
+              value={form.label}
+              onChange={(e) => setForm({ ...form, label: e.target.value })}
+              className="input-techno"
+              placeholder="Itaú Gabriel"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Sólo lo ves vos en el panel, para reconocer la cuenta.
+            </p>
+          </FormField>
+
+          <FormField label="Titular">
+            <input
+              type="text"
+              required
+              value={form.holderName}
+              onChange={(e) => setForm({ ...form, holderName: e.target.value })}
+              className="input-techno"
+              placeholder="GABRIEL CAFFAREL DALMAU"
+            />
+          </FormField>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Banco">
+              <input
+                type="text"
+                required
+                value={form.bank}
+                onChange={(e) => setForm({ ...form, bank: e.target.value })}
+                className="input-techno"
+                placeholder="ITAÚ"
+              />
+            </FormField>
+            <FormField label="Nro de cuenta">
+              <input
+                type="text"
+                required
+                value={form.accountNumber}
+                onChange={(e) => setForm({ ...form, accountNumber: e.target.value })}
+                className="input-techno"
+                placeholder="3483509"
+              />
+            </FormField>
+          </div>
+
+          <FormField label="Tipo de cuenta (opcional)">
+            <input
+              type="text"
+              value={form.accountType ?? ""}
+              onChange={(e) => setForm({ ...form, accountType: e.target.value })}
+              className="input-techno"
+              placeholder="CAJA DE AHORRO PESOS (UYU)"
+            />
+          </FormField>
+
+          <FormField label="Documento del titular (opcional)">
+            <input
+              type="text"
+              value={form.documentId ?? ""}
+              onChange={(e) => setForm({ ...form, documentId: e.target.value })}
+              className="input-techno"
+              placeholder="1.234.567-8"
+            />
+          </FormField>
+
+          <FormField label="Nota para el comprador (opcional)">
+            <textarea
+              value={form.notes ?? ""}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              className="input-techno min-h-[70px]"
+              placeholder="Ej: poner el nombre del evento en el concepto"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Se muestra debajo de los datos en el modal de compra.
+            </p>
+          </FormField>
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.isDefault ?? false}
+                onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+                className="accent-foreground"
+              />
+              Cuenta por defecto (se propone al crear un evento)
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.active ?? true}
+                onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                className="accent-foreground"
+              />
+              Activa (se ofrece al crear eventos)
+            </label>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-techno-outline flex-1" disabled={saving}>
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-techno flex-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {saving ? "Guardando..." : initial ? "Guardar cambios" : "Crear cuenta"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
@@ -609,10 +1035,13 @@ const SCALE_STEP = 0.1;
 
 const EventFormModal = ({
   initial,
+  accounts,
   onClose,
   onSave,
 }: {
   initial: AdminEvent | null;
+  /** Cuentas de cobro disponibles (las carga EventsAdmin una sola vez). */
+  accounts: PaymentAccount[];
   onClose: () => void;
   onSave: (data: Omit<AdminEvent, "id" | "createdAt">) => void | Promise<void>;
 }) => {
@@ -638,10 +1067,20 @@ const EventFormModal = ({
     capacity: initial?.capacity ?? 0,
     status: initial?.status ?? "activo",
     saleEndsAt: isoToLocalInput(initial?.saleEndsAt),
+    // Al crear, se propone la cuenta marcada por defecto.
+    paymentAccountId:
+      initial?.paymentAccountId ?? accounts.find((a) => a.isDefault)?.id ?? "",
     image: initial?.image ?? "",
     imagePosition: initial?.imagePosition ?? { ...DEFAULT_IMAGE_TRANSFORM },
     instagramUrl: initial?.instagramUrl ?? "https://www.instagram.com/odisea.uy/",
   });
+
+  // Sólo se ofrecen cuentas activas, pero si el evento ya usaba una que se
+  // desactivó la seguimos mostrando: si no, al guardar se perdería sin aviso.
+  const accountOptions = useMemo(
+    () => accounts.filter((a) => a.active || a.id === form.paymentAccountId),
+    [accounts, form.paymentAccountId]
+  );
 
   const setImagePosition = (updater: (p: ImageTransform) => ImageTransform) =>
     setForm((prev) => ({ ...prev, imagePosition: updater(prev.imagePosition) }));
@@ -684,6 +1123,10 @@ const EventFormModal = ({
     }
     if (!form.image) {
       toast.error("Subí una imagen para el evento");
+      return;
+    }
+    if (!form.paymentAccountId) {
+      toast.error("Elegí a qué cuenta se cobra este evento");
       return;
     }
     setSaving(true);
@@ -824,6 +1267,28 @@ const EventFormModal = ({
                 </select>
               </FormField>
             </div>
+
+            <FormField label="Cuenta de cobro">
+              <select
+                required
+                value={form.paymentAccountId}
+                onChange={(e) => setForm({ ...form, paymentAccountId: e.target.value })}
+                className="input-techno"
+              >
+                <option value="">Elegí una cuenta...</option>
+                {accountOptions.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label} · {accountSummary(a)}
+                    {a.active ? "" : " (inactiva)"}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {accountOptions.length === 0
+                  ? "No hay cuentas cargadas. Creá una en la pestaña Cuentas."
+                  : "Es la cuenta que ve el comprador en el modal de compra y en el mensaje de WhatsApp."}
+              </p>
+            </FormField>
 
             <FormField label="Cierre de venta (opcional)">
               <input

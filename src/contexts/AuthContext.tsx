@@ -80,6 +80,8 @@ export interface AdminEvent {
   status: "activo" | "agotado" | "finalizado";
   /** ISO datetime. Pasado este momento la venta se cierra sola (queda "agotado"). */
   saleEndsAt?: string;
+  /** Cuenta a la que transfiere la gente de este evento (payment_accounts.id). */
+  paymentAccountId: string;
   image: string;
   imagePosition: ImageTransform;
   instagramUrl?: string;
@@ -157,6 +159,7 @@ function eventFromDb(row: any): AdminEvent {
     capacity: row.capacity,
     status: row.status,
     saleEndsAt: row.sale_ends_at ?? undefined,
+    paymentAccountId: row.payment_account_id ?? "",
     image: row.image_url ?? "",
     imagePosition: normalizeImageTransform(row.image_position),
     instagramUrl: row.instagram_url ?? undefined,
@@ -174,6 +177,7 @@ function eventToDb(e: Partial<NewEventInput>) {
   if (e.capacity !== undefined) out.capacity = e.capacity;
   if (e.status !== undefined) out.status = e.status;
   if (e.saleEndsAt !== undefined) out.sale_ends_at = e.saleEndsAt || null;
+  if (e.paymentAccountId !== undefined) out.payment_account_id = e.paymentAccountId;
   if (e.image !== undefined) out.image_url = e.image || null;
   if (e.imagePosition !== undefined) out.image_position = e.imagePosition;
   if (e.instagramUrl !== undefined) out.instagram_url = e.instagramUrl || null;

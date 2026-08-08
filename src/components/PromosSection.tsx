@@ -5,6 +5,7 @@ import TicketPurchaseModal from "./TicketPurchaseModal";
 
 // Evento que consume el selector / modal de compra (derivado de los eventos reales).
 type PickerEvent = {
+  id: string;
   name: string;
   date: string;
   location: string;
@@ -59,6 +60,7 @@ const PromosSection = () => {
         .slice()
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((e) => ({
+          id: e.id,
           name: e.name,
           date: formatEventDate(e.date),
           location: e.location,
@@ -131,6 +133,7 @@ const PromosSection = () => {
         <TicketPurchaseModal
           isOpen={isModalOpen}
           onClose={() => { setIsModalOpen(false); setSelectedEvent(null); }}
+          eventId={selectedEvent.id}
           eventName={selectedEvent.name}
           eventDate={selectedEvent.date}
           eventLocation={selectedEvent.location}
