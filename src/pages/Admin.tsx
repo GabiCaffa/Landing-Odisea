@@ -97,12 +97,30 @@ import {
   setDefaultAccount,
   accountSummary,
 } from "@/lib/paymentAccounts";
+import {
+  TicketType,
+  TicketTypeInput,
+  EventTicket,
+  fetchTicketTypes,
+  createTicketType,
+  updateTicketType,
+  deleteTicketType,
+  saveEventTickets,
+  sortEventTickets,
+} from "@/lib/ticketTypes";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
-type Tab = "dashboard" | "events" | "accounts" | "users" | "deliveries" | "birthdays";
+type Tab =
+  | "dashboard"
+  | "events"
+  | "tickets"
+  | "accounts"
+  | "users"
+  | "deliveries"
+  | "birthdays";
 
 /** Pestañas que puede usar el operador (el resto es sólo del admin). */
 const OPERATOR_TABS: Tab[] = ["deliveries", "birthdays"];
@@ -164,6 +182,12 @@ const Admin = () => {
                 onClick={() => setTab("events")}
               />
               <SidebarLink
+                icon={<Ticket className="w-4 h-4" />}
+                label="Entradas"
+                active={activeTab === "tickets"}
+                onClick={() => setTab("tickets")}
+              />
+              <SidebarLink
                 icon={<CreditCard className="w-4 h-4" />}
                 label="Cuentas"
                 active={activeTab === "accounts"}
@@ -219,6 +243,7 @@ const Admin = () => {
             <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground">
               {activeTab === "dashboard" && "Resumen general"}
               {activeTab === "events" && "Gestión"}
+              {activeTab === "tickets" && "Tipos de entrada"}
               {activeTab === "accounts" && "Cobros"}
               {activeTab === "users" && "Comunidad"}
               {activeTab === "deliveries" && "Envío de entradas"}
@@ -227,6 +252,7 @@ const Admin = () => {
             <h1 className="title-sport text-3xl md:text-4xl tracking-wide font-black text-tinta">
               {activeTab === "dashboard" && "DASHBOARD"}
               {activeTab === "events" && "EVENTOS"}
+              {activeTab === "tickets" && "ENTRADAS"}
               {activeTab === "accounts" && "CUENTAS"}
               {activeTab === "users" && "USUARIOS"}
               {activeTab === "deliveries" && "ENTREGAS"}
@@ -252,6 +278,7 @@ const Admin = () => {
 
         {activeTab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
         {activeTab === "events" && <EventsAdmin />}
+        {activeTab === "tickets" && <TicketTypesAdmin />}
         {activeTab === "accounts" && <AccountsAdmin />}
         {activeTab === "users" && <UsersAdmin />}
         {activeTab === "deliveries" && <DeliveriesAdmin />}
@@ -299,7 +326,9 @@ const Dashboard = ({
 }) => {
   const activeEvents = events.filter((e) => e.status === "activo").length;
   const totalCapacity = events.reduce((acc, e) => acc + e.capacity, 0);
-  const avgPrice = events.length
+  // El evento ya no tiene precio propio: e.price es el tipo de entrada más
+  // barato (lo deriva la DB), así que esto es el promedio de esos mínimos.
+  const avgEntryPrice = events.length
     ? Math.round(events.reduce((acc, e) => acc + e.price, 0) / events.length)
     : 0;
   const newThisMonth = users.filter((u) => {
@@ -331,9 +360,9 @@ const Dashboard = ({
         />
         <StatCard
           icon={<TrendingUp className="w-5 h-5" />}
-          label="Precio promedio"
-          value={`$${avgPrice}`}
-          hint="por entrada"
+          label="Entrada más barata"
+          value={`$${avgEntryPrice}`}
+          hint="promedio entre eventos"
         />
       </div>
 
@@ -468,9 +497,12 @@ const EventsAdmin = () => {
   const [search, setSearch] = useState("");
   // Cuentas de cobro: para el selector del form y la columna "Cuenta".
   const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
+  // Catálogo de tipos de entrada, para armar las entradas de cada evento.
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
 
   useEffect(() => {
     fetchPaymentAccounts().then(setAccounts);
+    fetchTicketTypes().then(setTicketTypes);
   }, []);
 
   const accountById = useMemo(
@@ -489,13 +521,36 @@ const EventsAdmin = () => {
   );
 
   const handleSave = async (data: Omit<AdminEvent, "id" | "createdAt">) => {
-    const result = editing
-      ? await updateEvent(editing.id, data)
-      : await createEvent(data);
-    if (!result.ok) {
-      toast.error(result.error ?? "No se pudo guardar el evento");
-      return;
+    let eventId: string | undefined;
+    if (editing) {
+      const result = await updateEvent(editing.id, data);
+      if (!result.ok) {
+        toast.error(result.error ?? "No se pudo guardar el evento");
+        return;
+      }
+      eventId = editing.id;
+    } else {
+      const result = await createEvent(data);
+      if (!result.ok) {
+        toast.error(result.error ?? "No se pudo guardar el evento");
+        return;
+      }
+      eventId = result.id;
     }
+
+    // Las entradas van en su propia tabla, así que se guardan aparte. Si esto
+    // falla el evento igual quedó guardado: avisamos para que se reintente
+    // editándolo, en vez de dar por buena una fecha sin nada que vender.
+    if (eventId) {
+      const ticketsResult = await saveEventTickets(eventId, data.tickets);
+      if (!ticketsResult.ok) {
+        toast.error(
+          `Evento guardado, pero las entradas no: ${ticketsResult.error ?? "error desconocido"}`
+        );
+        return;
+      }
+    }
+
     toast.success(editing ? "Evento actualizado" : "Evento creado");
     setShowForm(false);
     setEditing(null);
@@ -549,7 +604,7 @@ const EventsAdmin = () => {
               <Th>Evento</Th>
               <Th>Fecha</Th>
               <Th>Lugar</Th>
-              <Th>Precio</Th>
+              <Th>Entradas</Th>
               <Th>Cuenta</Th>
               <Th>Capacidad</Th>
               <Th>Estado</Th>
@@ -582,7 +637,22 @@ const EventsAdmin = () => {
                 </Td>
                 <Td>{formatEventDate(e.date)}</Td>
                 <Td>{e.location}</Td>
-                <Td>${e.price}</Td>
+                <Td>
+                  {e.tickets.length === 0 ? (
+                    <span className="text-xs text-charrua">Sin entradas</span>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {e.tickets.map((t) => (
+                        <p
+                          key={t.ticketTypeId}
+                          className={`text-xs ${t.active ? "" : "text-muted-foreground line-through"}`}
+                        >
+                          {t.name} <span className="text-muted-foreground">${t.price}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </Td>
                 <Td>
                   {accountById.has(e.paymentAccountId) ? (
                     <div>
@@ -637,6 +707,7 @@ const EventsAdmin = () => {
         <EventFormModal
           initial={editing}
           accounts={accounts}
+          ticketTypes={ticketTypes}
           onClose={() => {
             setShowForm(false);
             setEditing(null);
@@ -644,6 +715,278 @@ const EventsAdmin = () => {
           onSave={handleSave}
         />
       )}
+    </div>
+  );
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Tipos de entrada (ABM) — el catálogo; el precio se pone en cada evento
+// ────────────────────────────────────────────────────────────────────────────
+const TicketTypesAdmin = () => {
+  const confirm = useConfirm();
+  const [types, setTypes] = useState<TicketType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<TicketType | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const reload = async () => {
+    setLoading(true);
+    setTypes(await fetchTicketTypes());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  const handleSave = async (data: TicketTypeInput) => {
+    const result = editing
+      ? await updateTicketType(editing.id, data)
+      : await createTicketType(data);
+    if (!result.ok) {
+      toast.error(result.error ?? "No se pudo guardar el tipo de entrada");
+      return;
+    }
+    toast.success(editing ? "Tipo actualizado" : "Tipo creado");
+    setShowForm(false);
+    setEditing(null);
+    reload();
+  };
+
+  const handleToggleActive = async (t: TicketType) => {
+    const result = await updateTicketType(t.id, { active: !t.active });
+    if (!result.ok) {
+      toast.error(result.error ?? "No se pudo cambiar el estado");
+      return;
+    }
+    toast.success(t.active ? "Tipo desactivado" : "Tipo activado");
+    reload();
+  };
+
+  const handleDelete = async (t: TicketType) => {
+    const ok = await confirm({
+      title: "Eliminar tipo de entrada",
+      description: `¿Seguro que querés eliminar "${t.name}"? Si algún evento lo vende, no se va a poder borrar: desactivalo en ese caso.`,
+      confirmText: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
+    const result = await deleteTicketType(t.id);
+    if (!result.ok) {
+      toast.error(result.error ?? "No se pudo eliminar");
+      return;
+    }
+    toast.success("Tipo eliminado");
+    reload();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground max-w-xl">
+          Los tipos de entrada que existen (General, VIP, Backstage…). El{" "}
+          <strong>precio no va acá</strong>: se define en cada evento, porque el mismo tipo
+          vale distinto según la fecha.
+        </p>
+        <button
+          onClick={() => {
+            setEditing(null);
+            setShowForm(true);
+          }}
+          className="btn-techno text-xs py-3 px-5 self-start sm:self-auto whitespace-nowrap"
+        >
+          <Plus className="w-4 h-4" />
+          Nuevo tipo
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground py-12 text-center">Cargando tipos...</p>
+      ) : types.length === 0 ? (
+        <div className="bg-card border border-border py-12 text-center">
+          <Ticket className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            No hay tipos de entrada. Creá al menos uno para poder vender.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {types.map((t) => (
+            <div
+              key={t.id}
+              className={`bg-card border p-4 space-y-3 ${
+                t.active ? "border-border" : "border-border/50 opacity-60"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold truncate">{t.name}</p>
+                    {!t.active && (
+                      <span className="text-[10px] tracking-wider uppercase border border-border px-1.5 py-0.5 text-muted-foreground">
+                        Inactivo
+                      </span>
+                    )}
+                  </div>
+                  {t.description && (
+                    <p className="text-xs text-muted-foreground mt-1">{t.description}</p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-1">Orden: {t.sortOrder}</p>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      setEditing(t);
+                      setShowForm(true);
+                    }}
+                    className="p-2 hover:bg-foreground hover:text-background transition-colors"
+                    aria-label="Editar"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(t)}
+                    className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                    aria-label="Eliminar"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={() => handleToggleActive(t)}
+                className="inline-flex items-center gap-1.5 text-[11px] tracking-wider uppercase border border-border px-2.5 py-1.5 hover:bg-foreground hover:text-background transition-colors"
+              >
+                {t.active ? <Undo2 className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+                {t.active ? "Desactivar" : "Activar"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <TicketTypeFormModal
+          initial={editing}
+          nextOrder={types.length + 1}
+          onClose={() => {
+            setShowForm(false);
+            setEditing(null);
+          }}
+          onSave={handleSave}
+        />
+      )}
+    </div>
+  );
+};
+
+const TicketTypeFormModal = ({
+  initial,
+  nextOrder,
+  onClose,
+  onSave,
+}: {
+  initial: TicketType | null;
+  nextOrder: number;
+  onClose: () => void;
+  onSave: (data: TicketTypeInput) => void | Promise<void>;
+}) => {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<TicketTypeInput>({
+    name: initial?.name ?? "",
+    description: initial?.description ?? "",
+    sortOrder: initial?.sortOrder ?? nextOrder,
+    active: initial?.active ?? true,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) {
+      toast.error("Indicá el nombre del tipo de entrada");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave({ ...form, name: form.name.trim() });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg bg-background border border-border max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background z-10">
+          <h2 className="title-sport text-2xl font-black tracking-wide">
+            {initial ? "EDITAR TIPO" : "NUEVO TIPO"}
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <FormField label="Nombre">
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="input-techno"
+              placeholder="VIP"
+            />
+          </FormField>
+
+          <FormField label="Qué incluye (opcional)">
+            <textarea
+              value={form.description ?? ""}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              className="input-techno min-h-[70px]"
+              placeholder="Acceso general + backstage y meet & greet"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Se le muestra al comprador debajo del nombre, en el modal de compra.
+            </p>
+          </FormField>
+
+          <FormField label="Orden">
+            <input
+              type="number"
+              min={0}
+              value={form.sortOrder ?? 0}
+              onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })}
+              className="input-techno"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              De menor a mayor: define en qué orden se listan las entradas.
+            </p>
+          </FormField>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer border-t border-border pt-4">
+            <input
+              type="checkbox"
+              checked={form.active ?? true}
+              onChange={(e) => setForm({ ...form, active: e.target.checked })}
+              className="accent-foreground"
+            />
+            Activo (se ofrece al armar un evento)
+          </label>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-techno-outline flex-1" disabled={saving}>
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-techno flex-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {saving ? "Guardando..." : initial ? "Guardar cambios" : "Crear tipo"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
@@ -1036,12 +1379,15 @@ const SCALE_STEP = 0.1;
 const EventFormModal = ({
   initial,
   accounts,
+  ticketTypes,
   onClose,
   onSave,
 }: {
   initial: AdminEvent | null;
   /** Cuentas de cobro disponibles (las carga EventsAdmin una sola vez). */
   accounts: PaymentAccount[];
+  /** Catálogo de tipos de entrada, para elegir cuáles vende este evento. */
+  ticketTypes: TicketType[];
   onClose: () => void;
   onSave: (data: Omit<AdminEvent, "id" | "createdAt">) => void | Promise<void>;
 }) => {
@@ -1070,6 +1416,7 @@ const EventFormModal = ({
     // Al crear, se propone la cuenta marcada por defecto.
     paymentAccountId:
       initial?.paymentAccountId ?? accounts.find((a) => a.isDefault)?.id ?? "",
+    tickets: initial?.tickets ?? [],
     image: initial?.image ?? "",
     imagePosition: initial?.imagePosition ?? { ...DEFAULT_IMAGE_TRANSFORM },
     instagramUrl: initial?.instagramUrl ?? "https://www.instagram.com/odisea.uy/",
@@ -1081,6 +1428,13 @@ const EventFormModal = ({
     () => accounts.filter((a) => a.active || a.id === form.paymentAccountId),
     [accounts, form.paymentAccountId]
   );
+
+  // El "desde $X" del preview: el tipo de entrada más barato a la venta. Es lo
+  // mismo que la DB va a dejar en events.price al guardar.
+  const minTicketPrice = useMemo(() => {
+    const active = form.tickets.filter((t) => t.active);
+    return active.length ? Math.min(...active.map((t) => t.price)) : 0;
+  }, [form.tickets]);
 
   const setImagePosition = (updater: (p: ImageTransform) => ImageTransform) =>
     setForm((prev) => ({ ...prev, imagePosition: updater(prev.imagePosition) }));
@@ -1127,6 +1481,14 @@ const EventFormModal = ({
     }
     if (!form.paymentAccountId) {
       toast.error("Elegí a qué cuenta se cobra este evento");
+      return;
+    }
+    if (form.tickets.length === 0) {
+      toast.error("Agregá al menos un tipo de entrada");
+      return;
+    }
+    if (form.tickets.some((t) => !(t.price > 0))) {
+      toast.error("Poné el precio de cada tipo de entrada");
       return;
     }
     setSaving(true);
@@ -1236,16 +1598,15 @@ const EventFormModal = ({
               />
             </FormField>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <FormField label="Precio (UYU)">
-                <input
-                  type="number"
-                  min={0}
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
-                  className="input-techno"
-                />
-              </FormField>
+            <FormField label="Entradas a la venta">
+              <TicketsEditor
+                catalog={ticketTypes}
+                value={form.tickets}
+                onChange={(tickets) => setForm((p) => ({ ...p, tickets }))}
+              />
+            </FormField>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Capacidad">
                 <input
                   type="number"
@@ -1339,7 +1700,7 @@ const EventFormModal = ({
               date={form.date ? formatEventDate(form.date) : "FECHA"}
               location={form.location || "Lugar del evento"}
               description={form.description || "Descripción del evento..."}
-              price={form.price}
+              price={minTicketPrice}
               status={form.status}
             />
             <p className="text-[10px] text-center text-muted-foreground leading-relaxed">
@@ -1348,6 +1709,136 @@ const EventFormModal = ({
           </div>
         </form>
       </div>
+    </div>
+  );
+};
+
+/**
+ * Elegir qué tipos vende el evento y a qué precio. El precio vive acá y no en
+ * el catálogo porque el mismo "VIP" vale distinto en cada fecha.
+ */
+const TicketsEditor = ({
+  catalog,
+  value,
+  onChange,
+}: {
+  catalog: TicketType[];
+  value: EventTicket[];
+  onChange: (tickets: EventTicket[]) => void;
+}) => {
+  const selected = useMemo(
+    () => new Map(value.map((t) => [t.ticketTypeId, t])),
+    [value]
+  );
+
+  // Se ofrecen los tipos activos; los inactivos sólo si el evento ya los vendía
+  // (si no, al editar un evento viejo se le borraría una entrada sin avisar).
+  const options = useMemo(
+    () => catalog.filter((t) => t.active || selected.has(t.id)),
+    [catalog, selected]
+  );
+
+  const toggle = (type: TicketType) => {
+    if (selected.has(type.id)) {
+      onChange(value.filter((t) => t.ticketTypeId !== type.id));
+      return;
+    }
+    onChange(
+      sortEventTickets([
+        ...value,
+        {
+          ticketTypeId: type.id,
+          name: type.name,
+          description: type.description,
+          price: 0,
+          active: true,
+          sortOrder: type.sortOrder,
+        },
+      ])
+    );
+  };
+
+  const setPrice = (typeId: string, price: number) =>
+    onChange(value.map((t) => (t.ticketTypeId === typeId ? { ...t, price } : t)));
+
+  const setActive = (typeId: string, active: boolean) =>
+    onChange(value.map((t) => (t.ticketTypeId === typeId ? { ...t, active } : t)));
+
+  if (options.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground border border-dashed border-border p-4">
+        No hay tipos de entrada cargados. Creá al menos uno en la pestaña{" "}
+        <strong>Entradas</strong>.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {options.map((type) => {
+        const row = selected.get(type.id);
+        return (
+          <div
+            key={type.id}
+            className={`border p-3 ${row ? "border-foreground" : "border-border"}`}
+          >
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={!!row}
+                onChange={() => toggle(type)}
+                className="accent-foreground flex-shrink-0"
+                aria-label={`Vender ${type.name}`}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">
+                  {type.name}
+                  {!type.active && (
+                    <span className="ml-2 text-[10px] tracking-wider uppercase text-muted-foreground">
+                      (tipo inactivo)
+                    </span>
+                  )}
+                </p>
+                {type.description && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-1">
+                    {type.description}
+                  </p>
+                )}
+              </div>
+              {row && (
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-sm text-muted-foreground">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={row.price || ""}
+                    onChange={(e) => setPrice(type.id, Number(e.target.value))}
+                    className="input-techno w-24 text-right"
+                    placeholder="0"
+                    aria-label={`Precio de ${type.name}`}
+                  />
+                </div>
+              )}
+            </div>
+
+            {row && (
+              <label className="flex items-center gap-2 text-[11px] text-muted-foreground mt-2 ml-7 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={row.active}
+                  onChange={(e) => setActive(type.id, e.target.checked)}
+                  className="accent-foreground"
+                />
+                A la venta (destildá para ocultarla sin perder el precio)
+              </label>
+            )}
+          </div>
+        );
+      })}
+      <p className="text-[11px] text-muted-foreground">
+        El evento no tiene precio propio: el comprador elige cuántas de cada tipo y el
+        total se calcula solo.
+      </p>
     </div>
   );
 };
@@ -1649,7 +2140,7 @@ const EventCardPreview = ({
             className="btn-techno flex-1 text-xs py-2 px-3 opacity-90 cursor-default"
           >
             <img src={whatsappLogo} alt="WhatsApp" className="w-4 h-4" />
-            <span>{status === "agotado" ? "Agotado" : `Comprar · $${price}`}</span>
+            <span>{status === "agotado" ? "Agotado" : `Comprar · desde $${price}`}</span>
           </button>
         </div>
       </div>

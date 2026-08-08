@@ -93,7 +93,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v7_profile_on_confirm.sql` → `v8_cleanup_unconfirmed.sql` →
 `v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql` →
 `v12_birthday_signups.sql` → `v13_payment_accounts.sql` →
-`v14_birthday_minor_warning.sql`.
+`v14_birthday_minor_warning.sql` → `v15_ticket_types.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -170,6 +170,26 @@ opcional en la ficha. Ahora se puede cargar igual, avisando dos veces —mensaje
 la fecha con **la fecha exacta en que cumple 18** (helper `eighteenthBirthday`) y diálogo de
 confirmación al guardar, mismo patrón que el documento repetido y la foto faltante—. En la
 DB, el trigger de 18+ se reemplazó por uno que sólo rechaza **fechas de nacimiento futuras**.
+
+**v15 — Tipos de entrada por evento.** Antes el evento tenía **un** precio (`events.price`) y
+el sitio inventaba un único tipo `"general"` en el código. Ahora: catálogo `ticket_types`
+(nombre único, `description` = qué incluye, `sort_order`, `active`) + `event_ticket_types`
+(`event_id`, `ticket_type_id`, `price`, `active`, `sort_order`, único por evento+tipo). El
+**precio vive en la relación**, no en el catálogo, porque el mismo "VIP" vale distinto en
+cada fecha. **El evento ya no tiene precio propio:** `events.price` pasó a ser DERIVADO —el
+tipo activo más barato, mantenido por el trigger `sync_event_price`— y `eventToDb` **dejó de
+escribirlo**; el form muestra "desde $X". El comprador arma un carrito (cantidades por tipo)
+y el total + desglose salen en el mensaje de WhatsApp; el modal ya soportaba varios tipos,
+sólo se le cambió el origen de los datos. RLS: lectura pública, escritura sólo admin.
+UI: pestaña **Entradas** (`TicketTypesAdmin` + `TicketTypeFormModal`) para el catálogo, y
+`TicketsEditor` dentro del form de evento (tildar tipo + poner precio; al menos uno,
+validado). Acceso a datos en `src/lib/ticketTypes.ts` (`saveEventTickets` reemplaza el
+conjunto: borra los que salieron y hace upsert del resto).
+**OJO — realtime:** `loadEvents` ahora trae los tipos embebidos
+(`event_ticket_types(*, ticket_types(*))`), así que la suscripción de `events` **recarga**
+en vez de parchear con el payload; parchear dejaba los eventos sin entradas (el payload de
+realtime es sólo la fila de `events`). `createEvent` devuelve el `id` porque las entradas se
+guardan después, en su propia tabla.
 
 ---
 

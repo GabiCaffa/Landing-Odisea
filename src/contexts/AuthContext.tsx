@@ -1,5 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { supabase, EVENT_IMAGES_BUCKET } from "@/lib/supabase";
+import { EventTicket, eventTicketFromDb, sortEventTickets } from "@/lib/ticketTypes";
+
+export type { EventTicket };
 
 export type UserRole = "admin" | "operador" | "user";
 
@@ -82,6 +85,11 @@ export interface AdminEvent {
   saleEndsAt?: string;
   /** Cuenta a la que transfiere la gente de este evento (payment_accounts.id). */
   paymentAccountId: string;
+  /**
+   * Tipos de entrada que vende el evento, con su precio. El evento no tiene
+   * precio propio: `price` es el más barato de estos (lo calcula la DB).
+   */
+  tickets: EventTicket[];
   image: string;
   imagePosition: ImageTransform;
   instagramUrl?: string;
@@ -120,7 +128,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   deleteUser: (id: string) => Promise<{ ok: boolean; error?: string }>;
   promoteUser: (id: string, role: UserRole) => Promise<{ ok: boolean; error?: string }>;
-  createEvent: (data: NewEventInput) => Promise<{ ok: boolean; error?: string }>;
+  createEvent: (data: NewEventInput) => Promise<{ ok: boolean; error?: string; id?: string }>;
   updateEvent: (id: string, data: Partial<NewEventInput>) => Promise<{ ok: boolean; error?: string }>;
   deleteEvent: (id: string) => Promise<{ ok: boolean; error?: string }>;
   uploadEventImage: (file: File) => Promise<{ ok: boolean; url?: string; error?: string }>;
@@ -160,6 +168,7 @@ function eventFromDb(row: any): AdminEvent {
     status: row.status,
     saleEndsAt: row.sale_ends_at ?? undefined,
     paymentAccountId: row.payment_account_id ?? "",
+    tickets: sortEventTickets((row.event_ticket_types ?? []).map(eventTicketFromDb)),
     image: row.image_url ?? "",
     imagePosition: normalizeImageTransform(row.image_position),
     instagramUrl: row.instagram_url ?? undefined,
@@ -173,7 +182,8 @@ function eventToDb(e: Partial<NewEventInput>) {
   if (e.date !== undefined) out.date = e.date;
   if (e.location !== undefined) out.location = e.location;
   if (e.description !== undefined) out.description = e.description;
-  if (e.price !== undefined) out.price = e.price;
+  // price NO se escribe: lo deriva la DB del tipo de entrada más barato
+  // (trigger sync_event_price). Ver supabase/v15_ticket_types.sql.
   if (e.capacity !== undefined) out.capacity = e.capacity;
   if (e.status !== undefined) out.status = e.status;
   if (e.saleEndsAt !== undefined) out.sale_ends_at = e.saleEndsAt || null;
@@ -221,7 +231,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loadEvents = useCallback(async () => {
     const { data, error } = await supabase
       .from("events")
-      .select("*")
+      // Los tipos de entrada vienen embebidos: el sitio los necesita para el
+      // modal de compra y así evitamos una consulta por evento.
+      .select("*, event_ticket_types(*, ticket_types(*))")
       .order("date", { ascending: true });
     if (!error && data) setEvents(data.map(eventFromDb));
   }, []);
@@ -303,23 +315,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const channel = supabase
       .channel("events-changes")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "events" }, (payload) => {
-        setEvents((prev) => {
-          const next = [...prev, eventFromDb(payload.new)];
-          return next.sort((a, b) => a.date.localeCompare(b.date));
-        });
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "events" }, (payload) => {
-        setEvents((prev) => prev.map((e) => (e.id === payload.new.id ? eventFromDb(payload.new) : e)));
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "events" }, (payload) => {
-        setEvents((prev) => prev.filter((e) => e.id !== (payload.old as any).id));
+      // Recargamos en vez de parchear con el payload: el evento que llega por
+      // realtime es sólo la fila de `events`, sin los tipos de entrada
+      // embebidos, y parchear dejaría los eventos sin entradas para comprar.
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => {
+        loadEvents();
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [loadEvents]);
 
   // ─── Acciones ─────────────────────────────────────────────────────────────
   const login: AuthContextValue["login"] = async (email, password) => {
@@ -425,9 +431,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const createEvent: AuthContextValue["createEvent"] = async (data) => {
-    const { error } = await supabase.from("events").insert(eventToDb(data));
+    // Devolvemos el id porque los tipos de entrada se guardan después, y para
+    // eso hay que saber a qué evento colgarlos.
+    const { data: row, error } = await supabase
+      .from("events")
+      .insert(eventToDb(data))
+      .select("id")
+      .single();
     if (error) return { ok: false, error: error.message };
-    return { ok: true };
+    return { ok: true, id: row.id as string };
   };
 
   const updateEvent: AuthContextValue["updateEvent"] = async (id, data) => {

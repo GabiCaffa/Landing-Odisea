@@ -2,15 +2,11 @@ import { useState, lazy, Suspense } from "react";
 import { Instagram } from "lucide-react";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
+import { EventTicket } from "@/lib/ticketTypes";
 
 // Carga diferida: el modal arrastra libphonenumber-js (~145KB) + PhoneInput.
 // Así no entran al bundle inicial de la home; se cargan recién al tocar "Comprar".
 const TicketPurchaseModal = lazy(() => import("./TicketPurchaseModal"));
-
-interface Ticket {
-  name: string;
-  price: number;
-}
 
 interface EventCardProps {
   id?: string;
@@ -21,7 +17,7 @@ interface EventCardProps {
   location: string;
   description: string;
   instagramUrl?: string;
-  tickets: Ticket[];
+  tickets: EventTicket[];
   soldOut?: boolean;
   /** ISO datetime; pasado este momento la venta se cierra sola */
   saleEndsAt?: string;
@@ -43,8 +39,10 @@ const EventCard = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
 
-  // Agotado si el admin lo marcó así, o si ya pasó la fecha/hora de cierre de venta.
-  const isSoldOut = soldOut || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
+  // Agotado si el admin lo marcó así, si ya pasó la fecha/hora de cierre de
+  // venta, o si el evento no tiene ningún tipo de entrada a la venta.
+  const isSoldOut =
+    soldOut || tickets.length === 0 || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
 
   return (
     <>

@@ -8,12 +8,8 @@ import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE, getCountry } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { PaymentAccount, fetchAccountForEvent } from "@/lib/paymentAccounts";
+import { EventTicket } from "@/lib/ticketTypes";
 import { toast } from "sonner";
-
-interface Ticket {
-  name: string;
-  price: number;
-}
 
 interface TicketPurchaseModalProps {
   isOpen: boolean;
@@ -22,7 +18,7 @@ interface TicketPurchaseModalProps {
   eventName: string;
   eventDate: string;
   eventLocation: string;
-  tickets: Ticket[];
+  tickets: EventTicket[];
 }
 
 type Step = "auth-prompt" | "purchase";
@@ -268,9 +264,14 @@ const TicketPurchaseModal = ({
                     key={ticket.name}
                     className="flex items-center justify-between p-4 border border-border hover:bg-muted/50 transition-colors"
                   >
-                    <div className="flex-1">
-                      <p className="font-medium capitalize">{ticket.name}</p>
+                    <div className="flex-1 min-w-0 pr-3">
+                      <p className="font-medium">{ticket.name}</p>
                       <p className="text-sm text-muted-foreground">${ticket.price}</p>
+                      {ticket.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {ticket.description}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <button

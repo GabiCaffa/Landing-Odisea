@@ -124,7 +124,7 @@ const EventsSection = () => {
                     instagramUrl={event.instagramUrl}
                     soldOut={event.status === "agotado"}
                     saleEndsAt={event.saleEndsAt}
-                    tickets={[{ name: "general", price: event.price }]}
+                    tickets={event.tickets.filter((t) => t.active)}
                   />
                 </div>
               ))}

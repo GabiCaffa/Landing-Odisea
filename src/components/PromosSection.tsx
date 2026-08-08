@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import TicketPurchaseModal from "./TicketPurchaseModal";
+import { EventTicket } from "@/lib/ticketTypes";
 
 // Evento que consume el selector / modal de compra (derivado de los eventos reales).
 type PickerEvent = {
@@ -9,7 +10,7 @@ type PickerEvent = {
   name: string;
   date: string;
   location: string;
-  tickets: { name: string; price: number }[];
+  tickets: EventTicket[];
 };
 
 // ── Datos de las 3 promos ─────────────────────────────────────────────────────
@@ -56,7 +57,8 @@ const PromosSection = () => {
   const purchasableEvents = useMemo<PickerEvent[]>(
     () =>
       events
-        .filter((e) => e.status === "activo")
+        // Sin tipos de entrada a la venta no hay nada que comprar: no se ofrece.
+        .filter((e) => e.status === "activo" && e.tickets.some((t) => t.active))
         .slice()
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((e) => ({
@@ -64,7 +66,7 @@ const PromosSection = () => {
           name: e.name,
           date: formatEventDate(e.date),
           location: e.location,
-          tickets: [{ name: "general", price: e.price }],
+          tickets: e.tickets.filter((t) => t.active),
         })),
     [events]
   );
