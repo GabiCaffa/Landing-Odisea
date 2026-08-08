@@ -1,0 +1,13 @@
+# Finales de línea: LF en el repo, siempre. Sin esto el comportamiento depende
+# del core.autocrlf global de cada máquina, que no viaja con el proyecto.
+* text=auto eol=lf
+
+# Binarios: que git no intente normalizarlos ni mostrarlos como texto en los diffs.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.woff  binary
+*.woff2 binary
