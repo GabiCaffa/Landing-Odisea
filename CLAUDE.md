@@ -93,7 +93,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v7_profile_on_confirm.sql` → `v8_cleanup_unconfirmed.sql` →
 `v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql` →
 `v12_birthday_signups.sql` → `v13_payment_accounts.sql` →
-`v14_birthday_minor_warning.sql` → `v15_ticket_types.sql`.
+`v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
+`v16_birthday_self_service.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -209,6 +210,35 @@ mandar** (mismo criterio que v14).
 > cumple contra el año del evento, así que un cumple del 28/12 con evento del 05/01 le da
 > ~357 días en vez de 8. El modal prueba los años vecinos. La RPC sigue con el bug y la usa
 > el modal de compra (`birthday_promo_claims`, cooldown 90 días) — pendiente de arreglar.
+
+**v16 — El cliente registrado carga su propia solicitud.** Además del WhatsApp, un usuario
+**con cuenta** puede enviar la solicitud desde el sitio (con la foto del documento) y entra
+como **`pendiente`** hasta que el staff la apruebe. Dos decisiones que explican el diseño:
+
+1. **Sólo registrados.** Abrirle el insert a `anon` sería exponer a escritura pública una
+   tabla con documentos y fechas de nacimiento más un bucket de fotos de cédula. Con cuenta,
+   cada fila tiene dueño (`user_id = auth.uid()`) y el abuso es rastreable.
+2. **Nunca directo a la lista.** Si el cliente escribiera en la lista verificada, se perdería
+   la diferencia entre lo que el staff validó y lo que afirma un desconocido.
+
+DB: `status` (`pendiente`/`aprobado`/`rechazado`), default **`aprobado`** para que lo ya
+cargado no cambie. El `with check` de `birthdays_insert_own` es lo que hace segura la
+autogestión: fuerza `user_id = auth.uid()`, `status = 'pendiente'` y `gift_given = false`
+—sin lo último, un usuario podría insertarse el regalo como ya entregado—. `select` propio sí;
+**update y delete del dueño, no** (una vez enviada la solicitud es del staff). Dos índices
+únicos parciales frenan las repetidas (van dos porque `event_id` es nullable y los NULL no
+colisionan entre sí). Storage: las fotos pasan a `{uid}/archivo.jpg` y la política nueva sólo
+deja **escribir** en la carpeta propia — **leerlas sigue siendo exclusivo del staff**, ni el
+dueño puede volver a bajar la suya. La foto se sube **al enviar**, no al elegirla: si cierra
+el modal antes, no queda un archivo huérfano que el cliente no puede borrar.
+UI: pestaña Cumpleaños con un tercer filtro **"A revisar"** (badge en rojo si hay algo) +
+botones Aprobar/Rechazar; las listas de regalo muestran sólo `aprobado`. Los `rechazado`
+quedan en la base como registro pero **no se muestran en ninguna lista**, y como los índices
+únicos sólo miran las pendientes, la persona puede volver a enviar una corregida.
+
+> **Retención:** las fotos de documento se guardan **sin plazo de borrado**. Fue una decisión
+> explícita del autor, tomada después de plantearle un job de limpieza a 30/90 días. Si
+> alguna vez se quiere un vencimiento, el molde es el `pg_cron` de `v8_cleanup_unconfirmed`.
 
 ---
 

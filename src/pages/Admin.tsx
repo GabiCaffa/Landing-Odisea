@@ -83,6 +83,7 @@ import {
   updateBirthday,
   deleteBirthday,
   setGiftGiven,
+  setBirthdayStatus,
   uploadIdPhoto,
   removeIdPhoto,
   getIdPhotoUrl,
@@ -2355,6 +2356,13 @@ const RegBadge = () => (
   </span>
 );
 
+/** Solicitud que cargó el propio cliente y todavía nadie verificó. */
+const PendingBadge = () => (
+  <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-charrua bg-charrua/10 border border-charrua/30 rounded-full px-1.5 py-0.5 whitespace-nowrap">
+    A revisar
+  </span>
+);
+
 // Botonera de acciones de una entrega. Compartida por las tarjetas (mobile) y la
 // tabla (desktop) para no duplicar la lógica.
 const DeliveryActions = ({
@@ -3170,6 +3178,8 @@ const BirthdayActions = ({
   onPhoto,
   onEdit,
   onDelete,
+  onApprove,
+  onReject,
 }: {
   b: BirthdaySignup;
   onGift: (b: BirthdaySignup) => void;
@@ -3177,9 +3187,32 @@ const BirthdayActions = ({
   onPhoto: (b: BirthdaySignup) => void;
   onEdit: (b: BirthdaySignup) => void;
   onDelete: (b: BirthdaySignup) => void;
+  onApprove: (b: BirthdaySignup) => void;
+  onReject: (b: BirthdaySignup) => void;
 }) => (
   <div className="flex items-center gap-1">
-    {b.giftGiven ? (
+    {/* Solicitud del cliente: primero se aprueba o se rechaza. Hasta entonces no
+        tiene sentido ofrecer el regalo, porque no está verificada. */}
+    {b.status === "pendiente" ? (
+      <>
+        <button
+          onClick={() => onApprove(b)}
+          className="p-2 hover:bg-green-600 hover:text-white transition-colors"
+          title="Aprobar la solicitud"
+          aria-label="Aprobar la solicitud"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onReject(b)}
+          className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+          title="Rechazar la solicitud"
+          aria-label="Rechazar la solicitud"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </>
+    ) : b.giftGiven ? (
       <button
         onClick={() => onUngift(b)}
         className="p-2 hover:bg-secondary transition-colors"
@@ -3241,7 +3274,8 @@ const BirthdaysAdmin = () => {
   const confirm = useConfirm();
   const [rows, setRows] = useState<BirthdaySignup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [giftFilter, setGiftFilter] = useState<"pending" | "given">("pending");
+  // "requests" = solicitudes que cargó el propio cliente y falta revisar.
+  const [giftFilter, setGiftFilter] = useState<"requests" | "pending" | "given">("pending");
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<BirthdaySignup | null>(null);
@@ -3269,14 +3303,27 @@ const BirthdaysAdmin = () => {
   }, []);
 
   const term = search.trim().toLowerCase();
-  const pendingCount = rows.filter((b) => !b.giftGiven && birthdayMatches(b, term)).length;
-  const givenCount = rows.filter((b) => b.giftGiven && birthdayMatches(b, term)).length;
+  // Las solicitudes sin revisar no cuentan en las listas de regalo: mezclarlas
+  // haría perder la diferencia entre lo verificado y lo que afirma un cliente.
+  const verified = rows.filter((b) => b.status === "aprobado");
+  const requestsCount = rows.filter(
+    (b) => b.status === "pendiente" && birthdayMatches(b, term)
+  ).length;
+  const pendingCount = verified.filter((b) => !b.giftGiven && birthdayMatches(b, term)).length;
+  const givenCount = verified.filter((b) => b.giftGiven && birthdayMatches(b, term)).length;
 
-  // Filtramos por estado del regalo + búsqueda y agrupamos por evento. Los que
-  // todavía no tienen evento asignado van juntos en un grupo al final.
+  // Filtramos por pestaña + búsqueda y agrupamos por evento. Los que todavía no
+  // tienen evento asignado van juntos en un grupo al final.
   const groups = useMemo(() => {
-    const wanted = giftFilter === "given";
-    const list = rows.filter((b) => b.giftGiven === wanted && birthdayMatches(b, term));
+    const list =
+      giftFilter === "requests"
+        ? rows.filter((b) => b.status === "pendiente" && birthdayMatches(b, term))
+        : rows.filter(
+            (b) =>
+              b.status === "aprobado" &&
+              b.giftGiven === (giftFilter === "given") &&
+              birthdayMatches(b, term)
+          );
     const byEvent = new Map<string, BirthdaySignup[]>();
     for (const b of list) {
       const key = b.eventId ?? "";
@@ -3377,6 +3424,33 @@ const BirthdaysAdmin = () => {
     await reload();
     toast.success("Regalo devuelto a pendientes");
   };
+  /** Acepta una solicitud del cliente: pasa a la lista verificada. */
+  const handleApprove = async (b: BirthdaySignup) => {
+    const result = await setBirthdayStatus(b.id, "aprobado");
+    if (!result.ok) return toast.error(result.error ?? "No se pudo aprobar");
+    await reload();
+    toast.success(`${b.firstName} aprobado: ya está en la lista`);
+  };
+
+  /**
+   * Rechaza la solicitud. Queda en la base como 'rechazado' (sale de las listas
+   * del panel) para tener el registro; los índices únicos sólo bloquean las
+   * pendientes, así que la persona puede volver a mandar una corregida.
+   */
+  const handleReject = async (b: BirthdaySignup) => {
+    const ok = await confirm({
+      title: "Rechazar solicitud",
+      description: `¿Rechazar la solicitud de ${b.firstName} ${b.lastName}? Sale de la lista, pero queda el registro y puede volver a enviarla.`,
+      confirmText: "Rechazar",
+      destructive: true,
+    });
+    if (!ok) return;
+    const result = await setBirthdayStatus(b.id, "rechazado");
+    if (!result.ok) return toast.error(result.error ?? "No se pudo rechazar");
+    await reload();
+    toast.success("Solicitud rechazada");
+  };
+
   const handleDelete = async (b: BirthdaySignup) => {
     const ok = await confirm({
       title: "Eliminar cumpleañero",
@@ -3407,6 +3481,18 @@ const BirthdaysAdmin = () => {
       {/* Toolbar */}
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
         <div className="inline-flex rounded-lg border border-border overflow-hidden self-start">
+          <button
+            onClick={() => setGiftFilter("requests")}
+            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
+              giftFilter === "requests"
+                ? "bg-foreground text-background"
+                : requestsCount > 0
+                  ? "bg-background text-charrua hover:bg-secondary"
+                  : "bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            A revisar ({requestsCount})
+          </button>
           <button
             onClick={() => setGiftFilter("pending")}
             className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
@@ -3455,9 +3541,11 @@ const BirthdaysAdmin = () => {
       {/* Grupos por evento */}
       {groups.length === 0 ? (
         <div className="bg-card border border-border py-16 text-center text-muted-foreground text-sm">
-          {giftFilter === "pending"
-            ? "No hay cumpleañeros pendientes. Agregá uno con el botón de arriba."
-            : "Todavía no marcaste ningún regalo como entregado."}
+          {giftFilter === "requests"
+            ? "No hay solicitudes para revisar. Acá caen las que cargan los clientes registrados desde el sitio."
+            : giftFilter === "pending"
+              ? "No hay cumpleañeros pendientes. Agregá uno con el botón de arriba."
+              : "Todavía no marcaste ningún regalo como entregado."}
         </div>
       ) : (
         groups.map((g) => (
@@ -3492,6 +3580,7 @@ const BirthdaysAdmin = () => {
                       <p className="font-semibold flex items-center gap-1.5 flex-wrap">
                         <span className="truncate">{b.firstName} {b.lastName}</span>
                         {b.userId && <RegBadge />}
+                        {b.status === "pendiente" && <PendingBadge />}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {birthdayLabel(b.birthDate)} · {ageFromBirthDate(b.birthDate)} años
@@ -3515,6 +3604,8 @@ const BirthdaysAdmin = () => {
                       b={b}
                       onGift={handleGift}
                       onUngift={handleUngift}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
                       onPhoto={setViewingPhoto}
                       onEdit={openEdit}
                       onDelete={handleDelete}
@@ -3542,9 +3633,10 @@ const BirthdaysAdmin = () => {
                   {g.rows.map((b) => (
                     <tr key={b.id} className="border-b border-border/50 hover:bg-secondary/30">
                       <Td>
-                        <p className="font-semibold flex items-center gap-2">
+                        <p className="font-semibold flex items-center gap-2 flex-wrap">
                           {b.firstName} {b.lastName}
                           {b.userId && <RegBadge />}
+                          {b.status === "pendiente" && <PendingBadge />}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {ageFromBirthDate(b.birthDate)} años
@@ -3585,6 +3677,8 @@ const BirthdaysAdmin = () => {
                           b={b}
                           onGift={handleGift}
                           onUngift={handleUngift}
+                          onApprove={handleApprove}
+                          onReject={handleReject}
                           onPhoto={setViewingPhoto}
                           onEdit={openEdit}
                           onDelete={handleDelete}

@@ -1,10 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
-import { X, Cake, Check, Copy, AlertTriangle, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  X,
+  Cake,
+  Check,
+  Copy,
+  AlertTriangle,
+  Sparkles,
+  Upload,
+  Clock,
+  Send,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
+import {
+  BirthdaySignup,
+  createBirthdayRequest,
+  fetchMyBirthdayRequests,
+  uploadIdPhoto,
+  removeIdPhoto,
+} from "@/lib/birthdays";
 import {
   normalizePhone,
   formatPhoneDisplay,
@@ -41,6 +58,15 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
     phone: "",
     eventId: "",
   });
+
+  // Autogestión (sólo con cuenta): foto del documento + envío de la solicitud.
+  // La foto se guarda en memoria y se sube recién al enviar: si cierra el modal
+  // sin enviar no queda un archivo huérfano en el bucket (el cliente no tiene
+  // permiso para borrar, así que limpiarlo después sería trabajo del staff).
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [sending, setSending] = useState(false);
+  const [myRequests, setMyRequests] = useState<BirthdaySignup[]>([]);
 
   // Con sesión saltamos el prompt: los datos ya están, no hay nada que pedir.
   useEffect(() => {
@@ -90,6 +116,25 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
     setForm((p) => (p.eventId ? p : { ...p, eventId: soleEligibleId }));
   }, [soleEligibleId]);
 
+  // Solicitudes que ya mandó, para no ofrecerle cargar una repetida.
+  useEffect(() => {
+    if (!isOpen || !currentUser) {
+      setMyRequests([]);
+      return;
+    }
+    let active = true;
+    fetchMyBirthdayRequests().then((rows) => {
+      if (active) setMyRequests(rows);
+    });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, currentUser]);
+
+  useEffect(() => {
+    if (!isOpen) setPhotoFile(null);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const phoneE164 = form.phone.trim()
@@ -98,6 +143,8 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
 
   const isFormValid =
     !!form.name.trim() && !!form.birthDate && !!form.email.trim() && !!phoneE164;
+
+  const pendingRequest = myRequests.find((r) => r.status === "pendiente");
 
   const buildMessage = () => {
     const firstName = form.name.trim().split(" ")[0];
@@ -127,6 +174,61 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
     const url = `https://wa.me/59892592179?text=${encodeURIComponent(buildMessage())}`;
     window.open(url, "_blank");
     onClose();
+  };
+
+  const pickPhoto = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Tiene que ser una imagen");
+    if (file.size > 10 * 1024 * 1024) return toast.error("La imagen es muy grande (máx 10MB)");
+    setPhotoFile(file);
+  };
+
+  /** Carga la solicitud directo en el panel. Sólo para usuarios con cuenta. */
+  const handleSendRequest = async () => {
+    if (!currentUser) return;
+    const document = usableDocumentId(currentUser.documentId);
+    if (!document) {
+      return toast.error(
+        "Falta tu número de documento en el perfil. Completalo y volvé a intentar."
+      );
+    }
+    if (!form.name.trim()) return toast.error("Indicá tu nombre completo");
+    if (!form.birthDate) return toast.error("Indicá tu fecha de nacimiento");
+    if (!photoFile) return toast.error("Adjuntá la foto del frente de tu documento");
+
+    setSending(true);
+
+    const upload = await uploadIdPhoto(photoFile);
+    if (!upload.ok || !upload.path) {
+      setSending(false);
+      return toast.error(upload.error ?? "No se pudo subir la foto");
+    }
+
+    const [firstName, ...rest] = form.name.trim().split(" ");
+    const result = await createBirthdayRequest({
+      eventId: form.eventId || null,
+      firstName,
+      lastName: rest.join(" ") || firstName,
+      documentId: document,
+      birthDate: form.birthDate,
+      email: form.email.trim() || null,
+      phone: phoneE164,
+      country: currentUser.country ?? null,
+      state: currentUser.state ?? null,
+      idPhotoPath: upload.path,
+      notes: "Solicitud cargada por el cliente desde la web",
+    });
+    setSending(false);
+
+    if (!result.ok) {
+      // La foto ya se subió: intentamos limpiarla para no dejarla colgada.
+      await removeIdPhoto(upload.path);
+      return toast.error(result.error ?? "No se pudo enviar la solicitud");
+    }
+
+    toast.success("Solicitud enviada. Te la confirmamos por WhatsApp o email.");
+    setPhotoFile(null);
+    setMyRequests(await fetchMyBirthdayRequests());
   };
 
   const handleCopy = async () => {
@@ -313,28 +415,121 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
               )}
             </div>
 
-            {/* Qué falta */}
-            <div className="p-4 bg-secondary/30 border border-border space-y-2">
-              <h4 className="font-medium text-base">Un último paso</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Para validar tu identidad necesitamos la{" "}
-                <strong>foto del frente de tu cédula</strong>. El mensaje ya avisa que la vas a
-                mandar: adjuntala en el mismo chat de WhatsApp.
-              </p>
-            </div>
+            {/* Foto del documento: con cuenta se sube acá; sin cuenta va por WhatsApp */}
+            {currentUser ? (
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-lg font-medium">Foto del documento</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    El frente de tu cédula, para validar que sos vos. Se guarda en privado y
+                    la ve sólo el equipo de ODÍSEA.
+                  </p>
+                </div>
+
+                <div
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    pickPhoto(e.dataTransfer.files?.[0]);
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  className="border-2 border-dashed border-border p-4"
+                >
+                  {photoFile ? (
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={URL.createObjectURL(photoFile)}
+                        alt="Documento"
+                        className="w-20 h-14 object-cover border border-border flex-shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium truncate">{photoFile.name}</p>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-[11px] text-muted-foreground underline"
+                        >
+                          Cambiar la foto
+                        </button>
+                      </div>
+                      <Check className="w-4 h-4 flex-shrink-0" />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full py-6 flex flex-col items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Upload className="w-6 h-6" />
+                      <span className="text-sm">Subir la foto del frente</span>
+                      <span className="text-xs">o arrastrala acá</span>
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => pickPhoto(e.target.files?.[0])}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-secondary/30 border border-border space-y-2">
+                <h4 className="font-medium text-base">Un último paso</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Para validar tu identidad necesitamos la{" "}
+                  <strong>foto del frente de tu cédula</strong>. El mensaje ya avisa que la vas
+                  a mandar: adjuntala en el mismo chat de WhatsApp.
+                </p>
+              </div>
+            )}
+
+            {/* Solicitudes ya enviadas */}
+            {pendingRequest && (
+              <div className="flex items-start gap-3 p-3 border border-foreground bg-secondary/40">
+                <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <p className="text-xs">
+                  <span className="font-semibold">Ya tenés una solicitud en revisión</span>
+                  {pendingRequest.eventId
+                    ? ` para ${
+                        eventOptions.find((e) => e.id === pendingRequest.eventId)?.name ??
+                        "un evento"
+                      }`
+                    : ""}
+                  . Te confirmamos en breve; si necesitás cambiarla, escribinos por WhatsApp.
+                </p>
+              </div>
+            )}
 
             {/* Acciones */}
             <div className="space-y-3">
+              {currentUser && (
+                <button
+                  onClick={handleSendRequest}
+                  disabled={!isFormValid || !photoFile || sending}
+                  className="btn-techno w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{sending ? "Enviando..." : "Enviar mi solicitud"}</span>
+                </button>
+              )}
+
               <button
                 onClick={handleSubmit}
                 disabled={!isFormValid}
-                className="btn-techno w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full disabled:opacity-50 disabled:cursor-not-allowed ${
+                  currentUser
+                    ? "inline-flex items-center justify-center gap-2 border border-border px-4 py-2.5 text-xs tracking-wider uppercase hover:bg-foreground hover:text-background transition-colors"
+                    : "btn-techno"
+                }`}
               >
                 <img src={whatsappLogo} alt="WhatsApp" className="w-5 h-5" />
-                <span>Enviar por WhatsApp</span>
+                <span>
+                  {currentUser ? "Prefiero coordinarlo por WhatsApp" : "Enviar por WhatsApp"}
+                </span>
               </button>
 
-              {isFormValid && (
+              {isFormValid && !currentUser && (
                 <button
                   onClick={handleCopy}
                   className="w-full inline-flex items-center justify-center gap-2 border border-border px-4 py-2.5 text-xs tracking-wider uppercase hover:bg-foreground hover:text-background transition-colors"

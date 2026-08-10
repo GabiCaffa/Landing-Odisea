@@ -11,8 +11,15 @@ import { compressImageToBlob } from "@/contexts/AuthContext";
  * (no una URL pública) y la mostramos con URLs firmadas de corta duración.
  */
 
+/**
+ * 'aprobado' = cargado o validado por el staff (todo lo previo a v16).
+ * 'pendiente' = lo cargó el propio cliente y falta revisarlo.
+ */
+export type BirthdayStatus = "pendiente" | "aprobado" | "rechazado";
+
 export interface BirthdaySignup {
   id: string;
+  status: BirthdayStatus;
   /** Evento al que va (opcional: se puede cargar antes de definirlo). */
   eventId?: string;
   /** Si es un usuario registrado, su id de perfil. null si es carga manual. */
@@ -53,6 +60,7 @@ export interface BirthdayInput {
 function fromDb(row: any): BirthdaySignup {
   return {
     id: row.id,
+    status: (row.status ?? "aprobado") as BirthdayStatus,
     eventId: row.event_id ?? undefined,
     userId: row.user_id ?? undefined,
     firstName: row.first_name,
@@ -135,6 +143,67 @@ export async function deleteBirthday(
   return { ok: true };
 }
 
+/** Aprobar o rechazar una solicitud cargada por el propio cliente. */
+export async function setBirthdayStatus(
+  id: string,
+  status: BirthdayStatus
+): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase
+    .from("birthday_signups")
+    .update({ status })
+    .eq("id", id);
+  if (error) return { ok: false, error: humanizeError(error.message) };
+  return { ok: true };
+}
+
+// ─── Autogestión del cliente (usuario registrado) ────────────────────────────
+
+/**
+ * Solicitud cargada por el propio cliente desde el sitio. Entra como
+ * 'pendiente' y a nombre suyo: la política de RLS rechaza cualquier otra
+ * combinación, así que esto no es una validación cosmética (ver v16).
+ */
+export async function createBirthdayRequest(
+  input: Omit<BirthdayInput, "userId" | "giftGiven">
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return { ok: false, error: "Iniciá sesión para enviar la solicitud" };
+
+  const row = {
+    ...toDb({ ...input, userId: uid, giftGiven: false }),
+    status: "pendiente",
+    created_by: uid,
+  };
+  const { error } = await supabase.from("birthday_signups").insert(row);
+  if (error) {
+    // Los índices únicos parciales de v16 frenan las solicitudes repetidas.
+    if (error.code === "23505") {
+      return { ok: false, error: "Ya tenés una solicitud pendiente para ese evento" };
+    }
+    return { ok: false, error: humanizeError(error.message) };
+  }
+  return { ok: true };
+}
+
+/**
+ * Solicitudes propias del usuario logueado. El filtro por user_id es explícito
+ * a propósito: la política select_own ya alcanzaría, pero si quien consulta es
+ * staff su política le devolvería la tabla entera.
+ */
+export async function fetchMyBirthdayRequests(): Promise<BirthdaySignup[]> {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return [];
+  const { data, error } = await supabase
+    .from("birthday_signups")
+    .select("*")
+    .eq("user_id", uid)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(fromDb);
+}
+
 /** Marca/desmarca el regalo como entregado (el trigger sella gift_given_at). */
 export async function setGiftGiven(
   id: string,
@@ -158,8 +227,12 @@ export async function uploadIdPhoto(
   file: File
 ): Promise<{ ok: boolean; path?: string; error?: string }> {
   try {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return { ok: false, error: "Sesión vencida, volvé a entrar" };
     const blob = await compressImageToBlob(file, 1400, 0.85);
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    // La carpeta es el uid: la política de storage sólo deja escribir en la
+    // propia, así que un cliente no puede pisar el archivo de otro (v16).
+    const path = `${auth.user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
     const { error } = await supabase.storage
       .from(ID_PHOTOS_BUCKET)
       .upload(path, blob, { contentType: "image/jpeg", upsert: false });
