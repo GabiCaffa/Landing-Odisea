@@ -191,6 +191,25 @@ en vez de parchear con el payload; parchear dejaba los eventos sin entradas (el 
 realtime es sólo la fila de `events`). `createEvent` devuelve el `id` porque las entradas se
 guardan después, en su propia tabla.
 
+## 6.1 Promo cumpleaños en el sitio (sin migración)
+
+La card 02 de `PromosSection` era un link fijo a WhatsApp ("Quiero info"). Ahora abre
+`BirthdayPromoModal`: arma el **mensaje completo** para reclamar el beneficio (nombre, fecha
+de nacimiento, email, teléfono, evento elegido y el aviso de que va a pasar la **foto del
+frente de la cédula** —que se adjunta en el chat, no se sube al sitio—). Con sesión se
+autocompleta del perfil e incluye el documento; como invitado se carga a mano y **no se le
+pide el número de documento** (la foto ya lo muestra). **No escribe en la base**: el staff lo
+carga después en la pestaña Cumpleaños. Decisiones: el registro se **incentiva sin obligar**
+(paso previo compartido `AuthPromptStep`, extraído de `TicketPurchaseModal` y ahora usado por
+los dos modales), y si el cumple **no** cae en la ventana de ±15 días **avisa pero deja
+mandar** (mismo criterio que v14).
+
+> `daysBirthdayToEvent` (en `BirthdayPromoModal`) replica la regla de la RPC
+> `can_claim_birthday_promo` (±15 días) pero **corrige el salto de año**: la RPC compara el
+> cumple contra el año del evento, así que un cumple del 28/12 con evento del 05/01 le da
+> ~357 días en vez de 8. El modal prueba los años vecinos. La RPC sigue con el bug y la usa
+> el modal de compra (`birthday_promo_claims`, cooldown 90 días) — pendiente de arreglar.
+
 ---
 
 ## 7. Branding / UI

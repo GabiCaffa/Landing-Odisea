@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import TicketPurchaseModal from "./TicketPurchaseModal";
+import BirthdayPromoModal from "./BirthdayPromoModal";
 import { EventTicket } from "@/lib/ticketTypes";
 
 // Evento que consume el selector / modal de compra (derivado de los eventos reales).
@@ -30,10 +31,9 @@ const promos = [
     tag: "PROMO CUMPLEAÑOS",
     title: "Tu cumple,\ntu fiesta.",
     description:
-      "Si tu cumpleaños cae cerca de la fecha del evento, tenemos un beneficio especial para vos. Escribinos y coordinamos.",
-    cta: "Consultar mi beneficio",
-    ctaHref:
-      "https://wa.me/59892592179?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Cumplea%C3%B1os",
+      "Si tu cumpleaños cae cerca de la fecha del evento, tenemos un beneficio especial para vos. Cargá tus datos y te lo confirmamos por WhatsApp.",
+    cta: "Reclamar mi beneficio",
+    modal: "birthday", // ← abre el modal de la promo de cumpleaños
   },
   {
     number: "03",
@@ -42,7 +42,7 @@ const promos = [
     description:
       "Comprá mediante nuestro canal de ventas y accedé al valor vigente de preventa. Atención personalizada, pago por transferencia y confirmación rápida.",
     cta: "Compra Directa",
-    isModal: true, // ← abre el selector de evento + modal de compra
+    modal: "tickets", // ← abre el selector de evento + modal de compra
     highlight: true,
   },
 ];
@@ -75,8 +75,12 @@ const PromosSection = () => {
   const [selectedEvent, setSelectedEvent] = useState<PickerEvent | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showEventPicker, setShowEventPicker] = useState(false);
+  const [showBirthday, setShowBirthday] = useState(false);
 
-  const openEventPicker = () => setShowEventPicker(true);
+  const openPromoModal = (promo: (typeof promos)[number]) => {
+    if ("modal" in promo && promo.modal === "birthday") setShowBirthday(true);
+    else setShowEventPicker(true);
+  };
 
   const selectEvent = (event: PickerEvent) => {
     setSelectedEvent(event);
@@ -112,7 +116,7 @@ const PromosSection = () => {
               key={promo.number}
               promo={promo}
               index={index}
-              onOpenModal={openEventPicker}
+              onOpenModal={() => openPromoModal(promo)}
             />
           ))}
         </div>
@@ -129,6 +133,9 @@ const PromosSection = () => {
           onClose={() => setShowEventPicker(false)}
         />
       )}
+
+      {/* Promo cumpleaños: arma el mensaje de WhatsApp con los datos cargados */}
+      <BirthdayPromoModal isOpen={showBirthday} onClose={() => setShowBirthday(false)} />
 
       {/* Ticket modal reutilizado */}
       {selectedEvent && (
@@ -279,8 +286,8 @@ const PromoCard = ({
         {promo.description}
       </p>
 
-      {/* CTA — botón si es modal, link si es WhatsApp directo */}
-      {"isModal" in promo && promo.isModal ? (
+      {/* CTA — botón si abre un modal, link si es WhatsApp directo */}
+      {"modal" in promo ? (
         <button
           onClick={onOpenModal}
           className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide bg-tinta text-papel rounded-full px-6 py-3 transition-all duration-200 w-fit hover:bg-white hover:text-tinta active:scale-[0.98] cursor-pointer"

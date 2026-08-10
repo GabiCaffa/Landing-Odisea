@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { X, LogIn, UserPlus, ArrowRight, Gift, Sparkles, Check } from "lucide-react";
+import { X, Gift, Sparkles, Check } from "lucide-react";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
 import PhoneInput from "./PhoneInput";
+import AuthPromptStep from "./AuthPromptStep";
 import { useAuth } from "@/contexts/AuthContext";
 import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE, getCountry } from "@/lib/locations";
@@ -210,7 +210,12 @@ const TicketPurchaseModal = ({
         </div>
 
         {step === "auth-prompt" ? (
-          <AuthPromptStep onContinue={() => setStep("purchase")} />
+          <AuthPromptStep
+            subtitle="Si ya tenés cuenta, tus datos se completan solos. Si no, podés continuar como invitado."
+            loginHint="Acelera la compra y desbloquea beneficios (promo cumpleaños, etc.)"
+            registerHint="Te lleva un minuto y queda guardado para próximas compras"
+            onContinue={() => setStep("purchase")}
+          />
         ) : (
           <div className="p-6 space-y-8">
             {/* Banner usuario logueado */}
@@ -413,68 +418,5 @@ const TicketPurchaseModal = ({
     </div>
   );
 };
-
-// ─── Step 0: Login / continue as guest ────────────────────────────────────
-const AuthPromptStep = ({ onContinue }: { onContinue: () => void }) => (
-  <div className="p-6 md:p-8 space-y-6">
-    <div className="text-center space-y-2">
-      <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground">
-        Antes de continuar
-      </p>
-      <h3 className="text-2xl font-semibold">¿Cómo querés seguir?</h3>
-      <p className="text-sm text-muted-foreground">
-        Si ya tenés cuenta, tus datos se completan solos. Si no, podés continuar como invitado.
-      </p>
-    </div>
-
-    <div className="grid grid-cols-1 gap-3">
-      {/* Login */}
-      <Link
-        to={`/login?next=${encodeURIComponent(window.location.pathname)}`}
-        className="flex items-center gap-4 p-5 rounded-xl border border-border hover:bg-foreground hover:text-background transition-colors group"
-      >
-        <LogIn className="w-5 h-5 flex-shrink-0" />
-        <div className="flex-1 text-left">
-          <p className="font-semibold tracking-wide uppercase text-sm">Iniciar sesión</p>
-          <p className="text-xs text-muted-foreground group-hover:text-background/60 mt-0.5">
-            Acelera la compra y desbloquea beneficios (promo cumpleaños, etc.)
-          </p>
-        </div>
-        <ArrowRight className="w-4 h-4 flex-shrink-0" />
-      </Link>
-
-      {/* Register */}
-      <Link
-        to={`/registro?next=${encodeURIComponent(window.location.pathname)}`}
-        className="flex items-center gap-4 p-5 border border-border hover:bg-secondary transition-colors group"
-      >
-        <UserPlus className="w-5 h-5 flex-shrink-0" />
-        <div className="flex-1 text-left">
-          <p className="font-semibold tracking-wide uppercase text-sm">Crear cuenta</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Te lleva un minuto y queda guardado para próximas compras
-          </p>
-        </div>
-        <ArrowRight className="w-4 h-4 flex-shrink-0" />
-      </Link>
-
-      {/* Guest */}
-      <button
-        type="button"
-        onClick={onContinue}
-        className="flex items-center gap-4 p-5 border border-dashed border-border hover:bg-muted transition-colors group"
-      >
-        <div className="w-5 h-5 flex-shrink-0" />
-        <div className="flex-1 text-left">
-          <p className="font-semibold tracking-wide uppercase text-sm">Continuar como invitado</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Cargás tus datos manualmente esta vez
-          </p>
-        </div>
-        <ArrowRight className="w-4 h-4 flex-shrink-0" />
-      </button>
-    </div>
-  </div>
-);
 
 export default TicketPurchaseModal;
