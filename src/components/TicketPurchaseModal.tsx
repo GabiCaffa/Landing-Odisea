@@ -4,7 +4,7 @@ import whatsappLogo from "@/assets/whatsapp-logo.png";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
 import { useAuth } from "@/contexts/AuthContext";
-import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
+import { normalizePhone, formatPhoneDisplay, usableDocumentId } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE, getCountry } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { PaymentAccount, fetchAccountForEvent } from "@/lib/paymentAccounts";
@@ -144,9 +144,8 @@ const TicketPurchaseModal = ({
     msg += `Nombre completo: ${formData.name}\n`;
     msg += `Email: ${formData.email}\n`;
     msg += `Teléfono: ${formatPhoneDisplay(phoneE164)}\n`;
-    if (currentUser) {
-      msg += `Documento: ${currentUser.documentId}\n`;
-    }
+    const document = usableDocumentId(currentUser?.documentId);
+    if (document) msg += `Documento: ${document}\n`;
     if (account) {
       msg += `\nVoy a realizar la transferencia a:\n`;
       msg += `${account.holderName}\n`;

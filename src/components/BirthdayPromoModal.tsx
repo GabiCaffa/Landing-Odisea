@@ -5,32 +5,16 @@ import whatsappLogo from "@/assets/whatsapp-logo.png";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
-import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
+import {
+  normalizePhone,
+  formatPhoneDisplay,
+  usableDocumentId,
+  daysBirthdayToEvent,
+  BIRTHDAY_WINDOW_DAYS,
+} from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { toast } from "sonner";
-
-/** Días de tolerancia entre el cumple y la fecha del evento (igual que la DB). */
-export const BIRTHDAY_WINDOW_DAYS = 15;
-
-const MS_PER_DAY = 86_400_000;
-
-/**
- * Días entre el cumpleaños y la fecha del evento, tomando el aniversario más
- * cercano. Se prueban los años vecinos para que un cumple del 28/12 y un evento
- * del 05/01 den 8 días y no 357.
- */
-export function daysBirthdayToEvent(birthDate: string, eventDate: string): number | null {
-  const [by, bm, bd] = birthDate.split("-").map(Number);
-  const [ey, em, ed] = eventDate.split("-").map(Number);
-  if (!by || !bm || !bd || !ey || !em || !ed) return null;
-  const event = Date.UTC(ey, em - 1, ed);
-  return Math.min(
-    ...[ey - 1, ey, ey + 1].map((year) =>
-      Math.round(Math.abs(event - Date.UTC(year, bm - 1, bd)) / MS_PER_DAY)
-    )
-  );
-}
 
 /** "2008-08-13" → "13/08/2008" */
 const formatBirthDate = (iso: string) => {
@@ -117,19 +101,20 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
 
   const buildMessage = () => {
     const firstName = form.name.trim().split(" ")[0];
-    let msg = `Buenas! Soy ${firstName} 🎂\n`;
+    const document = usableDocumentId(currentUser?.documentId);
+    let msg = `Buenas! Soy ${firstName}\n`;
     msg += `Quiero acceder a la PROMO CUMPLEAÑOS.\n\n`;
     msg += `Mis datos:\n`;
     msg += `Nombre completo: ${form.name.trim()}\n`;
     msg += `Fecha de nacimiento: ${formatBirthDate(form.birthDate)}\n`;
     msg += `Email: ${form.email.trim()}\n`;
     if (phoneE164) msg += `Teléfono: ${formatPhoneDisplay(phoneE164)}\n`;
-    if (currentUser?.documentId) msg += `Documento: ${currentUser.documentId}\n`;
+    if (document) msg += `Documento: ${document}\n`;
     msg += `\n`;
     msg += chosen
       ? `Evento al que voy: ${chosen.name} (${formatEventDate(chosen.date)})\n`
       : `Evento al que voy: todavía no lo elegí\n`;
-    msg += `\nTe paso ahora la foto del frente de mi cédula 📎`;
+    msg += `\nTe paso ahora la foto del frente de mi cédula.`;
     return msg;
   };
 
@@ -332,7 +317,7 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
             <div className="p-4 bg-secondary/30 border border-border space-y-2">
               <h4 className="font-medium text-base">Un último paso</h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                📎 Para validar tu identidad necesitamos la{" "}
+                Para validar tu identidad necesitamos la{" "}
                 <strong>foto del frente de tu cédula</strong>. El mensaje ya avisa que la vas a
                 mandar: adjuntala en el mismo chat de WhatsApp.
               </p>

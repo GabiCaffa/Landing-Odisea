@@ -159,21 +159,35 @@ export function daysToBirthday(birthDate: string, referenceDate: Date = new Date
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }
 
-// ─── Birthday cae cerca del evento ─────────────────────────────────────────
-// Devuelve true si el cumple del usuario cae dentro de ±windowDays del evento.
-export function birthdayMatchesEvent(
-  birthDate: string,
-  eventDate: string,
-  windowDays = 15
-): boolean {
-  if (!birthDate || !eventDate) return false;
-  const [, bm, bd] = birthDate.split("-").map(Number);
-  const [ey, em, ed] = eventDate.split("-").map(Number);
-  if (!bm || !bd || !ey || !em || !ed) return false;
-  const event = new Date(ey, em - 1, ed);
-  // Comparar contra el cumple en el mismo año del evento
-  const bday = new Date(ey, bm - 1, bd);
-  const diffMs = Math.abs(event.getTime() - bday.getTime());
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  return diffDays <= windowDays;
+// ─── Cumple cerca del evento (promo cumpleaños) ─────────────────────────────
+/** Días de tolerancia entre el cumple y la fecha del evento. */
+export const BIRTHDAY_WINDOW_DAYS = 15;
+
+/**
+ * Días entre el cumpleaños y la fecha del evento, tomando el aniversario más
+ * cercano. Se prueban los años vecinos a propósito: comparando sólo contra el
+ * año del evento, un cumple del 28/12 con un evento del 05/01 daría ~357 días
+ * en vez de 8 y la persona quedaría fuera de la promo por nada.
+ */
+export function daysBirthdayToEvent(birthDate: string, eventDate: string): number | null {
+  const [, bm, bd] = (birthDate ?? "").split("-").map(Number);
+  const [ey, em, ed] = (eventDate ?? "").split("-").map(Number);
+  if (!bm || !bd || !ey || !em || !ed) return null;
+  const MS_PER_DAY = 86_400_000;
+  const event = Date.UTC(ey, em - 1, ed);
+  return Math.min(
+    ...[ey - 1, ey, ey + 1].map((year) =>
+      Math.round(Math.abs(event - Date.UTC(year, bm - 1, bd)) / MS_PER_DAY)
+    )
+  );
+}
+
+// ─── Documento presentable ──────────────────────────────────────────────────
+/**
+ * Devuelve el documento sólo si parece uno de verdad. Hay perfiles con basura
+ * cargada (por ejemplo "0"), y eso no puede terminar en un mensaje al cliente.
+ */
+export function usableDocumentId(doc?: string | null): string | null {
+  const clean = (doc ?? "").replace(/[^\dkK]/gi, "");
+  return clean.length >= 6 ? (doc as string) : null;
 }
