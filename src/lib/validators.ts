@@ -137,6 +137,16 @@ export function formatPhoneDisplay(e164: string | undefined | null): string {
   return parsed?.formatInternational() ?? e164;
 }
 
+/**
+ * País (ISO-2) de un número ya en E.164. Sirve para preseleccionar la bandera
+ * del selector de teléfono cuando el número no lo tipeó el usuario (por ejemplo
+ * al leerlo de un mensaje de WhatsApp pegado).
+ */
+export function phoneCountryOf(e164: string | undefined | null): CountryCode | null {
+  if (!e164) return null;
+  return parsePhoneNumberFromString(e164)?.country ?? null;
+}
+
 // ─── Edad ───────────────────────────────────────────────────────────────────
 export function calcAge(birthDate: string): number {
   if (!birthDate) return 0;

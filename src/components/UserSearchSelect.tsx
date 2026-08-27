@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { User } from "@/contexts/AuthContext";
+import { foldText } from "@/lib/utils";
 
 /**
  * Selector de usuario registrado con buscador (typeahead).
@@ -13,22 +14,12 @@ import { User } from "@/contexts/AuthContext";
  * cambiarlo: así el texto escrito nunca queda "desincronizado" de la selección.
  */
 
-/** Marcas de acento que deja NFD al separar la letra de su tilde. */
-const DIACRITICS = new RegExp("[\u0300-\u036f]", "g");
-
 /**
- * Pasa una letra a minúscula y sin tilde. Devuelve SIEMPRE un carácter por
- * carácter (si el plegado no dejara ninguno, se queda el original): así los
- * índices del texto buscable coinciden con los del original y podemos resaltar
- * exactamente lo que coincidió.
+ * "Pérez" → "perez". El plegado vive en @/lib/utils porque lo comparte el
+ * parser de mensajes de WhatsApp; mantiene la garantía de un carácter por
+ * carácter, de la que depende el resaltado de más abajo.
  */
-const foldChar = (ch: string) => {
-  const folded = ch.normalize("NFD").replace(DIACRITICS, "").toLowerCase();
-  return folded.length === 1 ? folded : ch.toLowerCase();
-};
-
-/** "Pérez" → "perez", "Ñandú" → "nandu". */
-const norm = (s: string) => Array.from(s).map(foldChar).join("");
+const norm = foldText;
 
 /** Parte lo escrito en palabras sueltas, ya normalizadas. */
 const termsOf = (query: string) => norm(query).split(/\s+/).filter(Boolean);

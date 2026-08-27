@@ -5,10 +5,11 @@ import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
 import { useAuth } from "@/contexts/AuthContext";
 import { normalizePhone, formatPhoneDisplay, usableDocumentId } from "@/lib/validators";
-import { DEFAULT_COUNTRY_CODE, getCountry } from "@/lib/locations";
+import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { PaymentAccount, fetchAccountForEvent } from "@/lib/paymentAccounts";
 import { EventTicket } from "@/lib/ticketTypes";
+import { buildPurchaseMessage } from "@/lib/purchaseMessage";
 import { toast } from "sonner";
 
 interface TicketPurchaseModalProps {
@@ -132,32 +133,20 @@ const TicketPurchaseModal = ({
     const phoneE164 = normalizePhone(formData.phone, country as CountryCode);
     if (!phoneE164) return null;
 
-    const firstName = formData.name.split(" ")[0];
-    let msg = `Buenas! Soy ${firstName}\n`;
-    msg += `Quiero comprar para ${eventName} (${eventDate}):\n`;
-    selected.forEach((t) => {
-      const qty = quantities[t.name];
-      msg += `- ${qty} entrada${qty > 1 ? "s" : ""} ${t.name} ($${t.price * qty})\n`;
+    // El formato vive en @/lib/purchaseMessage, al lado del parser que lo lee
+    // en el panel para cargar la entrega. No armar el texto acá.
+    return buildPurchaseMessage({
+      fullName: formData.name,
+      email: formData.email,
+      phoneE164,
+      documentId: usableDocumentId(currentUser?.documentId),
+      eventName,
+      eventDate,
+      items: selected.map((t) => ({ name: t.name, qty: quantities[t.name], price: t.price })),
+      total: calculateTotal(),
+      birthdayPromo: birthdayApplied,
+      account,
     });
-    msg += `\nTOTAL: $${calculateTotal()}\n\n`;
-    msg += `Mis datos:\n`;
-    msg += `Nombre completo: ${formData.name}\n`;
-    msg += `Email: ${formData.email}\n`;
-    msg += `Teléfono: ${formatPhoneDisplay(phoneE164)}\n`;
-    const document = usableDocumentId(currentUser?.documentId);
-    if (document) msg += `Documento: ${document}\n`;
-    if (account) {
-      msg += `\nVoy a realizar la transferencia a:\n`;
-      msg += `${account.holderName}\n`;
-      msg += `Banco: ${account.bank}\n`;
-      if (account.accountType) msg += `Tipo de cuenta: ${account.accountType}\n`;
-      msg += `Nro de cuenta: ${account.accountNumber}\n`;
-      if (account.documentId) msg += `Documento del titular: ${account.documentId}\n`;
-    } else {
-      msg += `\n¿A qué cuenta hago la transferencia?\n`;
-    }
-    msg += `Comprobante: `;
-    return msg;
   };
 
   const handleSubmit = () => {

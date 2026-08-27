@@ -37,6 +37,8 @@ import {
   Eye,
   CreditCard,
   Star,
+  ClipboardPaste,
+  AlertTriangle,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
@@ -58,6 +60,7 @@ import UserSearchSelect from "@/components/UserSearchSelect";
 import {
   normalizePhone,
   formatPhoneDisplay,
+  phoneCountryOf,
   validateDocumentByCountry,
   documentLabelByCountry,
   documentPlaceholderByCountry,
@@ -66,6 +69,8 @@ import {
 } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
+import { parsePurchaseMessage } from "@/lib/purchaseMessage";
+import { foldText } from "@/lib/utils";
 import {
   TicketDelivery,
   DeliveryInput,
@@ -2436,6 +2441,9 @@ const DeliveriesAdmin = () => {
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<TicketDelivery | null>(null);
+  // Importar pegando el mensaje de WhatsApp: el parser deja el form pre-cargado.
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [prefill, setPrefill] = useState<DeliveryPrefill | null>(null);
 
   const reload = async () => {
     const data = await fetchDeliveries();
@@ -2543,10 +2551,12 @@ const DeliveriesAdmin = () => {
 
   const openNew = () => {
     setEditing(null);
+    setPrefill(null);
     setModalOpen(true);
   };
   const openEdit = (d: TicketDelivery) => {
     setEditing(d);
+    setPrefill(null);
     setModalOpen(true);
   };
 
@@ -2624,6 +2634,14 @@ const DeliveriesAdmin = () => {
             />
           </div>
           <button
+            onClick={() => setPasteOpen(true)}
+            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2"
+            title="Pegar el mensaje de WhatsApp del cliente y cargar la entrega"
+          >
+            <ClipboardPaste className="w-4 h-4" />{" "}
+            <span className="hidden sm:inline">Pegar mensaje</span>
+          </button>
+          <button
             onClick={exportCsv}
             className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2"
             title="Exportar la lista visible a CSV (Excel)"
@@ -2640,7 +2658,7 @@ const DeliveriesAdmin = () => {
       {groups.length === 0 ? (
         <div className="bg-card border border-border py-16 text-center text-muted-foreground text-sm">
           {statusFilter === "pending"
-            ? "No hay clientes por enviar. Agregá uno con el botón de arriba."
+            ? "No hay clientes por enviar. Cargá uno pegando su mensaje de WhatsApp o con el botón Agregar."
             : "Todavía no marcaste ninguna entrega como enviada."}
         </div>
       ) : (
@@ -2765,15 +2783,37 @@ const DeliveriesAdmin = () => {
         ))
       )}
 
+      {pasteOpen && (
+        <PasteMessageModal
+          events={events}
+          users={users}
+          existing={deliveries}
+          onClose={() => setPasteOpen(false)}
+          onParsed={(data) => {
+            // El mensaje no se guarda solo: cae en el form de siempre, con todo
+            // cargado, para que el staff lo revise antes de escribir en la base.
+            setPasteOpen(false);
+            setEditing(null);
+            setPrefill(data);
+            setModalOpen(true);
+          }}
+        />
+      )}
+
       {modalOpen && (
         <DeliveryFormModal
           events={events}
           users={users}
           existing={deliveries}
           editing={editing}
-          onClose={() => setModalOpen(false)}
+          prefill={prefill}
+          onClose={() => {
+            setModalOpen(false);
+            setPrefill(null);
+          }}
           onSaved={() => {
             setModalOpen(false);
+            setPrefill(null);
             // Un cliente nuevo nace "pendiente": mostramos esa lista para que se vea.
             if (!editing) setStatusFilter("pending");
             reload();
@@ -2784,11 +2824,260 @@ const DeliveriesAdmin = () => {
   );
 };
 
+/**
+ * Datos de un mensaje de WhatsApp ya interpretados, para abrir el form con todo
+ * puesto. Van como strings porque alimentan los inputs tal cual, y el form sigue
+ * siendo el que valida y guarda: el importador nunca escribe solo en la base.
+ */
+interface DeliveryPrefill {
+  eventId: string;
+  /** Vínculo al perfil si el email coincidió con un usuario registrado (v10). */
+  userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  phoneCountry: string;
+  quantity: string;
+  value: string;
+  notes: string;
+}
+
+/**
+ * Pegar el mensaje de WhatsApp de una compra y cargar la entrega sin retipear.
+ *
+ * El texto lo armó el propio sitio (ver @/lib/purchaseMessage), así que el
+ * parser sabe exactamente qué busca. Lo que se entendió se muestra ANTES de
+ * seguir: de acá no se escribe en la base, se abre el form de siempre con todo
+ * cargado para que el staff lo confirme.
+ */
+const PasteMessageModal = ({
+  events,
+  users,
+  existing,
+  onClose,
+  onParsed,
+}: {
+  events: AdminEvent[];
+  users: User[];
+  existing: TicketDelivery[];
+  onClose: () => void;
+  onParsed: (prefill: DeliveryPrefill) => void;
+}) => {
+  const [text, setText] = useState("");
+  // Evento elegido a mano: sólo se usa si el del mensaje no se pudo cruzar.
+  const [pickedEventId, setPickedEventId] = useState("");
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    areaRef.current?.focus();
+  }, []);
+
+  const parsed = useMemo(() => (text.trim() ? parsePurchaseMessage(text) : null), [text]);
+  const data = parsed?.data ?? null;
+
+  // Evento del mensaje → evento cargado. Sin tildes ni mayúsculas, y aceptando
+  // que uno contenga al otro: el nombre del evento suele venir con adornos.
+  const matchedEvent = useMemo(() => {
+    const name = data?.eventName;
+    if (!name) return null;
+    const wanted = foldText(name).trim();
+    const exact = events.find((e) => foldText(e.name).trim() === wanted);
+    if (exact) return exact;
+    return (
+      events.find((e) => {
+        const candidate = foldText(e.name).trim();
+        return candidate.includes(wanted) || wanted.includes(candidate);
+      }) ?? null
+    );
+  }, [data?.eventName, events]);
+
+  const eventId = pickedEventId || matchedEvent?.id || "";
+  const selectedEvent = events.find((e) => e.id === eventId) ?? null;
+
+  // Si el email es de alguien registrado, la entrega queda vinculada al perfil.
+  const matchedUser = useMemo(
+    () => (data?.email ? users.find((u) => u.email.toLowerCase() === data.email) ?? null : null),
+    [data?.email, users]
+  );
+
+  const duplicate = useMemo(() => {
+    if (!data?.email || !eventId) return null;
+    return (
+      existing.find((d) => d.eventId === eventId && d.email.toLowerCase() === data.email) ?? null
+    );
+  }, [data?.email, eventId, existing]);
+
+  const value = data ? data.total ?? data.itemsTotal : null;
+
+  const handleContinue = () => {
+    if (!data) return;
+    if (!eventId) {
+      toast.error("Elegí el evento");
+      return;
+    }
+    // El desglose por tipo de entrada no tiene columna propia en la tabla, así
+    // que va a Notas: sin esto se perdería qué compró cada uno.
+    const notes = [
+      data.itemsSummary,
+      data.birthdayPromo ? "PROMO CUMPLEAÑOS" : "",
+      data.documentId ? `Doc: ${data.documentId}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    onParsed({
+      eventId,
+      userId: matchedUser?.id ?? "",
+      fullName: data.fullName ?? "",
+      email: data.email ?? "",
+      // El input de teléfono espera el número sin el prefijo internacional.
+      phone: data.phoneE164
+        ? formatPhoneDisplay(data.phoneE164).replace(/^\+\d+\s*/, "")
+        : data.phoneRaw ?? "",
+      phoneCountry: phoneCountryOf(data.phoneE164) ?? DEFAULT_COUNTRY_CODE,
+      quantity: data.quantity > 0 ? String(data.quantity) : "1",
+      value: value !== null ? String(value) : "",
+      notes,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-2xl bg-background border border-border h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 md:p-6 border-b border-border sticky top-0 bg-background z-10">
+          <h2 className="title-sport text-xl md:text-2xl font-black tracking-wide">
+            PEGAR MENSAJE
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 md:p-6 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Copiá el mensaje que te mandó el cliente por WhatsApp y pegalo acá (Ctrl+V). Lo leo y
+            te muestro qué entendí antes de cargar nada.
+          </p>
+
+          <textarea
+            ref={areaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={8}
+            placeholder={"Buenas! Soy Juan\nQuiero comprar para ..."}
+            className="input-techno font-mono text-xs leading-relaxed resize-y"
+          />
+
+          {parsed && (
+            <div className="border border-border divide-y divide-border">
+              <div className="px-4 py-2.5 bg-secondary/50 flex items-center justify-between">
+                <span className="text-xs font-bold tracking-wider uppercase">Lo que entendí</span>
+                {matchedUser && <RegBadge />}
+              </div>
+
+              <ParsedRow label="Evento">
+                {matchedEvent ? (
+                  <span>
+                    {matchedEvent.name}{" "}
+                    <span className="text-xs text-muted-foreground">· detectado del mensaje</span>
+                  </span>
+                ) : (
+                  <select
+                    value={eventId}
+                    onChange={(e) => setPickedEventId(e.target.value)}
+                    className="input-techno py-1.5 text-sm"
+                  >
+                    <option value="">
+                      {data?.eventName ? `No encontré "${data.eventName}" — elegilo` : "Elegí el evento"}
+                    </option>
+                    {events.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name} · {formatEventDate(e.date)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </ParsedRow>
+              <ParsedRow label="Nombre">{data?.fullName}</ParsedRow>
+              <ParsedRow label="Email">{data?.email}</ParsedRow>
+              <ParsedRow label="Teléfono">
+                {data?.phoneE164 ? formatPhoneDisplay(data.phoneE164) : data?.phoneRaw}
+              </ParsedRow>
+              <ParsedRow label="Documento">{data?.documentId}</ParsedRow>
+              <ParsedRow label="Entradas">
+                {data && data.quantity > 0
+                  ? `${data.quantity} · ${data.itemsSummary}`
+                  : null}
+              </ParsedRow>
+              <ParsedRow label="Total">{value !== null ? `$${value}` : null}</ParsedRow>
+              {data?.birthdayPromo && (
+                <ParsedRow label="Promo">
+                  <span className="inline-flex items-center gap-1.5 text-celeste-deep font-semibold">
+                    <Cake className="w-3.5 h-3.5" /> Cumpleaños aplicada
+                  </span>
+                </ParsedRow>
+              )}
+            </div>
+          )}
+
+          {parsed && parsed.warnings.length > 0 && (
+            <div className="border border-charrua/40 bg-charrua/5 p-3 space-y-1.5">
+              {parsed.warnings.map((w) => (
+                <p key={w} className="flex items-start gap-2 text-xs text-charrua">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {w}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {duplicate && (
+            <div className="border border-charrua/40 bg-charrua/5 p-3">
+              <p className="flex items-start gap-2 text-xs text-charrua">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                Ya hay una entrega para {data?.email} en{" "}
+                {selectedEvent?.name ?? "este evento"} ({duplicate.quantity} entrada/s,{" "}
+                {duplicate.status === "sent" ? "ya enviada" : "pendiente"}). Vas a poder cargarla
+                igual, pero fijate que no sea la misma compra.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose} className="btn-techno-outline flex-1">
+              Cancelar
+            </button>
+            <button
+              onClick={handleContinue}
+              disabled={!data?.fullName && !data?.email}
+              className="btn-celeste flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Revisar y cargar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** Fila del resumen de lo parseado. Sin valor muestra un guión apagado. */
+const ParsedRow = ({ label, children }: { label: string; children?: React.ReactNode }) => (
+  <div className="px-4 py-2 flex items-baseline gap-3 text-sm">
+    <span className="w-24 shrink-0 text-xs tracking-wider uppercase text-muted-foreground">
+      {label}
+    </span>
+    <span className="min-w-0 flex-1 break-words">
+      {children || <span className="text-muted-foreground">—</span>}
+    </span>
+  </div>
+);
+
 const DeliveryFormModal = ({
   events,
   users,
   existing,
   editing,
+  prefill,
   onClose,
   onSaved,
 }: {
@@ -2796,26 +3085,32 @@ const DeliveryFormModal = ({
   users: User[];
   existing: TicketDelivery[];
   editing: TicketDelivery | null;
+  prefill?: DeliveryPrefill | null;
   onClose: () => void;
   onSaved: () => void;
 }) => {
   const confirm = useConfirm();
   // "registered": elegís un usuario ya registrado y sólo cargás las entradas.
-  // "manual": tipeás nombre/mail/teléfono. Al editar siempre usamos manual.
+  // "manual": tipeás nombre/mail/teléfono. Al editar siempre usamos manual, y
+  // al venir de un mensaje pegado también: los datos ya están, hay que verlos.
   const [mode, setMode] = useState<"registered" | "manual">(
-    !editing && users.length > 0 ? "registered" : "manual"
+    !editing && !prefill && users.length > 0 ? "registered" : "manual"
   );
   const [form, setForm] = useState({
-    eventId: editing?.eventId ?? (events[0]?.id ?? ""),
-    userId: editing?.userId ?? "",
-    fullName: editing ? `${editing.firstName} ${editing.lastName ?? ""}`.trim() : "",
+    eventId: prefill?.eventId || editing?.eventId || events[0]?.id || "",
+    userId: prefill?.userId || editing?.userId || "",
+    fullName:
+      prefill?.fullName ??
+      (editing ? `${editing.firstName} ${editing.lastName ?? ""}`.trim() : ""),
     // País sólo para el widget de teléfono (formato/bandera), no es ubicación del cliente.
-    phoneCountry: editing?.country || DEFAULT_COUNTRY_CODE,
-    phone: editing?.phone ? formatPhoneDisplay(editing.phone).replace(/^\+\d+\s*/, "") : "",
-    email: editing?.email ?? "",
-    quantity: String(editing?.quantity ?? 1),
-    value: editing ? String(editing.value) : "",
-    notes: editing?.notes ?? "",
+    phoneCountry: prefill?.phoneCountry || editing?.country || DEFAULT_COUNTRY_CODE,
+    phone:
+      prefill?.phone ??
+      (editing?.phone ? formatPhoneDisplay(editing.phone).replace(/^\+\d+\s*/, "") : ""),
+    email: prefill?.email ?? editing?.email ?? "",
+    quantity: prefill?.quantity ?? String(editing?.quantity ?? 1),
+    value: prefill?.value ?? (editing ? String(editing.value) : ""),
+    notes: prefill?.notes ?? editing?.notes ?? "",
   });
   const [saving, setSaving] = useState(false);
 

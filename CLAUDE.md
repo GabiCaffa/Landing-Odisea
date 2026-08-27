@@ -235,6 +235,50 @@ UI: pestaña Cumpleaños con un tercer filtro **"A revisar"** (badge en rojo si 
 botones Aprobar/Rechazar; las listas de regalo muestran sólo `aprobado`. **Rechazar borra
 (v17).**
 
+## 6.2 Cargar la entrega pegando el mensaje de WhatsApp (sin migración)
+
+El flujo real de una venta era: el cliente manda por WhatsApp el mensaje que **el propio
+sitio le armó**, el staff lo pasaba a un Excel a mano y además lo retipeaba en la pestaña
+Entregas. Ahora hay un botón **"Pegar mensaje"**: se pega el texto (Ctrl+V), se muestra
+**qué se entendió** y al confirmar se abre el form de entrega de siempre con todo cargado.
+
+**El formato vive en un solo archivo, `src/lib/purchaseMessage.ts`**, con
+`buildPurchaseMessage()` (lo usa `TicketPurchaseModal`) y `parsePurchaseMessage()` (lo usa el
+panel) **pegados uno al lado del otro**, compartiendo las etiquetas en la constante `MSG`. La
+razón es concreta: si el armado cambia en un archivo y el parser queda en otro, el importador
+se rompe **en silencio** —una carga que sale vacía, sin ningún error—. Al tocar el mensaje,
+tocar los dos lados de una vez.
+
+Decisiones del importador (`PasteMessageModal` en `Admin.tsx`):
+
+- **No escribe en la base.** Deja el form pre-cargado (`DeliveryPrefill`) y guarda el staff.
+  Así el importador no duplica la validación, el aviso de duplicado ni el vínculo al perfil.
+- **Corta el bloque de la transferencia antes de buscar etiquetas.** El mensaje trae
+  `Documento:` (del cliente) y `Documento del titular:` (de *nuestra* cuenta de cobro, v13).
+  Sin ese corte se carga la cédula del titular como si fuera la del comprador.
+- **Limpia el sello del chat** (`[12/9/26, 21:03] Juan: ` al principio de cada línea), que
+  aparece cuando se copian varios mensajes o se exporta el chat. El nombre del remitente se
+  saca sólo si lo que sigue no es una etiqueta conocida, para no comerse `Nombre completo:`.
+- **`parseMoney`**: `$1.500` es 1500 (miles, como se escribe en Uruguay) y `1500,50` es
+  decimal. La regla es cuántos dígitos quedan después del último separador.
+- **El desglose por tipo de entrada va a Notas** ("2 General · 1 VIP"): `ticket_deliveries`
+  sólo tiene `quantity` y `value`, así que si no se perdería qué compró cada uno. El documento
+  también va ahí (la tabla tiene la columna `document_id`, pero el form nunca la expuso).
+- Cruza el evento por nombre sin tildes ni mayúsculas (si no lo encuentra, se elige a mano) y
+  el email contra los perfiles, para enganchar el `user_id` y el badge "Registrado" (v10).
+
+**Bug arreglado de paso:** el modal de compra mostraba *"Promo cumpleaños aplicada · Aviso en
+el mensaje de WhatsApp"* pero `buildMessage` **no escribía ninguna línea de la promo**
+(`birthdayApplied` sólo pintaba el banner). La persona reclamaba el beneficio, quedaba
+registrado en `birthday_promo_claims`, y al staff le llegaba un mensaje idéntico a cualquier
+otro: se le cobraba el precio lleno. Ahora va la línea `PROMO CUMPLEAÑOS APLICADA`, que el
+parser detecta y deja marcada en el resumen y en las notas de la entrega.
+
+> El plegado de tildes (`foldText`) se subió de `UserSearchSelect` a `src/lib/utils.ts`, que
+> ahora lo comparten el buscador y el parser. Usa `\p{M}` y no un rango `[U+0300-U+036F]`
+> a propósito: el rango obliga a escribir marcas combinantes en el fuente, que se pegan al
+> carácter anterior en cualquier editor.
+
 **v17 — Rechazar una solicitud la borra.** El `status = 'rechazado'` de v16 era un registro
 que **ninguna lista mostraba** pero que **sí sumaba en las tarjetas de totales** (el resumen
 contaba `rows`, las listas `verified`): el panel decía que había cumpleañeros cargados que no
