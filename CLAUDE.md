@@ -94,7 +94,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql` →
 `v12_birthday_signups.sql` → `v13_payment_accounts.sql` →
 `v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
-`v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql`.
+`v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
+`v18_delivery_ticket_types.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -191,6 +192,34 @@ conjunto: borra los que salieron y hace upsert del resto).
 en vez de parchear con el payload; parchear dejaba los eventos sin entradas (el payload de
 realtime es sólo la fila de `events`). `createEvent` devuelve el `id` porque las entradas se
 guardan después, en su propia tabla.
+
+**v18 — Qué tipo de entrada compró cada uno.** `ticket_deliveries` (v9) guardaba `quantity` y
+`value` pero nunca **cuál** entrada: cuando se hizo el módulo el evento tenía un precio único.
+Desde v15 los tipos son una tabla y el comprador puede armar un carrito mezclado, así que el
+dato existía y se perdía (el importador de mensajes lo escribía en Notas como texto suelto).
+La planilla que el staff llevaba a mano **sí** tenía la columna "Tipo de entrada". Ahora hay
+tabla hija `delivery_ticket_types` (`delivery_id`, `ticket_type_id`, `quantity`, `unit_price`),
+sólo staff por RLS. Decisiones: **tabla hija y no una columna** porque una compra puede tener
+más de un tipo; apunta al **catálogo** (`ticket_types`) y no a `event_ticket_types` porque
+`saveEventTickets` **borra** las filas de esa tabla cuando el evento deja de vender un tipo, y
+con una FK ahí editar las entradas de un evento fallaría por las ventas viejas; `unit_price` es
+una **foto** de lo que se cobró (mismo criterio que v13); y `quantity`/`value` de la entrega
+**siguen siendo la verdad**, no se derivan del desglose (hay entregas viejas sin desglose y el
+staff puede cobrar un total distinto por promo o cortesía) — el form los recalcula al cargar el
+desglose y avisa si no coinciden. Al editar, los tipos que la entrega tiene pero el evento ya
+no vende **se muestran igual**: si no, al guardar se borraría un desglose que nadie pidió
+borrar. Acceso a datos en `src/lib/deliveries.ts` (`saveDeliveryTickets`, `ticketsSummary`);
+`createDelivery` ahora devuelve el `id` porque el desglose se guarda después.
+
+**Importar la planilla histórica:** `scripts/planilla-a-sql.mjs` convierte los CSV exportados
+de Google Sheets (una hoja por fecha) en un SQL para pegar en el SQL Editor. Detecta las
+columnas por el nombre del encabezado (el total es la columna sin título, anterior al nombre),
+normaliza el teléfono a E.164 y la plata escrita a mano, y salta las filas de plantilla. La
+clave de deduplicación es **email + cantidad + total**, no sólo el email: en la planilla real
+hay mails repetidos con **compras distintas** (alguien que compró para otro) y deduplicando
+sólo por email se perdía una de las dos sin avisar. El SQL generado es idempotente y pide
+pegar a mano el `id` de cada evento (una hoja no se puede cruzar sola con un evento: hay dos
+fechas distintas el mismo día).
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 

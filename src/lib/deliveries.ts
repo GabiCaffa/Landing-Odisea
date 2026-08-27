@@ -9,6 +9,18 @@ import { supabase } from "@/lib/supabase";
 
 export type DeliveryStatus = "pending" | "sent";
 
+/**
+ * Una línea del desglose: qué tipo de entrada compró y a qué precio (v18).
+ * `unitPrice` es lo que se cobró en su momento, no el precio de hoy.
+ */
+export interface DeliveryTicketLine {
+  ticketTypeId: string;
+  /** Nombre del catálogo, embebido para no resolverlo en cada pantalla. */
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 export interface TicketDelivery {
   id: string;
   eventId: string;
@@ -24,6 +36,8 @@ export interface TicketDelivery {
   email: string;
   quantity: number;
   value: number; // total pagado
+  /** Desglose por tipo de entrada. Vacío en las entregas cargadas antes de v18. */
+  tickets: DeliveryTicketLine[];
   status: DeliveryStatus;
   sentAt?: string;
   notes?: string;
@@ -47,6 +61,17 @@ export interface DeliveryInput {
   notes?: string | null;
 }
 
+/** Fila de delivery_ticket_types con el catálogo embebido (`ticket_types(name)`). */
+function lineFromDb(row: any): DeliveryTicketLine {
+  const type = Array.isArray(row.ticket_types) ? row.ticket_types[0] : row.ticket_types;
+  return {
+    ticketTypeId: row.ticket_type_id,
+    name: type?.name ?? "Entrada",
+    quantity: row.quantity,
+    unitPrice: Number(row.unit_price),
+  };
+}
+
 function fromDb(row: any): TicketDelivery {
   return {
     id: row.id,
@@ -62,6 +87,7 @@ function fromDb(row: any): TicketDelivery {
     email: row.email,
     quantity: row.quantity,
     value: Number(row.value),
+    tickets: (row.delivery_ticket_types ?? []).map(lineFromDb),
     status: row.status,
     sentAt: row.sent_at ?? undefined,
     notes: row.notes ?? undefined,
@@ -90,20 +116,67 @@ function toDb(input: Partial<DeliveryInput>): Record<string, any> {
 export async function fetchDeliveries(): Promise<TicketDelivery[]> {
   const { data, error } = await supabase
     .from("ticket_deliveries")
-    .select("*")
+    // El desglose por tipo viene embebido (v18): son 1 o 2 filas por entrega y
+    // se muestran en la misma lista, no vale la pena una segunda consulta.
+    .select("*, delivery_ticket_types(*, ticket_types(name))")
     .order("created_at", { ascending: false });
   if (error || !data) return [];
   return data.map(fromDb);
 }
 
+/**
+ * Crea la entrega y devuelve su id: el desglose por tipo de entrada se guarda
+ * después, en su propia tabla (mismo patrón que `createEvent` con v15).
+ */
 export async function createDelivery(
   input: DeliveryInput
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; id?: string; error?: string }> {
   const { data: auth } = await supabase.auth.getUser();
   const row = { ...toDb(input), created_by: auth.user?.id ?? null };
-  const { error } = await supabase.from("ticket_deliveries").insert(row);
+  const { data, error } = await supabase
+    .from("ticket_deliveries")
+    .insert(row)
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: data?.id };
+}
+
+/**
+ * Reemplaza el desglose de una entrega por el que se pasa: borra los tipos que
+ * salieron y hace upsert del resto (molde de `saveEventTickets`).
+ */
+export async function saveDeliveryTickets(
+  deliveryId: string,
+  lines: DeliveryTicketLine[]
+): Promise<{ ok: boolean; error?: string }> {
+  const keep = lines.filter((l) => l.quantity > 0);
+  const keepIds = keep.map((l) => l.ticketTypeId);
+
+  const del = supabase.from("delivery_ticket_types").delete().eq("delivery_id", deliveryId);
+  const { error: delError } = keepIds.length
+    ? await del.not("ticket_type_id", "in", `(${keepIds.map((id) => `"${id}"`).join(",")})`)
+    : await del;
+  if (delError) return { ok: false, error: delError.message };
+
+  if (!keep.length) return { ok: true };
+
+  const { error } = await supabase.from("delivery_ticket_types").upsert(
+    keep.map((l) => ({
+      delivery_id: deliveryId,
+      ticket_type_id: l.ticketTypeId,
+      quantity: l.quantity,
+      unit_price: l.unitPrice,
+    })),
+    { onConflict: "delivery_id,ticket_type_id" }
+  );
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/** Resumen legible del desglose: "2 General · 1 VIP". */
+export function ticketsSummary(lines: DeliveryTicketLine[]): string {
+  return lines.map((l) => `${l.quantity} ${l.name}`).join(" · ");
 }
 
 export async function updateDelivery(

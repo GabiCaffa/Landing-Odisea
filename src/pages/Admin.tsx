@@ -74,11 +74,14 @@ import { foldText } from "@/lib/utils";
 import {
   TicketDelivery,
   DeliveryInput,
+  DeliveryTicketLine,
   fetchDeliveries,
   createDelivery,
   updateDelivery,
   deleteDelivery,
   setDeliveryStatus,
+  saveDeliveryTickets,
+  ticketsSummary,
 } from "@/lib/deliveries";
 import {
   BirthdaySignup,
@@ -2521,7 +2524,7 @@ const DeliveriesAdmin = () => {
     }
     const headers = [
       "Evento", "Ubicación evento", "Nombre completo", "Email", "Teléfono",
-      "Entradas", "Total", "Estado", "Enviada", "Registrado", "Notas",
+      "Tipo de entrada", "Entradas", "Total", "Estado", "Enviada", "Registrado", "Notas",
     ];
     const esc = (v: unknown) => {
       const s = String(v ?? "");
@@ -2531,6 +2534,7 @@ const DeliveriesAdmin = () => {
       [
         eventName, eventLocation, `${d.firstName} ${d.lastName}`.trim(), d.email,
         d.phone ? formatPhoneDisplay(d.phone) : "",
+        ticketsSummary(d.tickets),
         d.quantity, d.value,
         d.status === "sent" ? "Enviada" : "Pendiente",
         d.sentAt ? d.sentAt.slice(0, 10) : "",
@@ -2708,6 +2712,9 @@ const DeliveriesAdmin = () => {
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground space-y-0.5">
+                    {d.tickets.length > 0 && (
+                      <p className="text-foreground">{ticketsSummary(d.tickets)}</p>
+                    )}
                     {d.phone && <p className="font-mono">{formatPhoneDisplay(d.phone)}</p>}
                     {statusFilter === "sent" && d.sentAt && (
                       <p>Enviada el {formatEventDate(d.sentAt.slice(0, 10))}</p>
@@ -2757,7 +2764,14 @@ const DeliveriesAdmin = () => {
                           </p>
                         )}
                       </Td>
-                      <Td className="font-semibold">{d.quantity}</Td>
+                      <Td className="font-semibold">
+                        {d.quantity}
+                        {d.tickets.length > 0 && (
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            {ticketsSummary(d.tickets)}
+                          </span>
+                        )}
+                      </Td>
                       <Td className="font-semibold">{fmtMoney(d.value)}</Td>
                       {statusFilter === "sent" && (
                         <Td className="text-xs text-muted-foreground">
@@ -2840,6 +2854,8 @@ interface DeliveryPrefill {
   quantity: string;
   value: string;
   notes: string;
+  /** Desglose por tipo de entrada ya cruzado con el catálogo (v18). */
+  lines: DeliveryTicketLine[];
 }
 
 /**
@@ -2907,6 +2923,37 @@ const PasteMessageModal = ({
     );
   }, [data?.email, eventId, existing]);
 
+  /**
+   * Cruza el tipo de entrada del mensaje con los que vende el evento (v18). El
+   * precio unitario sale del propio mensaje (subtotal ÷ cantidad): es lo que se
+   * le cobró, que puede no ser el precio de hoy.
+   */
+  const matched = useMemo(() => {
+    const available = selectedEvent?.tickets ?? [];
+    const lines: DeliveryTicketLine[] = [];
+    const unmatched: string[] = [];
+    for (const item of data?.items ?? []) {
+      const wanted = foldText(item.name).trim();
+      const type =
+        available.find((t) => foldText(t.name).trim() === wanted) ??
+        available.find((t) => {
+          const candidate = foldText(t.name).trim();
+          return candidate.includes(wanted) || wanted.includes(candidate);
+        });
+      if (!type) {
+        unmatched.push(item.name);
+        continue;
+      }
+      lines.push({
+        ticketTypeId: type.ticketTypeId,
+        name: type.name,
+        quantity: item.qty,
+        unitPrice: item.qty > 0 ? item.amount / item.qty : type.price,
+      });
+    }
+    return { lines, unmatched };
+  }, [data?.items, selectedEvent]);
+
   const value = data ? data.total ?? data.itemsTotal : null;
 
   const handleContinue = () => {
@@ -2915,12 +2962,13 @@ const PasteMessageModal = ({
       toast.error("Elegí el evento");
       return;
     }
-    // El desglose por tipo de entrada no tiene columna propia en la tabla, así
-    // que va a Notas: sin esto se perdería qué compró cada uno.
+    // El tipo de entrada ya tiene su propia tabla (v18), así que a Notas van
+    // sólo las cosas que no tienen dónde guardarse: la promo, el documento (la
+    // columna existe pero el form nunca la expuso) y lo que no se pudo cruzar.
     const notes = [
-      data.itemsSummary,
       data.birthdayPromo ? "PROMO CUMPLEAÑOS" : "",
       data.documentId ? `Doc: ${data.documentId}` : "",
+      matched.unmatched.length ? `Sin cruzar: ${matched.unmatched.join(", ")}` : "",
     ]
       .filter(Boolean)
       .join(" · ");
@@ -2938,6 +2986,7 @@ const PasteMessageModal = ({
       quantity: data.quantity > 0 ? String(data.quantity) : "1",
       value: value !== null ? String(value) : "",
       notes,
+      lines: matched.lines,
     });
   };
 
@@ -3005,9 +3054,17 @@ const PasteMessageModal = ({
               </ParsedRow>
               <ParsedRow label="Documento">{data?.documentId}</ParsedRow>
               <ParsedRow label="Entradas">
-                {data && data.quantity > 0
-                  ? `${data.quantity} · ${data.itemsSummary}`
-                  : null}
+                {data && data.quantity > 0 ? (
+                  <span>
+                    {data.quantity} · {data.itemsSummary}
+                    {matched.unmatched.length > 0 && (
+                      <span className="block text-xs text-charrua mt-0.5">
+                        No pude cruzar {matched.unmatched.join(", ")} con los tipos que vende el
+                        evento: cargalo a mano en el paso siguiente.
+                      </span>
+                    )}
+                  </span>
+                ) : null}
               </ParsedRow>
               <ParsedRow label="Total">{value !== null ? `$${value}` : null}</ParsedRow>
               {data?.birthdayPromo && (
@@ -3114,11 +3171,66 @@ const DeliveryFormModal = ({
   });
   const [saving, setSaving] = useState(false);
 
+  // Desglose por tipo de entrada (v18): cantidad por ticketTypeId.
+  const [lines, setLines] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    for (const line of prefill?.lines ?? editing?.tickets ?? []) {
+      initial[line.ticketTypeId] = line.quantity;
+    }
+    return initial;
+  });
+
   const set = (field: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
   const selectedUser = users.find((u) => u.id === form.userId) ?? null;
   const selectedEvent = events.find((ev) => ev.id === form.eventId) ?? null;
+
+  /**
+   * Tipos que se pueden cargar: los del evento, más los que esta entrega ya
+   * tiene aunque el evento haya dejado de venderlos. Sin ese rescate, al
+   * guardar se borraría un desglose viejo que nadie pidió borrar.
+   */
+  const typeRows = useMemo(() => {
+    const fromEvent = selectedEvent?.tickets ?? [];
+    const known = new Set(fromEvent.map((t) => t.ticketTypeId));
+    const orphans = (editing?.tickets ?? [])
+      .filter((line) => !known.has(line.ticketTypeId))
+      .map((line) => ({
+        ticketTypeId: line.ticketTypeId,
+        name: line.name,
+        price: line.unitPrice,
+        active: false,
+        sortOrder: 999,
+      }));
+    return sortEventTickets([...fromEvent, ...orphans]);
+  }, [selectedEvent, editing]);
+
+  /** Al tocar el desglose, la cantidad y el total se recalculan solos. */
+  const setLine = (ticketTypeId: string, quantity: number) => {
+    const next = { ...lines, [ticketTypeId]: Math.max(0, quantity) };
+    setLines(next);
+    let qty = 0;
+    let sum = 0;
+    for (const row of typeRows) {
+      const q = next[row.ticketTypeId] ?? 0;
+      qty += q;
+      sum += q * row.price;
+    }
+    // El total queda editable: puede cobrarse distinto (promo, cortesía).
+    if (qty > 0) setForm((p) => ({ ...p, quantity: String(qty), value: String(sum) }));
+  };
+
+  const ticketLines: DeliveryTicketLine[] = typeRows
+    .map((row) => ({
+      ticketTypeId: row.ticketTypeId,
+      name: row.name,
+      quantity: lines[row.ticketTypeId] ?? 0,
+      unitPrice: row.price,
+    }))
+    .filter((line) => line.quantity > 0);
+
+  const linesQuantity = ticketLines.reduce((acc, line) => acc + line.quantity, 0);
 
   const switchMode = (m: "registered" | "manual") => {
     setMode(m);
@@ -3199,12 +3311,49 @@ const DeliveryFormModal = ({
       }
     }
 
+    // Aviso y no bloqueo, mismo criterio que el duplicado y que v14: sin
+    // desglose no se puede saber después qué tipo de entrada compró.
+    if (typeRows.length > 0 && ticketLines.length === 0) {
+      const ok = await confirm({
+        title: "Sin tipo de entrada",
+        description:
+          "No cargaste el desglose, así que después no vas a poder saber qué entrada compró esta persona. ¿Guardar igual?",
+        confirmText: "Guardar igual",
+      });
+      if (!ok) return;
+    }
+
     setSaving(true);
-    const result = editing
-      ? await updateDelivery(editing.id, input)
-      : await createDelivery(input);
+
+    let deliveryId = editing?.id;
+    if (editing) {
+      const result = await updateDelivery(editing.id, input);
+      if (!result.ok) {
+        setSaving(false);
+        return toast.error(result.error ?? "No se pudo guardar");
+      }
+    } else {
+      const result = await createDelivery(input);
+      if (!result.ok) {
+        setSaving(false);
+        return toast.error(result.error ?? "No se pudo guardar");
+      }
+      deliveryId = result.id;
+    }
+
+    // El desglose vive en su propia tabla, así que se guarda recién con el id.
+    if (deliveryId) {
+      const result = await saveDeliveryTickets(deliveryId, ticketLines);
+      if (!result.ok) {
+        // La entrega ya se guardó: hay que decirlo, no tragarse el error.
+        setSaving(false);
+        toast.error(`Se guardó la entrega, pero no el desglose: ${result.error}`);
+        onSaved();
+        return;
+      }
+    }
+
     setSaving(false);
-    if (!result.ok) return toast.error(result.error ?? "No se pudo guardar");
     toast.success(editing ? "Cliente actualizado" : "Cliente agregado");
     onSaved();
   };
@@ -3354,6 +3503,50 @@ const DeliveryFormModal = ({
             </>
           )}
 
+          {/* Desglose por tipo de entrada (v18) */}
+          {typeRows.length > 0 ? (
+            <div>
+              <span className="block text-xs tracking-[0.2em] uppercase text-muted-foreground mb-2">
+                Tipo de entrada
+              </span>
+              <div className="border border-border divide-y divide-border">
+                {typeRows.map((row) => (
+                  <div key={row.ticketTypeId} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">
+                        {row.name}
+                        {!row.active && (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">
+                            (ya no se vende)
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{fmtMoney(row.price)} c/u</p>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      value={lines[row.ticketTypeId] ?? 0}
+                      onChange={(e) => setLine(row.ticketTypeId, parseInt(e.target.value, 10) || 0)}
+                      className="input-techno w-20 text-center py-1.5"
+                      aria-label={`Cantidad de ${row.name}`}
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Al cargar el desglose, la cantidad y el total se calculan solos (y se pueden
+                cambiar a mano).
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {form.eventId
+                ? "Este evento no tiene tipos de entrada cargados, así que no hay desglose para elegir."
+                : "Elegí el evento para cargar el tipo de entrada."}
+            </p>
+          )}
+
           {/* Datos de las entradas (siempre) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField label="Cantidad de entradas">
@@ -3383,6 +3576,14 @@ const DeliveryFormModal = ({
           <p className="text-xs text-muted-foreground">
             Total registrado: <b className="text-foreground">{fmtMoney(total)}</b>
           </p>
+
+          {/* El desglose y la cantidad pueden diferir a propósito, pero conviene verlo. */}
+          {linesQuantity > 0 && linesQuantity !== parseInt(form.quantity, 10) && (
+            <p className="flex items-start gap-2 text-xs text-charrua">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              El desglose suma {linesQuantity} entrada/s y la cantidad dice {form.quantity || 0}.
+            </p>
+          )}
 
           <FormField label="Notas (opcional)">
             <textarea
