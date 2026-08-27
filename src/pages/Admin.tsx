@@ -3305,7 +3305,7 @@ const BirthdaysAdmin = () => {
   const term = search.trim().toLowerCase();
   // Las solicitudes sin revisar no cuentan en las listas de regalo: mezclarlas
   // haría perder la diferencia entre lo verificado y lo que afirma un cliente.
-  const verified = rows.filter((b) => b.status === "aprobado");
+  const verified = useMemo(() => rows.filter((b) => b.status === "aprobado"), [rows]);
   const requestsCount = rows.filter(
     (b) => b.status === "pendiente" && birthdayMatches(b, term)
   ).length;
@@ -3352,15 +3352,18 @@ const BirthdaysAdmin = () => {
       });
   }, [rows, giftFilter, term, events]);
 
-  // Resumen general (todos los cumpleañeros, sin importar pestaña ni búsqueda).
+  // Resumen general (sin importar pestaña ni búsqueda). Cuenta sólo lo
+  // verificado, igual que las listas de regalo: si sumara las solicitudes sin
+  // revisar, las tarjetas mostrarían gente que no aparece en ninguna lista.
+  // Las que faltan revisar tienen su propio contador en la pestaña "A revisar".
   const summary = useMemo(
     () => ({
-      total: rows.length,
-      pending: rows.filter((b) => !b.giftGiven).length,
-      given: rows.filter((b) => b.giftGiven).length,
-      thisWeek: rows.filter((b) => daysToNextBirthday(b.birthDate) <= 7).length,
+      total: verified.length,
+      pending: verified.filter((b) => !b.giftGiven).length,
+      given: verified.filter((b) => b.giftGiven).length,
+      thisWeek: verified.filter((b) => daysToNextBirthday(b.birthDate) <= 7).length,
     }),
-    [rows]
+    [verified]
   );
 
   // CSV de la lista visible. Nunca incluye la foto del documento: sólo si está
@@ -3433,19 +3436,21 @@ const BirthdaysAdmin = () => {
   };
 
   /**
-   * Rechaza la solicitud. Queda en la base como 'rechazado' (sale de las listas
-   * del panel) para tener el registro; los índices únicos sólo bloquean las
-   * pendientes, así que la persona puede volver a mandar una corregida.
+   * Rechaza la solicitud: la BORRA, junto con la foto del documento. Antes
+   * quedaba como 'rechazado' para tener el registro, pero era un registro que
+   * no se podía ver ni gestionar en ninguna lista (y que igual sumaba en los
+   * totales de arriba), además de guardar una cédula sin motivo. La persona
+   * puede volver a enviar la solicitud corregida.
    */
   const handleReject = async (b: BirthdaySignup) => {
     const ok = await confirm({
       title: "Rechazar solicitud",
-      description: `¿Rechazar la solicitud de ${b.firstName} ${b.lastName}? Sale de la lista, pero queda el registro y puede volver a enviarla.`,
+      description: `¿Rechazar la solicitud de ${b.firstName} ${b.lastName}? Se borra de la base junto con la foto de su documento. Puede volver a enviarla corregida.`,
       confirmText: "Rechazar",
       destructive: true,
     });
     if (!ok) return;
-    const result = await setBirthdayStatus(b.id, "rechazado");
+    const result = await deleteBirthday(b);
     if (!result.ok) return toast.error(result.error ?? "No se pudo rechazar");
     await reload();
     toast.success("Solicitud rechazada");

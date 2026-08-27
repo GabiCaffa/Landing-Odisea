@@ -94,7 +94,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v9_ticket_deliveries.sql` → `v10_delivery_user_link.sql` → `v11_operator_role.sql` →
 `v12_birthday_signups.sql` → `v13_payment_accounts.sql` →
 `v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
-`v16_birthday_self_service.sql`.
+`v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -232,9 +232,19 @@ deja **escribir** en la carpeta propia — **leerlas sigue siendo exclusivo del 
 dueño puede volver a bajar la suya. La foto se sube **al enviar**, no al elegirla: si cierra
 el modal antes, no queda un archivo huérfano que el cliente no puede borrar.
 UI: pestaña Cumpleaños con un tercer filtro **"A revisar"** (badge en rojo si hay algo) +
-botones Aprobar/Rechazar; las listas de regalo muestran sólo `aprobado`. Los `rechazado`
-quedan en la base como registro pero **no se muestran en ninguna lista**, y como los índices
-únicos sólo miran las pendientes, la persona puede volver a enviar una corregida.
+botones Aprobar/Rechazar; las listas de regalo muestran sólo `aprobado`. **Rechazar borra
+(v17).**
+
+**v17 — Rechazar una solicitud la borra.** El `status = 'rechazado'` de v16 era un registro
+que **ninguna lista mostraba** pero que **sí sumaba en las tarjetas de totales** (el resumen
+contaba `rows`, las listas `verified`): el panel decía que había cumpleañeros cargados que no
+aparecían en ningún lado. Encima guardaba la foto de una cédula de alguien a quien se le
+rechazó la solicitud. Ahora el botón ✕ llama a `deleteBirthday` (fila + foto del documento) y
+el resumen cuenta sólo `aprobado`. No se pierde nada: los índices únicos de v16 sólo miran
+las pendientes, así que la persona ya podía reenviar una corregida. El estado `rechazado`
+salió del `check` de la DB y del tipo `BirthdayStatus`. **La migración incluye un `select`
+previo con las rutas de las fotos a borrar a mano en Storage**: borrar la fila no borra el
+archivo del bucket.
 
 > **Retención:** las fotos de documento se guardan **sin plazo de borrado**. Fue una decisión
 > explícita del autor, tomada después de plantearle un job de limpieza a 30/90 días. Si

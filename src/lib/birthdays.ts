@@ -14,8 +14,12 @@ import { compressImageToBlob } from "@/contexts/AuthContext";
 /**
  * 'aprobado' = cargado o validado por el staff (todo lo previo a v16).
  * 'pendiente' = lo cargó el propio cliente y falta revisarlo.
+ *
+ * No hay 'rechazado': rechazar BORRA la fila y la foto (ver v17). Guardar la
+ * solicitud rechazada dejaba un registro invisible —fuera de todas las listas
+ * pero contado en los totales— y un documento de identidad sin motivo.
  */
-export type BirthdayStatus = "pendiente" | "aprobado" | "rechazado";
+export type BirthdayStatus = "pendiente" | "aprobado";
 
 export interface BirthdaySignup {
   id: string;
@@ -143,7 +147,10 @@ export async function deleteBirthday(
   return { ok: true };
 }
 
-/** Aprobar o rechazar una solicitud cargada por el propio cliente. */
+/**
+ * Cambia el estado de una solicitud del cliente. Hoy sólo se usa para aprobar:
+ * rechazar es `deleteBirthday`.
+ */
 export async function setBirthdayStatus(
   id: string,
   status: BirthdayStatus
