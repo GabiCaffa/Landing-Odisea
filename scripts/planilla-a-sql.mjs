@@ -22,13 +22,23 @@
  *   Mail                                    → email
  *   Tipo de entrada     "General"           → delivery_ticket_types (v18)
  *   Cantidad                                → quantity
- *   Confirmacion                            → status (ver --enviadas)
+ *   Confirmacion        cualquier marca     → status = 'sent'
  *   Cuenta              titular de cobro    → se ignora (v13: es del evento)
  *   Detalle                                 → notes
  *
+ * OJO con el verde de la planilla: en la planilla, la fila pintada de verde es
+ * "ya le envié las entradas", pero el CSV NO exporta los colores de celda. Hay
+ * dos formas de traer ese dato:
+ *   · Si en una hoja TODAS las filas cargadas están verdes: --enviadas.
+ *   · Si la hoja está mezclada: poner cualquier marca (una "x") en la columna
+ *     Confirmacion de las verdes antes de exportar. Fila con marca = enviada.
+ *
+ * `sent_at` queda en null a propósito: no sabemos de qué día fue el envío, y
+ * poner la fecha de la importación diría que se enviaron hoy.
+ *
  * Opciones:
- *   --enviadas   marca TODAS las filas como 'sent' (entradas ya enviadas).
- *                Por defecto entran como 'pending'.
+ *   --enviadas   marca TODAS las filas como 'sent', ignorando Confirmacion.
+ *                Por defecto: 'sent' sólo las que tengan Confirmacion cargada.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -140,6 +150,7 @@ for (const file of files) {
   const iMail = col("mail", "email");
   const iType = col("tipo de entrada");
   const iQty = col("cantidad");
+  const iConf = col("confirmacion");
   const iDetail = col("detalle");
   // El total no tiene encabezado: es la columna anterior al nombre.
   const iTotal = iName > 0 ? iName - 1 : -1;
@@ -184,6 +195,9 @@ for (const file of files) {
       type: (r[iType] ?? "").trim() || "General",
       unitPrice: unit ?? 0,
       notes: iDetail === -1 ? "" : (r[iDetail] ?? "").trim(),
+      // El verde de la planilla no viaja en el CSV: se usa la marca de
+      // Confirmacion, o --enviadas si la hoja entera ya fue enviada.
+      sent: markSent || (iConf !== -1 && (r[iConf] ?? "").trim() !== ""),
     });
   }
   sheets.push(sheet);
@@ -240,7 +254,7 @@ for (const sheet of sheets) {
     out.push("      (event_id, first_name, last_name, email, phone, quantity, value, status, notes)");
     out.push(
       `    values (v_event, ${q(r.firstName)}, ${q(r.lastName)}, ${q(r.email)}, ${q(r.phone)}, ` +
-        `${r.quantity}, ${r.value}, ${markSent ? "'sent'" : "'pending'"}, ${q(r.notes)})`
+        `${r.quantity}, ${r.value}, ${r.sent ? "'sent'" : "'pending'"}, ${q(r.notes)})`
     );
     out.push("    returning id into v_delivery;");
     out.push("");
@@ -259,19 +273,18 @@ for (const sheet of sheets) {
   out.push("");
 }
 
-if (markSent) {
-  out.push("-- Las filas entran como 'sent': sent_at lo sella el trigger de v9 al marcarlas,");
-  out.push("-- así que se completa con la fecha de la importación.");
-  out.push("update public.ticket_deliveries set sent_at = now()");
-  out.push(" where status = 'sent' and sent_at is null;");
-  out.push("");
-}
-
+out.push("-- Las importadas como 'sent' quedan con sent_at en null a propósito: no");
+out.push("-- sabemos de qué día fue el envío, y poner la fecha de la importación diría");
+out.push("-- que se enviaron hoy. En la lista se ven como enviadas, con la fecha en '—'.");
+out.push("");
 out.push("commit;");
 out.push("");
 out.push("-- ════════════════════════════════════════════════════════════════════════════");
 out.push(`-- Resumen: ${total} fila/s en ${sheets.length} hoja/s.`);
-for (const s of sheets) out.push(`--   · ${s.name}: ${s.rows.length}`);
+for (const s of sheets) {
+  const sent = s.rows.filter((r) => r.sent).length;
+  out.push(`--   · ${s.name}: ${s.rows.length} (${sent} enviadas, ${s.rows.length - sent} por enviar)`);
+}
 if (problems.length) {
   out.push("--");
   out.push("-- Avisos del conversor:");

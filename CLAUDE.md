@@ -221,6 +221,13 @@ sólo por email se perdía una de las dos sin avisar. El SQL generado es idempot
 pegar a mano el `id` de cada evento (una hoja no se puede cruzar sola con un evento: hay dos
 fechas distintas el mismo día).
 
+> **El verde de la planilla no se puede importar solo.** En la planilla, la fila verde significa
+> "ya le envié las entradas", pero **el CSV no exporta colores de celda**. Se resuelve de dos
+> formas: `--enviadas` si la hoja entera ya fue enviada, o una marca en la columna
+> *Confirmacion* de las verdes antes de exportar (fila con marca = `sent`). Las importadas como
+> enviadas quedan con **`sent_at` en null**: no se sabe de qué día fue el envío, y poner la
+> fecha de la importación diría que se enviaron hoy.
+
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
 La card 02 de `PromosSection` era un link fijo a WhatsApp ("Quiero info"). Ahora abre
