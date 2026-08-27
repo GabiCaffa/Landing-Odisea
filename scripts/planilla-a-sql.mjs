@@ -33,8 +33,9 @@
  *   · Si la hoja está mezclada: poner cualquier marca (una "x") en la columna
  *     Confirmacion de las verdes antes de exportar. Fila con marca = enviada.
  *
- * `sent_at` queda en null a propósito: no sabemos de qué día fue el envío, y
- * poner la fecha de la importación diría que se enviaron hoy.
+ * `sent_at` de las enviadas se llena con la FECHA DEL EVENTO, no con la de la
+ * importación: no sabemos el día exacto del envío, pero la fecha del evento es
+ * una aproximación razonable y no miente diciendo que se enviaron hoy.
  *
  * Opciones:
  *   --enviadas   marca TODAS las filas como 'sent', ignorando Confirmacion.
@@ -232,9 +233,17 @@ for (const sheet of sheets) {
   out.push("do $$");
   out.push("declare");
   out.push(`  v_event uuid := '${placeholder}';`);
+  out.push("  v_event_date date;");
   out.push("  v_delivery uuid;");
   out.push("  v_type uuid;");
   out.push("begin");
+  out.push("  -- Fecha del evento: se usa como sent_at de las que ya se enviaron.");
+  out.push("  select date into v_event_date from public.events where id = v_event;");
+  out.push("  if v_event_date is null then");
+  out.push(
+    "    raise exception 'No hay ningún evento con el id % — revisá el bloque de ids del encabezado', v_event;"
+  );
+  out.push("  end if;");
 
   for (const r of sheet.rows) {
     out.push("");
@@ -251,10 +260,13 @@ for (const sheet of sheets) {
     );
     out.push("  else");
     out.push("    insert into public.ticket_deliveries");
-    out.push("      (event_id, first_name, last_name, email, phone, quantity, value, status, notes)");
+    out.push(
+      "      (event_id, first_name, last_name, email, phone, quantity, value, status, sent_at, notes)"
+    );
     out.push(
       `    values (v_event, ${q(r.firstName)}, ${q(r.lastName)}, ${q(r.email)}, ${q(r.phone)}, ` +
-        `${r.quantity}, ${r.value}, ${r.sent ? "'sent'" : "'pending'"}, ${q(r.notes)})`
+        `${r.quantity}, ${r.value}, ${r.sent ? "'sent'" : "'pending'"}, ` +
+        `${r.sent ? "v_event_date" : "null"}, ${q(r.notes)})`
     );
     out.push("    returning id into v_delivery;");
     out.push("");
@@ -273,9 +285,9 @@ for (const sheet of sheets) {
   out.push("");
 }
 
-out.push("-- Las importadas como 'sent' quedan con sent_at en null a propósito: no");
-out.push("-- sabemos de qué día fue el envío, y poner la fecha de la importación diría");
-out.push("-- que se enviaron hoy. En la lista se ven como enviadas, con la fecha en '—'.");
+out.push("-- Las importadas como 'sent' llevan la FECHA DEL EVENTO en sent_at: no se");
+out.push("-- sabe el día exacto del envío, pero es una aproximación razonable y no dice");
+out.push("-- que se enviaron el día de la importación.");
 out.push("");
 out.push("commit;");
 out.push("");

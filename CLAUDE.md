@@ -225,8 +225,9 @@ fechas distintas el mismo día).
 > "ya le envié las entradas", pero **el CSV no exporta colores de celda**. Se resuelve de dos
 > formas: `--enviadas` si la hoja entera ya fue enviada, o una marca en la columna
 > *Confirmacion* de las verdes antes de exportar (fila con marca = `sent`). Las importadas como
-> enviadas quedan con **`sent_at` en null**: no se sabe de qué día fue el envío, y poner la
-> fecha de la importación diría que se enviaron hoy.
+> enviadas llevan en `sent_at` la **fecha del evento**, no la de la importación: no se sabe el
+> día exacto del envío, pero es una aproximación razonable y no dice que se enviaron hoy. El
+> bloque de cada hoja aborta con un mensaje claro si el `id` de evento pegado no existe.
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
