@@ -2,9 +2,13 @@ import { Link } from "react-router-dom";
 import { LogIn, UserPlus, ArrowRight } from "lucide-react";
 
 /**
- * Paso previo de los flujos que se pueden completar sin cuenta (compra de
- * entradas, promo de cumpleaños): ofrece iniciar sesión, registrarse o seguir
- * como invitado. El registro se incentiva, nunca se obliga.
+ * Paso previo de los flujos que arrancan sin sesión: ofrece iniciar sesión,
+ * registrarse y —sólo si el flujo lo permite— seguir como invitado.
+ *
+ * La compra de entradas pasa `onContinue` (el registro se incentiva, no se
+ * obliga). La promo de cumpleaños lo omite: exige cuenta, porque la solicitud
+ * queda con dueño (`user_id`) y trae una foto de documento, y sin cuenta no hay
+ * a quién atribuirla ni cómo rastrear un abuso.
  */
 const AuthPromptStep = ({
   title = "¿Cómo querés seguir?",
@@ -20,7 +24,8 @@ const AuthPromptStep = ({
   loginHint: string;
   registerHint?: string;
   guestHint?: string;
-  onContinue: () => void;
+  /** Sin esto no se ofrece la opción de invitado: el flujo requiere cuenta. */
+  onContinue?: () => void;
 }) => {
   const next = encodeURIComponent(window.location.pathname);
 
@@ -63,19 +68,23 @@ const AuthPromptStep = ({
           <ArrowRight className="w-4 h-4 flex-shrink-0" />
         </Link>
 
-        {/* Guest */}
-        <button
-          type="button"
-          onClick={onContinue}
-          className="flex items-center gap-4 p-5 border border-dashed border-border hover:bg-muted transition-colors group"
-        >
-          <div className="w-5 h-5 flex-shrink-0" />
-          <div className="flex-1 text-left">
-            <p className="font-semibold tracking-wide uppercase text-sm">Continuar como invitado</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{guestHint}</p>
-          </div>
-          <ArrowRight className="w-4 h-4 flex-shrink-0" />
-        </button>
+        {/* Guest — sólo en los flujos que no exigen cuenta */}
+        {onContinue && (
+          <button
+            type="button"
+            onClick={onContinue}
+            className="flex items-center gap-4 p-5 border border-dashed border-border hover:bg-muted transition-colors group"
+          >
+            <div className="w-5 h-5 flex-shrink-0" />
+            <div className="flex-1 text-left">
+              <p className="font-semibold tracking-wide uppercase text-sm">
+                Continuar como invitado
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">{guestHint}</p>
+            </div>
+            <ArrowRight className="w-4 h-4 flex-shrink-0" />
+          </button>
+        )}
       </div>
     </div>
   );

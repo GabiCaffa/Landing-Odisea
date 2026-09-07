@@ -232,15 +232,20 @@ fechas distintas el mismo día).
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
 La card 02 de `PromosSection` era un link fijo a WhatsApp ("Quiero info"). Ahora abre
-`BirthdayPromoModal`: arma el **mensaje completo** para reclamar el beneficio (nombre, fecha
-de nacimiento, email, teléfono, evento elegido y el aviso de que va a pasar la **foto del
-frente de la cédula** —que se adjunta en el chat, no se sube al sitio—). Con sesión se
-autocompleta del perfil e incluye el documento; como invitado se carga a mano y **no se le
-pide el número de documento** (la foto ya lo muestra). **No escribe en la base**: el staff lo
-carga después en la pestaña Cumpleaños. Decisiones: el registro se **incentiva sin obligar**
-(paso previo compartido `AuthPromptStep`, extraído de `TicketPurchaseModal` y ahora usado por
-los dos modales), y si el cumple **no** cae en la ventana de ±15 días **avisa pero deja
-mandar** (mismo criterio que v14).
+`BirthdayPromoModal`, que **exige cuenta**: sin sesión el modal muestra sólo el paso de
+login/registro (`AuthPromptStep` sin `onContinue`) y no hay forma de reclamar el beneficio
+como invitado. Con sesión, el form se autocompleta del perfil (nombre, fecha de nacimiento,
+email, teléfono; el documento sale del perfil y no se vuelve a pedir), se adjunta la **foto
+del frente de la cédula** y la solicitud se carga como `pendiente` (ver v16 abajo). Si el
+cumple **no** cae en la ventana de ±15 días **avisa pero deja enviar** (mismo criterio que
+v14).
+
+> **La vía de WhatsApp se sacó** (antes el modal armaba un mensaje con los datos y la foto se
+> pasaba por el chat). Motivo: por WhatsApp la cédula queda en un chat, la solicitud no tiene
+> dueño en la base y el staff tenía que retipearla. Ahora hay **un solo camino desde el
+> sitio** —la solicitud del cliente registrado—; el staff **sigue pudiendo cargar a mano** en
+> la pestaña Cumpleaños a quien no tenga cuenta. `AuthPromptStep` conserva la opción de
+> invitado como **opcional** (`onContinue`), porque la compra de entradas sí la usa.
 
 > `daysBirthdayToEvent` (en `BirthdayPromoModal`) replica la regla de la RPC
 > `can_claim_birthday_promo` (±15 días) pero **corrige el salto de año**: la RPC compara el
@@ -248,9 +253,9 @@ mandar** (mismo criterio que v14).
 > ~357 días en vez de 8. El modal prueba los años vecinos. La RPC sigue con el bug y la usa
 > el modal de compra (`birthday_promo_claims`, cooldown 90 días) — pendiente de arreglar.
 
-**v16 — El cliente registrado carga su propia solicitud.** Además del WhatsApp, un usuario
-**con cuenta** puede enviar la solicitud desde el sitio (con la foto del documento) y entra
-como **`pendiente`** hasta que el staff la apruebe. Dos decisiones que explican el diseño:
+**v16 — El cliente registrado carga su propia solicitud.** Un usuario **con cuenta** envía la
+solicitud desde el sitio (con la foto del documento) y entra como **`pendiente`** hasta que el
+staff la apruebe. Es la **única** vía de autogestión. Dos decisiones que explican el diseño:
 
 1. **Sólo registrados.** Abrirle el insert a `anon` sería exponer a escritura pública una
    tabla con documentos y fechas de nacimiento más un bucket de fotos de cédula. Con cuenta,

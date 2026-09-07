@@ -31,7 +31,7 @@ const promos = [
     tag: "PROMO CUMPLEAÑOS",
     title: "Tu cumple,\ntu fiesta.",
     description:
-      "Si tu cumpleaños cae cerca de la fecha del evento, tenemos un beneficio especial para vos. Cargá tus datos y te lo confirmamos por WhatsApp.",
+      "Si tu cumpleaños cae cerca de la fecha del evento, tenemos un beneficio especial para vos. Reclamalo desde tu cuenta y te lo confirmamos.",
     cta: "Reclamar mi beneficio",
     modal: "birthday", // ← abre el modal de la promo de cumpleaños
   },
@@ -134,7 +134,7 @@ const PromosSection = () => {
         />
       )}
 
-      {/* Promo cumpleaños: arma el mensaje de WhatsApp con los datos cargados */}
+      {/* Promo cumpleaños: la solicitud se carga desde el sitio, sólo con cuenta */}
       <BirthdayPromoModal isOpen={showBirthday} onClose={() => setShowBirthday(false)} />
 
       {/* Ticket modal reutilizado */}
