@@ -652,3 +652,22 @@
 :root[data-theme="halloween"] .btn-techno img {
   filter: invert(1);
 }
+
+/* ── Colores de las arañas ── */
+/* Se pisan los rellenos que Lottie escribe en el SVG, igual que con los
+   murciélagos: una silueta plana por color, sin un .json por variante.
+   Incluye el hilo, que queda del mismo color — y así se lee como una sola
+   pieza en vez de un bicho colgando de una línea ajena. */
+:root[data-theme="halloween"] .spooky-arana--hueso svg path { fill: #C3D4D0 !important; }
+/* No un negro real: el fondo del tema ya es #0B1D22 y un #071A21 encima es
+   invisible. Este gris azulado se lee como una araña oscura de verdad. */
+:root[data-theme="halloween"] .spooky-arana--negro svg path { fill: #2C4B55 !important; }
+:root[data-theme="halloween"] .spooky-arana--calabaza svg path { fill: hsl(var(--celeste)) !important; }
+:root[data-theme="halloween"] .spooky-arana--espectro svg path { fill: hsl(var(--espectro)) !important; }
+
+/* Las de abajo no se mudan: quedan fijas donde cuelgan. Sin el ciclo de
+   opacidad, sólo un fundido de entrada. */
+:root[data-theme="halloween"] .spooky-arana--quieta {
+  animation: none;
+  opacity: 0.45;
+}

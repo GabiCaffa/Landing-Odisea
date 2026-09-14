@@ -433,28 +433,32 @@ negro va más grande y más opaco porque sobre la noche casi no se ve. El ancho 
 variable (`--bat-ancho`) y el CSS lo acota con `min(..., 38vw)`: responsivo sin un `@media`
 aparte.
 
-**Araña (`SpookySpider`, en la sección de eventos).** **Se ancla a elementos reales, no a un
-porcentaje.** La primera versión sorteaba un `left` a ciegas y la mitad de las veces caía en el
-vacío al lado del título. Ahora mide el DOM en cada ciclo y elige entre siete anclajes: cuatro
-sobre las letras del título y uno por tarjeta, colgando hasta el borde superior de la card.
+**Arañas (`SpookySpiders`, en la sección de eventos).** Dos grupos con reglas distintas:
 
-> **La caja de la animación NO es el bicho.** Esto costó un rato y es la trampa menos obvia del
-> archivo: el dibujo ocupa sólo **del 5% al 23%** de su contenedor y el 77% de abajo está vacío
-> (la telaraña cuelga muy por encima del viewBox). Calcular el alto del contenedor para "llegar"
-> al título dejaba la araña flotando mucho más arriba — el usuario lo describió como que
-> "troleaba". La solución es no adivinar: se **mide dónde caen los pies del dibujo ya
-> renderizado** y se posiciona el contenedor restando ese offset.
+- **Una cuelga del título** "PRÓXIMOS EVENTOS", cambiando de letra en cada ciclo. Es la única que
+  se muda. Antes también se anclaba a las tarjetas y quedaba en lugares raros — el autor lo
+  describió como que "hacía lo que quería".
+- **Tres cuelgan por DEBAJO de las tarjetas**, quietas, en colores distintos y a alturas
+  escalonadas. El hilo nace detrás de la card (van en `z-0`) y sólo asoma la araña por abajo, así
+  que no tapan nada.
+
+> **La caja de la animación NO es el bicho.** Es la trampa del archivo y costó dos intentos: el
+> dibujo ocupa sólo **del 5% al 23%** de su contenedor y el 77% de abajo está vacío, porque la
+> telaraña cuelga muy por encima del viewBox. Calcular el alto del contenedor para "llegar" a un
+> punto deja la araña flotando mucho más arriba. La solución es no adivinar: se **mide dónde caen
+> los pies del dibujo ya renderizado** y se resta ese offset.
 >
-> La medición va sobre los `path`, no sobre `getBBox()`: los rects de los `path` llevan aplicadas
-> las transformaciones de Lottie, mientras que `getBBox()` devuelve coordenadas sin transformar
-> y acá da valores fuera del viewBox, que no sirven para nada.
+> La medición va sobre los `path`, **no** sobre `getBBox()`: los rects de los `path` llevan
+> aplicadas las transformaciones de Lottie, mientras que `getBBox()` devuelve coordenadas sin
+> transformar y acá da valores fuera del viewBox, inservibles.
 
-> Probé primero los huecos *entre* tarjetas, pero miden ~32px y la araña 64-100: quedaba casi
-> toda escondida. Y como `left` posiciona el **borde izquierdo** mientras el anclaje apunta al
-> **centro**, lleva `transform: translateX(-50%)`.
+> **Cuidado con el "negro".** Los colores se pisan por CSS sobre los rellenos del SVG (igual que
+> los murciélagos: una silueta plana por variante, sin un `.json` por color). El primer intento
+> usó `#071A21`, que sobre el fondo del tema (`#0B1D22`) da contraste **1.05**: invisible. El tono
+> oscuro es un gris azulado `#2C4B55` — contraste 1.85, se lee como araña oscura de verdad.
 
-Medir el DOM resuelve la responsividad sola: en celular las tarjetas se apilan y los anclajes se
-recalculan, sin un `@media` que mantener. Se recalcula también al cambiar el tamaño de ventana.
+Medir el DOM resuelve la responsividad sola: en celular las tarjetas se apilan y todo se
+recalcula, sin un `@media` que mantener. Se recalcula también al cambiar el tamaño de ventana.
 
 **Iconos monocromos sobre botón claro.** El logo de WhatsApp es un PNG **blanco** (medido:
 `rgb(254,254,254)`). En la paleta base el botón `btn-techno` es tinta oscura y se lee perfecto;
