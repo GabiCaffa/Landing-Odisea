@@ -1,7 +1,13 @@
-import odiseaLogo from "@/assets/odisea-logo-black.png";
+import odiseaLogoDark from "@/assets/odisea-logo-black.png";
+import odiseaLogoLight from "@/assets/odisea-logo-white.png";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { playThud } from "@/lib/spookySound";
 
 const Hero = () => {
+  // El logo negro se pierde sobre el fondo oscuro del tema estacional.
+  const { theme } = useTheme();
+  const odiseaLogo = theme === "halloween" ? odiseaLogoLight : odiseaLogoDark;
   const { ref, isVisible } = useScrollReveal({ threshold: 0.2 });
 
   return (
@@ -53,7 +59,7 @@ const Hero = () => {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 w-full sm:w-auto">
-            <a href="#eventos" className="btn-celeste w-full sm:w-auto group">
+            <a href="#eventos" onClick={playThud} className="btn-celeste w-full sm:w-auto group">
               Ver eventos
               <svg
                 className="w-4 h-4 group-hover:translate-x-0.5 transition-transform"
@@ -64,7 +70,7 @@ const Hero = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
               </svg>
             </a>
-            <a href="#promos" className="btn-techno-outline w-full sm:w-auto">
+            <a href="#promos" onClick={playThud} className="btn-techno-outline w-full sm:w-auto">
               Ver promociones
             </a>
           </div>

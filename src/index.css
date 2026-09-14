@@ -4,6 +4,9 @@
 @import '@fontsource/inter-tight/700.css';
 @import '@fontsource/inter-tight/800.css';
 @import '@fontsource/inter-tight/900.css';
+/* Sólo se usa en el tema Halloween. El archivo de fuente no se descarga
+   mientras nada se renderice con ella. */
+@import '@fontsource/creepster';
 
 @tailwind base;
 @tailwind components;
@@ -28,6 +31,14 @@
 
     /* Rojo de error/destructive (token "charrua" reutilizado) */
     --charrua: 4 74% 54%;        /* #E54B3C */
+
+    /* Acento secundario: sólo lo usa el tema Halloween, pero se define acá
+       para que la clase exista siempre y no pinte nada raro en la base. */
+    --espectro: var(--celeste);
+
+    /* Fondo de los modales. Era un `bg-black/70` escrito a mano en tres
+       componentes; con un tema oscuro el negro puro corta mal. */
+    --velo: 0 0% 0%;
 
     /* Shadcn tokens mapeados */
     --background: var(--papel);
@@ -68,6 +79,10 @@
     --shadow-xl: 0 28px 64px hsl(0 0% 0% / 0.12);
 
     --font-display: 'Inter Tight', system-ui, sans-serif;
+    /* Tipografía de los títulos GRANDES (hero y encabezados de sección).
+       Separada de --font-display para que un tema pueda cambiar el hero sin
+       meter una fuente de terror en "Iniciar sesión". */
+    --font-scream: var(--font-display);
     --font-sport: 'Inter Tight', system-ui, sans-serif;
     --font-body: 'Inter Tight', Inter, system-ui, sans-serif;
 
@@ -98,6 +113,69 @@
     --border: 0 0% 20%;
     --input: 0 0% 22%;
     --ring: var(--celeste);
+  }
+
+  /* ─── Tema Halloween ──────────────────────────────────────────────────────
+     Se activa con data-theme="halloween" en <html>, que pone ThemeContext
+     según lo que diga site_settings (v19). Ningún componente sabe que este
+     tema existe: acá sólo se redefinen tokens.
+
+     Paleta sacada del flyer de "Halloween Colonia" (Plaza de Toros, 31.10) y
+     de la referencia de la calabaza. El acento casi no se mueve —el naranja de
+     ODÍSEA ya era el de la calabaza—; lo que cambia es el fondo. */
+  :root[data-theme="halloween"] {
+    --papel: 193 51% 9%;          /* #0B1D22 · noche verde azulada del flyer */
+    --tinta: 171 18% 92%;         /* #E8EFEE · hueso, la luna de la referencia */
+
+    --celeste: 25 96% 55%;        /* #FA7A1E · calabaza (era #F25C26) */
+    --celeste-deep: 14 87% 45%;   /* #D93E0F · brasa, para hover */
+    --celeste-soft: 195 53% 15%;  /* el tinte crema no existe en la noche */
+
+    --sol: 195 53% 15%;           /* #12303A · niebla */
+    --sol-deep: 185 13% 63%;      /* #93AAAC */
+
+    /* Más claro que el rojo de la base a propósito: #E54B3C se lee bien sobre
+       blanco, pero sobre la noche queda apagado y un error tiene que gritar. */
+    --charrua: 6 100% 64%;        /* #FF5A47 */
+
+    --espectro: 166 59% 56%;      /* #4FD1B3 · el reflejo fosforescente */
+
+    /* Estos tokens de shadcn no son alias de la paleta: hay que repetirlos. */
+    --card: 195 53% 13%;
+    --secondary: 195 53% 15%;
+    --muted: 195 40% 17%;
+    --muted-foreground: 185 13% 63%;
+    --border: 194 35% 22%;
+    --input: 194 35% 26%;
+
+    /* Tinta oscura sobre el naranja: el blanco da 2.7:1 y no se lee. */
+    --accent-foreground: 36 29% 7%;
+
+    --velo: 193 60% 3%;
+
+    /* Las sombras claras de la base son invisibles sobre fondo oscuro. */
+    --shadow-sm: 0 1px 2px hsl(193 80% 2% / 0.5), 0 1px 3px hsl(193 80% 2% / 0.45);
+    --shadow-md: 0 4px 14px hsl(193 80% 2% / 0.55);
+    --shadow-lg: 0 14px 36px hsl(193 80% 2% / 0.6);
+    --shadow-xl: 0 28px 64px hsl(193 80% 2% / 0.7);
+  }
+
+  /* La tipografía estacional va SÓLO en la vidriera (la home). El color del
+     tema sí llega a registro, login y perfil; Creepster no, porque
+     `.title-sport` lo usan también esas páginas y "INICIAR SESIÓN" en una
+     tipografía de terror se lee peor justo donde hay algo que completar. */
+  :root[data-theme="halloween"][data-surface="vidriera"] {
+    --font-scream: 'Creepster', var(--font-display);
+  }
+
+  /* Creepster trae un solo peso y mucho aire propio: el font-black y el
+     tracking negativo que le sientan a Inter Tight le pegan las gotas unas con
+     otras. Se corrigen donde efectivamente se usa. */
+  :root[data-theme="halloween"][data-surface="vidriera"] .title-display,
+  :root[data-theme="halloween"][data-surface="vidriera"] .title-sport {
+    font-weight: 400;
+    letter-spacing: 0.015em;
+    line-height: 1.02;
   }
 }
 
@@ -141,7 +219,10 @@
 
   .btn-celeste {
     @apply inline-flex items-center justify-center gap-2 px-7 py-3.5 text-sm font-semibold tracking-wide transition-all duration-200 rounded-full;
-    @apply bg-celeste text-white;
+    /* text-accent-foreground y no text-white: sobre el naranja del tema
+       Halloween el blanco da 2.7:1 y no se lee. El token es blanco en la
+       paleta base, así que acá no cambia nada. */
+    @apply bg-celeste text-accent-foreground;
     @apply hover:bg-celeste-deep active:scale-[0.98];
     font-family: var(--font-body);
   }
@@ -199,13 +280,13 @@
 
   /* ─── Display titles ─── */
   .title-display {
-    font-family: var(--font-display);
+    font-family: var(--font-scream);
     @apply leading-[0.92] font-black;
     letter-spacing: -0.03em;
   }
 
   .title-sport {
-    font-family: var(--font-display);
+    font-family: var(--font-scream);
     @apply leading-[0.95] font-black;
     letter-spacing: -0.03em;
   }
@@ -323,3 +404,86 @@
   border: 1px solid hsl(0 0% 100% / 0.22) !important;
   color: hsl(var(--papel)) !important;
 }
+
+/* ─── Capa de Halloween · murciélagos y hojas ────────────────────────────── */
+/* Sólo se monta con el tema prendido (ver SpookyLayer.tsx). Todo se anima con
+   transform y opacity: nada obliga al navegador a recalcular layout por cuadro.
+   z-30 la deja sobre el contenido (z-10/z-20) y bajo el header y los modales
+   (z-50), así nunca tapa algo que haya que tocar. */
+
+.spooky-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.spooky-bat {
+  position: absolute;
+  left: 0;
+  will-change: transform;
+  animation-name: spookyBatCross;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.spooky-bat-bob {
+  display: block;
+  animation-name: spookyBatBob;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/* El aleteo: el murciélago se achata y se estira en vertical. */
+.spooky-bat-wings {
+  display: block;
+  color: hsl(var(--tinta));
+  animation: spookyFlap 0.55s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.spooky-leaf {
+  position: absolute;
+  top: 0;
+  color: hsl(var(--celeste));
+  will-change: transform;
+  animation-name: spookyLeafFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes spookyBatCross {
+  from { transform: translate3d(-20vw, 0, 0); }
+  to   { transform: translate3d(120vw, 0, 0); }
+}
+
+@keyframes spookyBatBob {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, -26px, 0); }
+}
+
+@keyframes spookyFlap {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(0.72); }
+}
+
+/* La hoja cae, deriva de costado y gira. Arranca y termina transparente para
+   que no aparezca ni desaparezca de golpe en el borde de la pantalla. */
+@keyframes spookyLeafFall {
+  0% {
+    transform: translate3d(0, -12vh, 0) rotate(var(--spooky-tilt, 0deg));
+    opacity: 0;
+  }
+  8%, 88% { opacity: 0.8; }
+  100% {
+    transform: translate3d(var(--spooky-drift, 5vw), 110vh, 0)
+               rotate(calc(var(--spooky-tilt, 0deg) + 540deg));
+    opacity: 0;
+  }
+}
+
+/* Las hojas no son todas del mismo naranja: todas iguales parecen confeti. */
+.spooky-leaf--celeste { color: hsl(var(--celeste)); }
+.spooky-leaf--celeste-deep { color: hsl(var(--celeste-deep)); }

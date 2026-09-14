@@ -163,7 +163,7 @@ const EventPickerOverlay = ({
   onSelect: (e: PickerEvent) => void;
   onClose: () => void;
 }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-velo/70 backdrop-blur-sm">
     <div className="relative w-full max-w-md bg-background border border-border">
       {/* Header */}
       <div className="flex items-center justify-between p-6 border-b border-border">
@@ -290,7 +290,7 @@ const PromoCard = ({
       {"modal" in promo ? (
         <button
           onClick={onOpenModal}
-          className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide bg-tinta text-papel rounded-full px-6 py-3 transition-all duration-200 w-fit hover:bg-white hover:text-tinta active:scale-[0.98] cursor-pointer"
+          className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide bg-tinta text-papel rounded-full px-6 py-3 transition-all duration-200 w-fit hover:bg-papel hover:text-tinta active:scale-[0.98] cursor-pointer"
         >
           {promo.cta}
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">

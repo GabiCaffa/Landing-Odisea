@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { LogOut, ShieldCheck, User as UserIcon, UserCircle } from "lucide-react";
-import odiseaLogo from "@/assets/odisea-logo-black.png";
+import odiseaLogoDark from "@/assets/odisea-logo-black.png";
+import odiseaLogoLight from "@/assets/odisea-logo-white.png";
+import { useTheme } from "@/contexts/ThemeContext";
 import whatsappLogo2 from "@/assets/whatsapp-logo2.png";
 import { useAuth, isStaffRole } from "@/contexts/AuthContext";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -9,6 +11,9 @@ import { ProfileAvatar } from "@/components/ProfileAvatar";
 
 
 const Header = () => {
+  // El logo negro se pierde sobre el fondo oscuro del tema estacional.
+  const { theme } = useTheme();
+  const odiseaLogo = theme === "halloween" ? odiseaLogoLight : odiseaLogoDark;
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);

@@ -37,6 +37,10 @@
           // storage: sólo un nombre de tema tiene esta forma.
           if (t && t !== 'base' && /^[a-z-]{1,32}$/.test(t)) {
             document.documentElement.dataset.theme = t;
+            // La tipografía estacional es sólo de la home (ver isShowcasePath).
+            if (location.pathname === '/') {
+              document.documentElement.dataset.surface = 'vidriera';
+            }
           }
         } catch (e) {}
       })();

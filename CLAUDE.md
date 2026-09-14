@@ -352,6 +352,62 @@ parser detecta y deja marcada en el resumen y en las notas de la entrega.
 > a propósito: el rango obliga a escribir marcas combinantes en el fuente, que se pegan al
 > carácter anterior en cualquier editor.
 
+## 6.3 Tema Halloween (sin migración)
+
+El tema que prende el interruptor de v19. Vive entero en `[data-theme="halloween"]`
+dentro de `src/index.css`: **ningún componente sabe que este tema existe**, sólo se
+redefinen tokens. Con el tema apagado el sitio queda exactamente como estaba —
+verificado: fondo blanco, Inter Tight, logo negro, cero nodos de decoración.
+
+**Paleta** (del flyer de "Halloween Colonia" y de la referencia de la calabaza): noche
+verde azulada `#0B1D22` de fondo, hueso `#E8EFEE` de texto, calabaza `#FA7A1E` de acento
+y un verde espectral `#4FD1B3` como secundario. El acento casi no se mueve porque **el
+naranja de ODÍSEA ya era el de la calabaza**: lo que cambia es el fondo, y por eso el tema
+no se lee como un disfraz pegado encima. El rojo de error se **aclara** a `#FF5A47`:
+`#E54B3C` se lee bien sobre blanco pero queda apagado sobre la noche.
+
+**Contraste:** `--accent-foreground` pasa a tinta oscura y `.btn-celeste` dejó de usar
+`text-white`. Blanco sobre `#FA7A1E` da **2.7:1** y no pasa; la tinta da 7:1. El mismo
+cambio en el badge de fecha de `EventCard`. En la paleta base el token sigue siendo
+blanco, así que ahí no cambia nada.
+
+**Tipografía — Creepster, pero sólo en la vidriera.** `--font-scream` es un token aparte
+de `--font-display` y se define **únicamente** bajo `[data-surface="vidriera"]`, que
+ThemeContext pone sólo en `/`. El motivo es concreto: `.title-sport` lo usan **todas** las
+páginas —"INICIAR SESIÓN", los encabezados de Términos, los números del dashboard—, así
+que ponerlo en la raíz del tema metía una tipografía de terror justo donde la persona
+tiene algo que completar. El color del tema sí llega a registro, login y perfil; la
+tipografía no. Creepster trae un solo peso, así que el `font-black` y el tracking negativo
+que le sientan a Inter Tight se corrigen en el mismo selector. (Se verificó que la fuente
+trae los acentos del español: sin eso, la Í de "ODÍSEA" caía a Inter Tight y se veía rota.)
+
+**Vista previa por URL:** `?tema=halloween` fuerza un tema sólo para quien abre ese link,
+sin escribir en la DB ni en el cache. Sin esto, la única forma de ver cómo quedó era
+prenderlo **para todos** — que es exactamente la prueba que uno quiere hacer antes de
+prenderlo. El panel sigue mostrando el tema guardado (`siteTheme`), no el de la vista previa.
+
+**Decoración (`SpookyLayer`):** murciélagos cruzando y hojas cayendo, en `z-30` (sobre el
+contenido, bajo header y modales). Sólo se monta con el tema prendido, `pointer-events:
+none` + `aria-hidden`, y **no se renderiza** con `prefers-reduced-motion` — como acá la
+animación *es* el elemento, congelarlo no tendría sentido. Todo se anima con `transform` y
+`opacity`. Va montada **sólo en `Index`**: en el registro o el login distraería de lo único
+que esas páginas tienen que lograr.
+
+**Sonido (`src/lib/spookySound.ts` + `SoundToggle`):** apagado por defecto, con la
+preferencia guardada. Tres restricciones lo definen: el navegador **bloquea el audio
+automático** (por eso el AudioContext se crea recién al tocar el altavoz, que es el gesto
+que lo habilita); nadie quiere sonido que no pidió en un sitio que **vende entradas**; y
+los sonidos cortos se **sintetizan con Web Audio**, sin archivos ni licencias. Al restaurar
+la preferencia de una visita anterior se arma un escuchador de un solo uso para el primer
+gesto —si no, el botón diría "prendido" y no sonaría nada— y ahí no suena el golpe de
+confirmación, que salido de la nada sobresalta.
+
+> **El ambiente necesita un archivo y es opcional.** `public/halloween-ambiente.mp3`
+> (viento, aullido lejano). Sintetizarlo con osciladores suena a módem, así que tiene que
+> ser un audio real **libre de derechos**. Si el archivo no está, el `error` del elemento
+> `<audio>` apaga esa parte y **no se vuelve a intentar**: los sonidos de interacción andan
+> igual. Hoy no está puesto.
+
 **v17 — Rechazar una solicitud la borra.** El `status = 'rechazado'` de v16 era un registro
 que **ninguna lista mostraba** pero que **sí sumaba en las tarjetas de totales** (el resumen
 contaba `rows`, las listas `verified`): el panel decía que había cumpleañeros cargados que no

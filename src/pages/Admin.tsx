@@ -4927,7 +4927,7 @@ const THEME_SWATCHES: Record<SiteTheme, { colors: string[]; caption: string }> =
 };
 
 const AppearanceAdmin = () => {
-  const { theme, loading, setTheme } = useTheme();
+  const { siteTheme: theme, loading, setTheme } = useTheme();
   const confirm = useConfirm();
   const [saving, setSaving] = useState<SiteTheme | null>(null);
 

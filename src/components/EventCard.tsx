@@ -1,6 +1,7 @@
 import { useState, lazy, Suspense } from "react";
 import { Instagram } from "lucide-react";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
+import { playHover } from "@/lib/spookySound";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
 import { EventTicket } from "@/lib/ticketTypes";
 
@@ -46,7 +47,10 @@ const EventCard = ({
 
   return (
     <>
-      <article className="card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px]">
+      <article
+        onMouseEnter={playHover}
+        className="card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px]"
+      >
         {/* Event Image */}
         <div className="relative aspect-[4/3] bg-papel overflow-hidden border-b border-border">
           <img
@@ -63,7 +67,7 @@ const EventCard = ({
             }}
           />
           {/* Date badge estilo ticket */}
-          <div className="absolute top-3 left-3 bg-celeste text-white px-3 py-1.5 rounded-full shadow-sm">
+          <div className="absolute top-3 left-3 bg-celeste text-accent-foreground px-3 py-1.5 rounded-full shadow-sm">
             <span className="text-xs font-semibold tracking-[0.12em] uppercase">{date}</span>
           </div>
 

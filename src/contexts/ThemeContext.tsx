@@ -6,7 +6,7 @@ import {
   useState,
   ReactNode,
 } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import {
   DEFAULT_THEME,
@@ -28,6 +28,18 @@ import {
 const STORAGE_KEY = "odisea:theme";
 
 /**
+ * `?tema=halloween` fuerza un tema sólo para quien abre ese link.
+ *
+ * Sin esto, la única forma de ver cómo quedó un tema es prenderlo para TODOS
+ * los visitantes, que es exactamente la prueba que uno quiere hacer antes de
+ * prenderlo. Con el parámetro se revisa en el celular, con calma, mientras el
+ * sitio sigue como está.
+ *
+ * No escribe nada: ni la DB ni el cache. Se cierra la pestaña y no queda rastro.
+ */
+const PREVIEW_PARAM = "tema";
+
+/**
  * El panel NO se tematiza: es herramienta de trabajo interna y nadie de afuera
  * la ve. Como los tokens son globales, la única forma de dejarlo afuera es no
  * poner el atributo cuando estamos en esa ruta.
@@ -38,11 +50,28 @@ const STORAGE_KEY = "odisea:theme";
  */
 const isThemedPath = (pathname: string) => !pathname.startsWith("/admin");
 
-/** 'base' = sin atributo, así el CSS de :root queda tal cual. */
-const applyTheme = (theme: SiteTheme) => {
+/**
+ * La home es la vidriera: la única pantalla donde la tipografía estacional
+ * tiene sentido. En registro, login y perfil los títulos siguen en Inter Tight.
+ *
+ * No es una cuestión de gusto: `.title-sport` lo usan TODAS las páginas
+ * (incluido "INICIAR SESIÓN" y los encabezados de Términos), y una tipografía
+ * de terror ahí se lee peor justo donde la persona tiene algo que completar.
+ * El color del tema sí llega a esas páginas; la tipografía no.
+ */
+const isShowcasePath = (pathname: string) => pathname === "/";
+
+/** 'base' = sin atributos, así el CSS de :root queda tal cual. */
+const applyTheme = (theme: SiteTheme, showcase: boolean) => {
   const root = document.documentElement;
-  if (theme === "base") delete root.dataset.theme;
-  else root.dataset.theme = theme;
+  if (theme === "base") {
+    delete root.dataset.theme;
+    delete root.dataset.surface;
+    return;
+  }
+  root.dataset.theme = theme;
+  if (showcase) root.dataset.surface = "vidriera";
+  else delete root.dataset.surface;
 };
 
 const rememberTheme = (theme: SiteTheme) => {
@@ -54,8 +83,10 @@ const rememberTheme = (theme: SiteTheme) => {
 };
 
 interface ThemeContextValue {
-  /** Tema configurado en el sitio (no depende de en qué ruta estemos). */
+  /** Tema que se está pintando. Puede venir de `?tema=` (vista previa). */
   theme: SiteTheme;
+  /** Tema realmente guardado en el sitio. Es el que muestra el panel. */
+  siteTheme: SiteTheme;
   /** Todavía no llegó el valor de la DB. */
   loading: boolean;
   /** Guarda el tema. Sólo el admin pasa el RLS. */
@@ -68,6 +99,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<SiteTheme>(DEFAULT_THEME);
   const [loading, setLoading] = useState(true);
   const { pathname } = useLocation();
+  const [params] = useSearchParams();
+
+  const preview = params.get(PREVIEW_PARAM);
+  // El de la URL gana sobre el de la base, pero sólo para pintar: el panel
+  // sigue mostrando y guardando el tema real del sitio.
+  const effective = isSiteTheme(preview) ? preview : theme;
 
   // Carga inicial.
   useEffect(() => {
@@ -105,8 +142,8 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   // Pinta el atributo. Depende del tema Y de la ruta (el panel queda afuera).
   useEffect(() => {
-    applyTheme(isThemedPath(pathname) ? theme : DEFAULT_THEME);
-  }, [theme, pathname]);
+    applyTheme(isThemedPath(pathname) ? effective : DEFAULT_THEME, isShowcasePath(pathname));
+  }, [effective, pathname]);
 
   const setTheme = useCallback(async (next: SiteTheme) => {
     await saveTheme(next);
@@ -116,7 +153,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, loading, setTheme }}>
+    <ThemeContext.Provider value={{ theme: effective, siteTheme: theme, loading, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );
