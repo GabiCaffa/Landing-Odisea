@@ -527,3 +527,32 @@
   --tinta: 193 64% 5%;
   --papel: 171 18% 92%;
 }
+
+/* ── Animación de Halloween (Lottie) ── */
+/* Dentro del hero y por debajo de su contenido. No se intenta cubrir toda la
+   página: las secciones de abajo tienen fondo opaco, así que una capa fija
+   detrás sería invisible — y ponerla ENCIMA es justo el error que hacía que
+   los bichos cruzaran por delante de las cards.
+
+   Aparece con un fundido de más de un segundo: el JSON puede tardar y que
+   algo se materialice de golpe en el hero se lee como un salto. */
+:root[data-theme="halloween"] .hero-lottie {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 1200ms ease;
+}
+
+/* La opacidad es LO PRIMERO que hay que tocar si la animación distrae.
+   Entre 0.2 y 0.4 suele ser el rango donde suma sin robar atención. */
+:root[data-theme="halloween"] .hero-lottie--visible { opacity: 0.3; }
+
+:root[data-theme="halloween"] .hero-lottie svg {
+  width: 100%;
+  height: 100%;
+}

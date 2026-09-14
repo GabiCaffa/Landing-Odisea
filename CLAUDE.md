@@ -418,6 +418,41 @@ por segundo por algo que nadie nota conscientemente.
 > todos en el borde". Se resuelve con retrasos **negativos** (entra ya a mitad de recorrido) y
 > `animation-fill-mode: backwards`.
 
+**Animación de fondo con Lottie (`SpookyLottie`).** Después de que la decoración en SVG a mano
+fracasara, la conclusión fue que **el dibujo no puede salir de acá**. Lottie reproduce
+animaciones exportadas desde After Effects por ilustradores: el trazo lo hace alguien que sabe
+dibujar y el código sólo lo pone en pantalla.
+
+Cuatro reglas, todas sacadas de lo que falló antes:
+
+1. **Detrás del contenido y sólo en el hero.** La capa vieja estaba en `z-30`, encima de todo,
+   y cruzaba por delante de las cards. Ésta vive dentro del hero —la única sección sin
+   tarjetas— y se declara **primero en el DOM**, que es lo que la deja pintada debajo del
+   texto. No se intenta cubrir toda la página: las secciones de abajo tienen fondo opaco, así
+   que una capa fija detrás sería invisible de todos modos.
+2. **Lenta.** `VELOCIDAD = 0.45`, o sea menos de la mitad de como la exportó el ilustrador.
+   Parte de lo que se veía mal antes era la velocidad, no sólo el dibujo.
+3. **El runtime se carga aparte y sólo si hace falta.** Se consulta **primero el JSON**; si no
+   está, la función retorna **antes** del `import("lottie-web")`, así el chunk de 300 KB no se
+   descarga nunca. En desarrollo sí aparece descargado, porque Vite pre-empaqueta las
+   dependencias al arrancar — eso es del dev server, no de producción.
+4. **Sin archivo no pasa nada.** Igual que el audio: sin `public/halloween-lottie.json` el
+   contenedor queda vacío en opacidad 0 y el sitio sigue idéntico.
+
+> **Cómo cambiar la animación.** Bajar el `.json` de [lottiefiles.com](https://lottiefiles.com)
+> —filtrando por **Free**, que es la *Lottie Simple License*: permite uso comercial y **no
+> exige atribución**— y guardarlo como `public/halloween-lottie.json`. Nada más. Conviene una
+> animación de **silueta sobre fondo transparente** (un murciélago, un cuervo, humo): las que
+> traen fondo propio o muchos colores pelean con la paleta. Si distrae, lo primero que hay que
+> tocar es la **opacidad** de `.hero-lottie--visible` en `index.css` (0.2–0.4 es el rango
+> razonable), y después `VELOCIDAD`.
+
+> **Dos trampas del camino.** El `fetch` **no** lleva `cache: "force-cache"`: parece un ahorro
+> y es un footgun — el navegador se queda con la copia vieja sin revalidar, así que cambiar de
+> animación no se vería. Y el `catch` **avisa por consola en desarrollo** (`import.meta.env.DEV`):
+> un catch mudo acá ya costó un rato de no entender por qué el contenedor quedaba vacío. En
+> producción sigue callado, porque es decoración opcional.
+
 **Sonido (`src/lib/spookySound.ts` + `SoundToggle`):** apagado por defecto, con la
 preferencia guardada. Tres restricciones lo definen: el navegador **bloquea el audio
 automático** (por eso el AudioContext se crea recién al tocar el altavoz, que es el gesto
