@@ -82,17 +82,32 @@ const ensureContext = (): AudioContext | null => {
  * cortar un oscilador produce un "click" — el chasquido es la discontinuidad
  * en la onda, no un sonido que hayamos pedido.
  */
-const tone = (opts: {
+interface ToneOpts {
   from: number;
   to: number;
   duration: number;
   peak: number;
   type?: OscillatorType;
   cutoff?: number;
-}) => {
+}
+
+const tone = (opts: ToneOpts) => {
   const audio = ensureContext();
   if (!audio || !master) return;
 
+  // `resume()` es ASÍNCRONO. Programar el sonido justo después parece
+  // funcionar y no suena nada: mientras el contexto está suspendido su reloj
+  // no avanza, así que el oscilador queda agendado en un instante que, para
+  // cuando el contexto despierta, ya pasó. Hay que esperar a que arranque.
+  if (audio.state === "suspended") {
+    void audio.resume().then(() => emit(audio, opts));
+    return;
+  }
+  emit(audio, opts);
+};
+
+const emit = (audio: AudioContext, opts: ToneOpts) => {
+  if (!master) return;
   const now = audio.currentTime;
   const osc = audio.createOscillator();
   const gain = audio.createGain();

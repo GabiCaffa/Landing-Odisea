@@ -404,12 +404,14 @@
   border: 1px solid hsl(0 0% 100% / 0.22) !important;
   color: hsl(var(--papel)) !important;
 }
-
 /* ─── Capa de Halloween · murciélagos y hojas ────────────────────────────── */
 /* Sólo se monta con el tema prendido (ver SpookyLayer.tsx). Todo se anima con
    transform y opacity: nada obliga al navegador a recalcular layout por cuadro.
    z-30 la deja sobre el contenido (z-10/z-20) y bajo el header y los modales
-   (z-50), así nunca tapa algo que haya que tocar. */
+   (z-50), así nunca tapa algo que haya que tocar.
+
+   Las posiciones y los tiempos NO están acá: los sortea el componente y los
+   pasa como custom properties. Acá sólo vive la forma del movimiento. */
 
 .spooky-layer {
   position: fixed;
@@ -419,6 +421,10 @@
   pointer-events: none;
 }
 
+/* ── Murciélago: cruzar + subir y bajar + aletear, una capa cada cosa ── */
+/* Van separadas porque se componen: si el aleteo y el avance compartieran
+   transform, el segundo pisaría al primero. */
+
 .spooky-bat {
   position: absolute;
   left: 0;
@@ -426,6 +432,14 @@
   animation-name: spookyBatCross;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
+  /* Durante cualquier espera muestra el fotograma inicial (fuera de pantalla)
+     y no su posición natural, que es la esquina y se ve. */
+  animation-fill-mode: backwards;
+}
+
+/* Algunos cruzan al revés: todos para el mismo lado se lee como desfile. */
+.spooky-bat--rtl {
+  animation-name: spookyBatCrossRtl;
 }
 
 .spooky-bat-bob {
@@ -436,32 +450,28 @@
   animation-direction: alternate;
 }
 
-/* El aleteo: el murciélago se achata y se estira en vertical. */
 .spooky-bat-wings {
   display: block;
   color: hsl(var(--tinta));
-  animation: spookyFlap 0.55s ease-in-out infinite;
   transform-origin: center;
-}
-
-.spooky-leaf {
-  position: absolute;
-  top: 0;
-  color: hsl(var(--celeste));
-  will-change: transform;
-  animation-name: spookyLeafFall;
-  animation-timing-function: linear;
+  animation-name: spookyFlap;
+  animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
 }
 
 @keyframes spookyBatCross {
-  from { transform: translate3d(-20vw, 0, 0); }
-  to   { transform: translate3d(120vw, 0, 0); }
+  from { transform: translate3d(-22vw, 0, 0); }
+  to   { transform: translate3d(122vw, 0, 0); }
+}
+
+@keyframes spookyBatCrossRtl {
+  from { transform: translate3d(122vw, 0, 0); }
+  to   { transform: translate3d(-22vw, 0, 0); }
 }
 
 @keyframes spookyBatBob {
   from { transform: translate3d(0, 0, 0); }
-  to   { transform: translate3d(0, -26px, 0); }
+  to   { transform: translate3d(0, calc(var(--spooky-bob, 26px) * -1), 0); }
 }
 
 @keyframes spookyFlap {
@@ -469,21 +479,56 @@
   50%      { transform: scaleY(0.72); }
 }
 
-/* La hoja cae, deriva de costado y gira. Arranca y termina transparente para
-   que no aparezca ni desaparezca de golpe en el borde de la pantalla. */
-@keyframes spookyLeafFall {
-  0% {
-    transform: translate3d(0, -12vh, 0) rotate(var(--spooky-tilt, 0deg));
-    opacity: 0;
-  }
-  8%, 88% { opacity: 0.8; }
-  100% {
-    transform: translate3d(var(--spooky-drift, 5vw), 110vh, 0)
-               rotate(calc(var(--spooky-tilt, 0deg) + 540deg));
-    opacity: 0;
-  }
+/* ── Hoja: caer + zigzaguear + girar, también en capas ── */
+/* La caída tiene que ser lineal y constante. Si el zigzag viviera en el mismo
+   transform, cada vaivén aceleraría o frenaría la bajada. */
+
+.spooky-leaf {
+  position: absolute;
+  top: 0;
+  will-change: transform;
+  animation-name: spookyLeafFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-fill-mode: backwards;
 }
 
-/* Las hojas no son todas del mismo naranja: todas iguales parecen confeti. */
+.spooky-leaf-sway {
+  display: block;
+  animation-name: spookyLeafSway;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+.spooky-leaf-spin {
+  display: block;
+  animation-name: spookyLeafSpin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* No todas del mismo naranja: todas iguales parecen confeti. El verde
+   espectral sale poco, es el acento raro y no un color más. */
 .spooky-leaf--celeste { color: hsl(var(--celeste)); }
 .spooky-leaf--celeste-deep { color: hsl(var(--celeste-deep)); }
+.spooky-leaf--espectro { color: hsl(var(--espectro)); }
+
+/* Arranca y termina transparente para que no aparezca ni se corte de golpe
+   contra el borde de la pantalla. */
+@keyframes spookyLeafFall {
+  0%   { transform: translate3d(0, -14vh, 0); opacity: 0; }
+  7%   { opacity: 0.85; }
+  90%  { opacity: 0.85; }
+  100% { transform: translate3d(0, 112vh, 0); opacity: 0; }
+}
+
+@keyframes spookyLeafSway {
+  from { transform: translate3d(calc(var(--spooky-sway, 40px) * -0.5), 0, 0); }
+  to   { transform: translate3d(calc(var(--spooky-sway, 40px) * 0.5), 0, 0); }
+}
+
+@keyframes spookyLeafSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(var(--spooky-spin, 360deg)); }
+}

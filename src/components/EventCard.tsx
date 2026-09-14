@@ -1,7 +1,7 @@
 import { useState, lazy, Suspense } from "react";
 import { Instagram } from "lucide-react";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
-import { playHover } from "@/lib/spookySound";
+import { playHover, playThud } from "@/lib/spookySound";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
 import { EventTicket } from "@/lib/ticketTypes";
 
@@ -100,7 +100,12 @@ const EventCard = ({
 
           <div className="flex gap-2 mt-auto">
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                // En celular no hay hover: si el sonido no está también acá,
+                // desde un teléfono el sitio es mudo.
+                playThud();
+                setIsModalOpen(true);
+              }}
               disabled={isSoldOut}
               className="btn-techno flex-1 text-xs py-2.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >

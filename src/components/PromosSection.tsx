@@ -4,6 +4,7 @@ import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import TicketPurchaseModal from "./TicketPurchaseModal";
 import BirthdayPromoModal from "./BirthdayPromoModal";
 import { EventTicket } from "@/lib/ticketTypes";
+import { playThud } from "@/lib/spookySound";
 
 // Evento que consume el selector / modal de compra (derivado de los eventos reales).
 type PickerEvent = {
@@ -289,7 +290,10 @@ const PromoCard = ({
       {/* CTA — botón si abre un modal, link si es WhatsApp directo */}
       {"modal" in promo ? (
         <button
-          onClick={onOpenModal}
+          onClick={() => {
+            playThud();
+            onOpenModal();
+          }}
           className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide bg-tinta text-papel rounded-full px-6 py-3 transition-all duration-200 w-fit hover:bg-papel hover:text-tinta active:scale-[0.98] cursor-pointer"
         >
           {promo.cta}

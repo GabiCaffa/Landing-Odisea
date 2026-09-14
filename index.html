@@ -23,25 +23,55 @@
     <!-- Preconnect a Supabase: adelanta DNS+TLS para datos e imágenes de eventos -->
     <link rel="preconnect" href="https://ccdhjqqyriejeddbcpuu.supabase.co" crossorigin />
     <!-- Tema estacional: se aplica ANTES de que React monte.
-         El valor real vive en la DB (site_settings, v19) y llega por red; si
-         esperáramos a eso, cada carga mostraría un flash de la paleta clara
-         antes de saltar a la oscura. Acá se usa el último tema conocido,
-         cacheado en localStorage por ThemeContext. -->
+         El valor manda desde la DB (site_settings, v19) y viaja por red; si
+         esperáramos al bundle, cada carga mostraría un destello de la paleta
+         clara antes de saltar a la oscura.
+
+         Dos caminos, en este orden:
+          1) El último tema conocido, cacheado en localStorage por ThemeContext.
+             Instantáneo, y cubre a todo el que ya visitó el sitio.
+          2) Para el que entra por PRIMERA vez no hay cache, así que el pedido a
+             Supabase sale desde acá — antes de que el bundle exista. Con el
+             preconnect de arriba ya resuelto, suele llegar para el primer
+             pintado. Es lo más temprano que se puede sin renderizar en
+             servidor, cosa que este sitio (SPA estática en Vercel) no hace.
+
+         Sí, esto repite un poco de la lógica de ThemeContext. Es el precio de
+         cualquier script anti-parpadeo: tiene que correr antes que la app. -->
     <script>
       (function () {
+        // El panel no se tematiza (ver isThemedPath en ThemeContext).
+        if (location.pathname.indexOf('/admin') === 0) return;
+
+        function apply(t) {
+          if (!t || t === 'base' || !/^[a-z-]{1,32}$/.test(t)) return;
+          var el = document.documentElement;
+          el.dataset.theme = t;
+          // La tipografía estacional es sólo de la home (ver isShowcasePath).
+          if (location.pathname === '/') el.dataset.surface = 'vidriera';
+        }
+
+        // ?tema=... gana y no consulta nada: es la vista previa.
+        var preview = new URLSearchParams(location.search).get('tema');
+        if (preview) { apply(preview); return; }
+
+        try { apply(localStorage.getItem('odisea:theme')); } catch (e) {}
+
+        // Adelanto del valor real para quien no tiene cache.
         try {
-          // El panel no se tematiza (ver isThemedPath en ThemeContext).
-          if (location.pathname.indexOf('/admin') === 0) return;
-          var t = localStorage.getItem('odisea:theme');
-          // El regex es para no escribir en el DOM lo que haya quedado en
-          // storage: sólo un nombre de tema tiene esta forma.
-          if (t && t !== 'base' && /^[a-z-]{1,32}$/.test(t)) {
-            document.documentElement.dataset.theme = t;
-            // La tipografía estacional es sólo de la home (ver isShowcasePath).
-            if (location.pathname === '/') {
-              document.documentElement.dataset.surface = 'vidriera';
-            }
-          }
+          var url = '%VITE_SUPABASE_URL%';
+          var key = '%VITE_SUPABASE_ANON_KEY%';
+          if (url.indexOf('http') !== 0) return; // sin env (dev sin .env): se deja al bundle
+          fetch(url + '/rest/v1/site_settings?select=value&key=eq.theme', {
+            headers: { apikey: key, Authorization: 'Bearer ' + key },
+          })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (rows) {
+              if (!rows || !rows[0]) return;
+              apply(rows[0].value);
+              try { localStorage.setItem('odisea:theme', rows[0].value); } catch (e) {}
+            })
+            .catch(function () {}); // Sin red: el bundle lo resuelve igual.
         } catch (e) {}
       })();
     </script>
