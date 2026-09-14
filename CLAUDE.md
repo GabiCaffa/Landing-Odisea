@@ -408,6 +408,24 @@ confirmación, que salido de la nada sobresalta.
 > `<audio>` apaga esa parte y **no se vuelve a intentar**: los sonidos de interacción andan
 > igual. Hoy no está puesto.
 
+**Las cards en el tema.** Se encienden por dentro con un `box-shadow` **inset** y no con una
+capa `::after` encima: una sombra interior se pinta sobre el fondo pero DEBAJO del contenido,
+así que no le tira naranja al texto ni a los botones. Queda algo prendida siempre, porque en
+celular no hay hover y si el efecto dependiera sólo de él desde un teléfono no existiría; se
+intensifica con `:hover`, `:focus-within` y `:active`. La foto lleva viñeteado para que deje de
+ser un rectángulo pegado sobre la noche (en `z-1`; la fecha y el sello van en `z-2` o quedarían
+tapados). El CSS se engancha de clases propias (`.evento-card`, `.evento-media`, `.evento-fecha`,
+`.evento-agotado`, `.promo-card--destacada`) y **nunca de utilidades de Tailwind**: esas clases
+existen para pintar, no para identificar una variante, y usar `:not(.bg-celeste)` para detectar
+la promo destacada ya generó selectores raros en el build.
+
+**Barrido de contraste.** `--accent-foreground` existe para esto: blanco sobre el naranja del
+tema da **2,7:1**. Se reemplazó `text-white` por `text-accent-foreground` en los seis lugares que
+lo tenían junto a `bg-celeste` (header, footer, promos, ErrorBoundary, botones) — quedan en 7:1.
+En la paleta base el token sigue siendo blanco, así que ahí no cambió nada. El sello AGOTADO usa
+un rojo propio y profundo, porque el `--charrua` del tema es claro a propósito (para que un error
+grite sobre la noche) y con blanco encima no se leería.
+
 **v17 — Rechazar una solicitud la borra.** El `status = 'rechazado'` de v16 era un registro
 que **ninguna lista mostraba** pero que **sí sumaba en las tarjetas de totales** (el resumen
 contaba `rows`, las listas `verified`): el panel decía que había cumpleañeros cargados que no

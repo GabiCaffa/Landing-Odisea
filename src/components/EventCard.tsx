@@ -49,10 +49,10 @@ const EventCard = ({
     <>
       <article
         onMouseEnter={playHover}
-        className="card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px]"
+        className="evento-card card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px]"
       >
         {/* Event Image */}
-        <div className="relative aspect-[4/3] bg-papel overflow-hidden border-b border-border">
+        <div className="evento-media relative aspect-[4/3] bg-papel overflow-hidden border-b border-border">
           <img
             src={image}
             alt={name}
@@ -67,13 +67,13 @@ const EventCard = ({
             }}
           />
           {/* Date badge estilo ticket */}
-          <div className="absolute top-3 left-3 bg-celeste text-accent-foreground px-3 py-1.5 rounded-full shadow-sm">
+          <div className="evento-fecha absolute top-3 left-3 z-[2] bg-celeste text-accent-foreground px-3 py-1.5 rounded-full shadow-sm">
             <span className="text-xs font-semibold tracking-[0.12em] uppercase">{date}</span>
           </div>
 
           {isSoldOut && (
-            <div className="absolute inset-0 bg-tinta/65 backdrop-blur-[1px] flex items-center justify-center">
-              <span className="title-display text-4xl md:text-5xl text-white bg-charrua rounded-lg px-5 py-1.5 -rotate-6 shadow-[var(--shadow-lg)]">
+            <div className="absolute inset-0 z-[2] bg-tinta/65 backdrop-blur-[1px] flex items-center justify-center">
+              <span className="evento-agotado title-display text-4xl md:text-5xl text-white bg-charrua rounded-lg px-5 py-1.5 -rotate-6 shadow-[var(--shadow-lg)]">
                 AGOTADO
               </span>
             </div>

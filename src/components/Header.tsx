@@ -154,7 +154,7 @@ const Header = () => {
                 </Link>
                 <Link
                   to="/registro"
-                  className="text-sm font-semibold tracking-wide bg-celeste text-white rounded-full px-5 py-2 hover:bg-celeste-deep active:scale-[0.98] transition-all"
+                  className="text-sm font-semibold tracking-wide bg-celeste text-accent-foreground rounded-full px-5 py-2 hover:bg-celeste-deep active:scale-[0.98] transition-all"
                 >
                   Crear cuenta
                 </Link>

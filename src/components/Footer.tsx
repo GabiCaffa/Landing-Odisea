@@ -37,7 +37,7 @@ const Footer = () => {
               href="https://www.instagram.com/odisea.uy/"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-white transition-all"
+              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-accent-foreground transition-all"
               aria-label="Síguenos en Instagram"
             >
               <Instagram className="w-5 h-5" />
@@ -46,7 +46,7 @@ const Footer = () => {
               href="https://wa.me/59892592179"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-white transition-all"
+              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-accent-foreground transition-all"
               aria-label="Contáctanos por WhatsApp"
             >
               <img src={whatsappLogo} alt="WhatsApp" className="w-5 h-5" />

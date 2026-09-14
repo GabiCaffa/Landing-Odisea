@@ -532,3 +532,93 @@
   from { transform: rotate(0deg); }
   to   { transform: rotate(var(--spooky-spin, 360deg)); }
 }
+
+/* ─── Cards de evento en el tema Halloween ───────────────────────────────── */
+/* Sólo aquí: con el tema apagado, ni una de estas reglas aplica y las cards
+   quedan exactamente como siempre.
+   Se engancha de clases propias (.evento-*) y no de utilidades de Tailwind,
+   que cambian cada vez que alguien retoca el markup. */
+
+/* ── La card se enciende ── */
+/* El resplandor va como box-shadow INSET y no como una capa ::after encima:
+   una sombra interior se pinta sobre el fondo pero DEBAJO del contenido, así
+   que no le tira naranja al texto ni a los botones. */
+:root[data-theme="halloween"] .evento-card {
+  transition: box-shadow 320ms ease, border-color 320ms ease, transform 300ms ease;
+  /* Queda algo prendida siempre: en celular no hay hover, y si el efecto
+     dependiera sólo de él, desde un teléfono no existiría. */
+  box-shadow:
+    inset 0 -46px 56px -34px hsl(var(--celeste) / 0.3),
+    var(--shadow-sm);
+}
+
+:root[data-theme="halloween"] .evento-card:hover,
+:root[data-theme="halloween"] .evento-card:focus-within,
+:root[data-theme="halloween"] .evento-card:active {
+  border-color: hsl(var(--celeste) / 0.5);
+  box-shadow:
+    inset 0 -56px 68px -30px hsl(var(--celeste) / 0.55),
+    0 0 40px -8px hsl(var(--celeste) / 0.42),
+    var(--shadow-lg);
+}
+
+/* ── Viñeteado de la foto ── */
+/* Sin esto la imagen es un rectángulo pegado sobre la noche. Oscureciendo los
+   bordes hacia el color de la card, la foto se funde con ella. */
+:root[data-theme="halloween"] .evento-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;               /* la fecha y el sello van en z-2 */
+  pointer-events: none;
+  background:
+    radial-gradient(118% 88% at 50% 38%, transparent 42%, hsl(var(--papel) / 0.62) 100%),
+    linear-gradient(to bottom, transparent 58%, hsl(var(--card)) 100%);
+}
+
+/* ── La fecha, como una brasa ── */
+:root[data-theme="halloween"] .evento-fecha {
+  background: linear-gradient(140deg, #FFC24A 0%, hsl(var(--celeste)) 52%, hsl(var(--celeste-deep)) 100%);
+  box-shadow: 0 0 20px -3px hsl(var(--celeste) / 0.65);
+}
+
+/* ── AGOTADO, como un sello de lacre ── */
+/* El rojo del tema (#FF5A47) es claro para que un mensaje de error grite sobre
+   la noche, pero con texto blanco encima da 2.8:1. Acá el sello usa un rojo
+   profundo propio para que el blanco se lea. */
+:root[data-theme="halloween"] .evento-agotado {
+  background: radial-gradient(circle at 34% 26%, #C2341F 0%, #9A2414 52%, #6E1509 100%);
+  box-shadow:
+    inset 0 2px 5px hsl(0 0% 100% / 0.22),
+    inset 0 -4px 10px hsl(0 0% 0% / 0.45),
+    0 0 0 2px hsl(12 70% 26%),
+    var(--shadow-lg);
+}
+/* ── Cards de promociones: el mismo encendido ── */
+/* La destacada se marca con una clase PROPIA y no con `:not(.bg-celeste)`.
+   Enganchar el CSS del tema a una utilidad de Tailwind es frágil: esa clase
+   existe para pintar un fondo, no para identificar una variante, y cualquiera
+   que cambie el fondo de esa card rompe el tema sin darse cuenta. */
+:root[data-theme="halloween"] .promo-card {
+  transition: box-shadow 320ms ease, border-color 320ms ease, transform 700ms ease;
+  box-shadow:
+    inset 0 -46px 56px -34px hsl(var(--celeste) / 0.24),
+    var(--shadow-sm);
+}
+
+:root[data-theme="halloween"] .promo-card:hover,
+:root[data-theme="halloween"] .promo-card:focus-within {
+  border-color: hsl(var(--celeste) / 0.5);
+  box-shadow:
+    inset 0 -56px 68px -30px hsl(var(--celeste) / 0.5),
+    0 0 40px -8px hsl(var(--celeste) / 0.4),
+    var(--shadow-lg);
+}
+
+/* La destacada (03) ya viene con fondo naranja: un resplandor naranja adentro
+   no se vería, así que sólo se le enciende el contorno. */
+:root[data-theme="halloween"] .promo-card--destacada,
+:root[data-theme="halloween"] .promo-card--destacada:hover,
+:root[data-theme="halloween"] .promo-card--destacada:focus-within {
+  box-shadow: 0 0 48px -6px hsl(var(--celeste) / 0.55), var(--shadow-lg);
+}
