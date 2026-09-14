@@ -192,7 +192,7 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-velo/70 backdrop-blur-sm">
       <div
         className="relative w-full max-w-2xl h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto bg-background border border-border"
         style={{ fontFamily: "Inter, sans-serif", letterSpacing: "normal" }}

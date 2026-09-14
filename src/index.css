@@ -4,6 +4,9 @@
 @import '@fontsource/inter-tight/700.css';
 @import '@fontsource/inter-tight/800.css';
 @import '@fontsource/inter-tight/900.css';
+/* Sólo se usa en el tema Halloween. El archivo de fuente no se descarga
+   mientras nada se renderice con ella. */
+@import '@fontsource/creepster';
 
 @tailwind base;
 @tailwind components;
@@ -28,6 +31,14 @@
 
     /* Rojo de error/destructive (token "charrua" reutilizado) */
     --charrua: 4 74% 54%;        /* #E54B3C */
+
+    /* Acento secundario: sólo lo usa el tema Halloween, pero se define acá
+       para que la clase exista siempre y no pinte nada raro en la base. */
+    --espectro: var(--celeste);
+
+    /* Fondo de los modales. Era un `bg-black/70` escrito a mano en tres
+       componentes; con un tema oscuro el negro puro corta mal. */
+    --velo: 0 0% 0%;
 
     /* Shadcn tokens mapeados */
     --background: var(--papel);
@@ -68,6 +79,10 @@
     --shadow-xl: 0 28px 64px hsl(0 0% 0% / 0.12);
 
     --font-display: 'Inter Tight', system-ui, sans-serif;
+    /* Tipografía de los títulos GRANDES (hero y encabezados de sección).
+       Separada de --font-display para que un tema pueda cambiar el hero sin
+       meter una fuente de terror en "Iniciar sesión". */
+    --font-scream: var(--font-display);
     --font-sport: 'Inter Tight', system-ui, sans-serif;
     --font-body: 'Inter Tight', Inter, system-ui, sans-serif;
 
@@ -98,6 +113,69 @@
     --border: 0 0% 20%;
     --input: 0 0% 22%;
     --ring: var(--celeste);
+  }
+
+  /* ─── Tema Halloween ──────────────────────────────────────────────────────
+     Se activa con data-theme="halloween" en <html>, que pone ThemeContext
+     según lo que diga site_settings (v19). Ningún componente sabe que este
+     tema existe: acá sólo se redefinen tokens.
+
+     Paleta sacada del flyer de "Halloween Colonia" (Plaza de Toros, 31.10) y
+     de la referencia de la calabaza. El acento casi no se mueve —el naranja de
+     ODÍSEA ya era el de la calabaza—; lo que cambia es el fondo. */
+  :root[data-theme="halloween"] {
+    --papel: 193 51% 9%;          /* #0B1D22 · noche verde azulada del flyer */
+    --tinta: 171 18% 92%;         /* #E8EFEE · hueso, la luna de la referencia */
+
+    --celeste: 25 96% 55%;        /* #FA7A1E · calabaza (era #F25C26) */
+    --celeste-deep: 14 87% 45%;   /* #D93E0F · brasa, para hover */
+    --celeste-soft: 195 53% 15%;  /* el tinte crema no existe en la noche */
+
+    --sol: 195 53% 15%;           /* #12303A · niebla */
+    --sol-deep: 185 13% 63%;      /* #93AAAC */
+
+    /* Más claro que el rojo de la base a propósito: #E54B3C se lee bien sobre
+       blanco, pero sobre la noche queda apagado y un error tiene que gritar. */
+    --charrua: 6 100% 64%;        /* #FF5A47 */
+
+    --espectro: 166 59% 56%;      /* #4FD1B3 · el reflejo fosforescente */
+
+    /* Estos tokens de shadcn no son alias de la paleta: hay que repetirlos. */
+    --card: 195 53% 13%;
+    --secondary: 195 53% 15%;
+    --muted: 195 40% 17%;
+    --muted-foreground: 185 13% 63%;
+    --border: 194 35% 22%;
+    --input: 194 35% 26%;
+
+    /* Tinta oscura sobre el naranja: el blanco da 2.7:1 y no se lee. */
+    --accent-foreground: 36 29% 7%;
+
+    --velo: 193 60% 3%;
+
+    /* Las sombras claras de la base son invisibles sobre fondo oscuro. */
+    --shadow-sm: 0 1px 2px hsl(193 80% 2% / 0.5), 0 1px 3px hsl(193 80% 2% / 0.45);
+    --shadow-md: 0 4px 14px hsl(193 80% 2% / 0.55);
+    --shadow-lg: 0 14px 36px hsl(193 80% 2% / 0.6);
+    --shadow-xl: 0 28px 64px hsl(193 80% 2% / 0.7);
+  }
+
+  /* La tipografía estacional va SÓLO en la vidriera (la home). El color del
+     tema sí llega a registro, login y perfil; Creepster no, porque
+     `.title-sport` lo usan también esas páginas y "INICIAR SESIÓN" en una
+     tipografía de terror se lee peor justo donde hay algo que completar. */
+  :root[data-theme="halloween"][data-surface="vidriera"] {
+    --font-scream: 'Creepster', var(--font-display);
+  }
+
+  /* Creepster trae un solo peso y mucho aire propio: el font-black y el
+     tracking negativo que le sientan a Inter Tight le pegan las gotas unas con
+     otras. Se corrigen donde efectivamente se usa. */
+  :root[data-theme="halloween"][data-surface="vidriera"] .title-display,
+  :root[data-theme="halloween"][data-surface="vidriera"] .title-sport {
+    font-weight: 400;
+    letter-spacing: 0.015em;
+    line-height: 1.02;
   }
 }
 
@@ -141,7 +219,10 @@
 
   .btn-celeste {
     @apply inline-flex items-center justify-center gap-2 px-7 py-3.5 text-sm font-semibold tracking-wide transition-all duration-200 rounded-full;
-    @apply bg-celeste text-white;
+    /* text-accent-foreground y no text-white: sobre el naranja del tema
+       Halloween el blanco da 2.7:1 y no se lee. El token es blanco en la
+       paleta base, así que acá no cambia nada. */
+    @apply bg-celeste text-accent-foreground;
     @apply hover:bg-celeste-deep active:scale-[0.98];
     font-family: var(--font-body);
   }
@@ -199,13 +280,13 @@
 
   /* ─── Display titles ─── */
   .title-display {
-    font-family: var(--font-display);
+    font-family: var(--font-scream);
     @apply leading-[0.92] font-black;
     letter-spacing: -0.03em;
   }
 
   .title-sport {
-    font-family: var(--font-display);
+    font-family: var(--font-scream);
     @apply leading-[0.95] font-black;
     letter-spacing: -0.03em;
   }
@@ -322,4 +403,271 @@
   background: hsl(var(--tinta)) !important;
   border: 1px solid hsl(0 0% 100% / 0.22) !important;
   color: hsl(var(--papel)) !important;
+}/* ─── Atmósfera del tema Halloween ───────────────────────────────────────── */
+/* Acá vivían murciélagos, hojas, ojos, niebla y una luna, todos dibujados a
+   mano en SVG. Se sacaron: se leían como calcomanías, iban demasiado rápido y
+   —peor— la capa estaba en z-30, POR ENCIMA de las cards, cruzándoles por
+   delante. Están en el commit 945b51b por si alguna vez se rescata algo.
+
+   Queda sólo el grano, que no es una figura sino una textura: no tiene
+   silueta que pueda verse mal, no se mueve, y estar por encima del contenido
+   no molesta a nada porque no tapa nada. Es lo que hace que un color plano
+   deje de parecer plano. */
+
+.spooky-grano {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ─── Cards de evento en el tema Halloween ───────────────────────────────── */
+/* Sólo aquí: con el tema apagado, ni una de estas reglas aplica y las cards
+   quedan exactamente como siempre.
+   Se engancha de clases propias (.evento-*) y no de utilidades de Tailwind,
+   que cambian cada vez que alguien retoca el markup. */
+
+/* ── La card se enciende ── */
+/* El resplandor va como box-shadow INSET y no como una capa ::after encima:
+   una sombra interior se pinta sobre el fondo pero DEBAJO del contenido, así
+   que no le tira naranja al texto ni a los botones. */
+:root[data-theme="halloween"] .evento-card {
+  transition: box-shadow 320ms ease, border-color 320ms ease, transform 300ms ease;
+  /* Queda algo prendida siempre: en celular no hay hover, y si el efecto
+     dependiera sólo de él, desde un teléfono no existiría. */
+  box-shadow:
+    inset 0 -46px 56px -34px hsl(var(--celeste) / 0.3),
+    var(--shadow-sm);
+}
+
+:root[data-theme="halloween"] .evento-card:hover,
+:root[data-theme="halloween"] .evento-card:focus-within,
+:root[data-theme="halloween"] .evento-card:active {
+  border-color: hsl(var(--celeste) / 0.5);
+  box-shadow:
+    inset 0 -56px 68px -30px hsl(var(--celeste) / 0.55),
+    0 0 40px -8px hsl(var(--celeste) / 0.42),
+    var(--shadow-lg);
+}
+
+/* ── Viñeteado de la foto ── */
+/* Sin esto la imagen es un rectángulo pegado sobre la noche. Oscureciendo los
+   bordes hacia el color de la card, la foto se funde con ella. */
+:root[data-theme="halloween"] .evento-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;               /* la fecha y el sello van en z-2 */
+  pointer-events: none;
+  background:
+    radial-gradient(118% 88% at 50% 38%, transparent 42%, hsl(var(--papel) / 0.62) 100%),
+    linear-gradient(to bottom, transparent 58%, hsl(var(--card)) 100%);
+}
+
+/* ── La fecha, como una brasa ── */
+:root[data-theme="halloween"] .evento-fecha {
+  background: linear-gradient(140deg, #FFC24A 0%, hsl(var(--celeste)) 52%, hsl(var(--celeste-deep)) 100%);
+  box-shadow: 0 0 20px -3px hsl(var(--celeste) / 0.65);
+}
+
+/* ── AGOTADO, como un sello de lacre ── */
+/* El rojo del tema (#FF5A47) es claro para que un mensaje de error grite sobre
+   la noche, pero con texto blanco encima da 2.8:1. Acá el sello usa un rojo
+   profundo propio para que el blanco se lea. */
+:root[data-theme="halloween"] .evento-agotado {
+  background: radial-gradient(circle at 34% 26%, #C2341F 0%, #9A2414 52%, #6E1509 100%);
+  box-shadow:
+    inset 0 2px 5px hsl(0 0% 100% / 0.22),
+    inset 0 -4px 10px hsl(0 0% 0% / 0.45),
+    0 0 0 2px hsl(12 70% 26%),
+    var(--shadow-lg);
+}
+/* ── Cards de promociones: el mismo encendido ── */
+/* La destacada se marca con una clase PROPIA y no con `:not(.bg-celeste)`.
+   Enganchar el CSS del tema a una utilidad de Tailwind es frágil: esa clase
+   existe para pintar un fondo, no para identificar una variante, y cualquiera
+   que cambie el fondo de esa card rompe el tema sin darse cuenta. */
+:root[data-theme="halloween"] .promo-card {
+  transition: box-shadow 320ms ease, border-color 320ms ease, transform 700ms ease;
+  box-shadow:
+    inset 0 -46px 56px -34px hsl(var(--celeste) / 0.24),
+    var(--shadow-sm);
+}
+
+:root[data-theme="halloween"] .promo-card:hover,
+:root[data-theme="halloween"] .promo-card:focus-within {
+  border-color: hsl(var(--celeste) / 0.5);
+  box-shadow:
+    inset 0 -56px 68px -30px hsl(var(--celeste) / 0.5),
+    0 0 40px -8px hsl(var(--celeste) / 0.4),
+    var(--shadow-lg);
+}
+
+/* La destacada (03) ya viene con fondo naranja: un resplandor naranja adentro
+   no se vería, así que sólo se le enciende el contorno. */
+:root[data-theme="halloween"] .promo-card--destacada,
+:root[data-theme="halloween"] .promo-card--destacada:hover,
+:root[data-theme="halloween"] .promo-card--destacada:focus-within {
+  box-shadow: 0 0 48px -6px hsl(var(--celeste) / 0.55), var(--shadow-lg);
+}
+
+/* ── Bloques que se invierten contra la página ── */
+/* El footer y la tarjeta de "Hablá con nosotros" usan `bg-tinta text-papel`
+   a propósito: en la paleta base eso es una banda oscura sobre papel blanco.
+   Con el tema, invertir da una banda CLARA sobre la noche — un slab blanco
+   enorme al pie de la página, que es justo lo que se veía mal.
+
+   Se arregla intercambiando los dos tokens SÓLO dentro del bloque. El markup
+   no cambia: sigue diciendo bg-tinta, text-papel, border-papel/15; lo que
+   cambia es qué significan esas palabras acá adentro. */
+:root[data-theme="halloween"] .bloque-invertido {
+  --tinta: 193 64% 5%;
+  --papel: 171 18% 92%;
+}
+
+/* ── Animaciones de Lottie ── */
+/* Dos: el murciélago en el hero y la araña en la sección de eventos. La regla
+   que las dos respetan es la que la decoración anterior no respetaba: **van
+   detrás del contenido**, nunca encima. */
+
+/* ── Bandada de murciélagos (hero) ── */
+/* Dentro del hero —la única sección sin tarjetas— y en z-0, por debajo de su
+   contenido. Cruzar + subir y bajar + aletear van en capas separadas: si el
+   avance y el vaivén compartieran `transform`, uno pisaría al otro. */
+
+:root[data-theme="halloween"] .spooky-bats {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+:root[data-theme="halloween"] .spooky-bat-vuelo {
+  position: absolute;
+  left: 0;
+  will-change: transform;
+  animation-name: batCruza;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  /* Durante cualquier espera muestra el fotograma inicial (fuera de pantalla)
+     y no su posición natural, que es el borde y se ve. */
+  animation-fill-mode: backwards;
+}
+
+:root[data-theme="halloween"] .spooky-bat-vuelo--rtl { animation-name: batCruzaRtl; }
+
+:root[data-theme="halloween"] .spooky-bat-vaiven {
+  display: block;
+  animation-name: batVaiven;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/* El ancho lo sortea el componente y llega por variable; el `min` con vw lo
+   acota en celular sin necesidad de un @media aparte. */
+:root[data-theme="halloween"] .spooky-bat-dibujo {
+  width: min(var(--bat-ancho, 90px), 38vw);
+  aspect-ratio: 760 / 500;   /* el del archivo: si no, se deforma */
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+
+/* La opacidad final la decide el contenedor (cada murciélago tiene la suya);
+   acá sólo se revela cuando Lottie terminó de cargar. */
+:root[data-theme="halloween"] .spooky-bat-dibujo.lottie--visible { opacity: 1; }
+
+:root[data-theme="halloween"] .spooky-bat-dibujo svg { width: 100%; height: 100%; }
+
+/* Los tres tonos. Se pisan los rellenos que Lottie escribe en el SVG, así no
+   hace falta un .json por color: queda una silueta plana, que es como se lee
+   un murciélago en el cielo. */
+:root[data-theme="halloween"] .spooky-bat-dibujo--negro svg path { fill: #04121A !important; }
+:root[data-theme="halloween"] .spooky-bat-dibujo--gris svg path { fill: #7E918E !important; }
+:root[data-theme="halloween"] .spooky-bat-dibujo--blanco svg path { fill: #E8EFEE !important; }
+
+/* Lentos: el más rápido tarda ~38s en cruzar. La decoración anterior lo hacía
+   en 7 y se sentía agresiva. */
+@keyframes batCruza {
+  from { transform: translate3d(-24vw, 0, 0); }
+  to   { transform: translate3d(124vw, 0, 0); }
+}
+@keyframes batCruzaRtl {
+  from { transform: translate3d(124vw, 0, 0); }
+  to   { transform: translate3d(-24vw, 0, 0); }
+}
+@keyframes batVaiven {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, calc(var(--vaiven, 28px) * -1), 0); }
+}
+
+/* Araña de la sección de eventos. `z-0` contra el `z-10` del contenido: cuando
+   pasa por detrás de una tarjeta, gana la tarjeta. Por eso puede colgar en
+   cualquier posición sin tapar nunca nada que haya que leer o tocar. */
+:root[data-theme="halloween"] .spooky-arana {
+  position: absolute;
+  /* El `top` lo pone el componente: sale de medir dónde caen los pies del
+     dibujo, porque la caja de la animación es mucho más alta que el bicho. */
+  z-index: 0;
+  /* El `left` que calcula el componente apunta al CENTRO del anclaje (una
+     letra del título, una tarjeta), pero `left` posiciona el borde izquierdo:
+     sin esto la araña queda corrida media anchura y no cuelga de lo que
+     debía. */
+  transform: translateX(-50%);
+  width: clamp(64px, 8.5vw, 100px);
+  /* El alto lo pone el componente: sale de medir el título o la tarjeta a la
+     que se ancla, así la responsividad se resuelve sola. */
+  pointer-events: none;
+  opacity: 0;
+  animation: spookyAranaVida 34s ease-in-out infinite;
+}
+
+/* El ciclo la desvanece antes de que el componente sortee la posición nueva:
+   cambiar de lugar a plena vista se ve como un salto. */
+@keyframes spookyAranaVida {
+  0%        { opacity: 0; }
+  9%        { opacity: 0.5; }
+  76%       { opacity: 0.5; }
+  92%, 100% { opacity: 0; }
+}
+
+:root[data-theme="halloween"] .spooky-arana-lottie,
+:root[data-theme="halloween"] .spooky-arana-lottie svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Iconos monocromos sobre botón claro ── */
+/* El logo de WhatsApp es un PNG blanco (medido: rgb(254,254,254)). En la
+   paleta base el botón `btn-techno` es tinta oscura y el blanco se lee
+   perfecto; con el tema, "tinta" es el hueso y el botón queda CLARO, así que
+   el icono desaparecía. Se invierte para que acompañe al texto oscuro.
+
+   Va acotado a `.btn-techno`: el mismo logo en el footer sí está sobre fondo
+   oscuro y ahí tiene que seguir blanco. */
+:root[data-theme="halloween"] .btn-techno img {
+  filter: invert(1);
+}
+
+/* ── Colores de las arañas ── */
+/* Se pisan los rellenos que Lottie escribe en el SVG, igual que con los
+   murciélagos: una silueta plana por color, sin un .json por variante.
+   Incluye el hilo, que queda del mismo color — y así se lee como una sola
+   pieza en vez de un bicho colgando de una línea ajena. */
+:root[data-theme="halloween"] .spooky-arana--hueso svg path { fill: #C3D4D0 !important; }
+/* No un negro real: el fondo del tema ya es #0B1D22 y un #071A21 encima es
+   invisible. Este gris azulado se lee como una araña oscura de verdad. */
+:root[data-theme="halloween"] .spooky-arana--negro svg path { fill: #2C4B55 !important; }
+:root[data-theme="halloween"] .spooky-arana--calabaza svg path { fill: hsl(var(--celeste)) !important; }
+:root[data-theme="halloween"] .spooky-arana--espectro svg path { fill: hsl(var(--espectro)) !important; }
+
+/* Las de abajo no se mudan: quedan fijas donde cuelgan. Sin el ciclo de
+   opacidad, sólo un fundido de entrada. */
+:root[data-theme="halloween"] .spooky-arana--quieta {
+  animation: none;
+  opacity: 0.45;
 }

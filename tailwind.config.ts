@@ -60,6 +60,10 @@ export default {
           deep: "hsl(var(--sol-deep))",
         },
         charrua: "hsl(var(--charrua))",
+        // Acento secundario del tema Halloween (en la base es el naranja).
+        espectro: "hsl(var(--espectro))",
+        // Fondo de los modales, para que siga al tema en vez de ser negro puro.
+        velo: "hsl(var(--velo))",
         papel: "hsl(var(--papel))",
         tinta: "hsl(var(--tinta))",
         whatsapp: "hsl(var(--whatsapp-green))",

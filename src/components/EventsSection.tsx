@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import EventCard from "./EventCard";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
+import SpookySpiders from "./SpookySpiders";
 
 const EventsSection = () => {
   const { events } = useAuth();
@@ -47,8 +48,13 @@ const EventsSection = () => {
   };
 
   return (
-    <section id="eventos" className="section-padding bg-secondary/40 relative">
-      <div className="container-odisea">
+    <section id="eventos" className="section-padding bg-secondary/40 relative overflow-hidden">
+      {/* Va ANTES del contenido y en z-0; el contenedor de abajo lleva z-10.
+          Así, cuando la araña pasa por detrás de una tarjeta, gana la tarjeta:
+          es la regla que la decoración anterior no respetaba. */}
+      <SpookySpiders />
+
+      <div className="container-odisea relative z-10">
         {/* Section header */}
         <div
           ref={headerRef}

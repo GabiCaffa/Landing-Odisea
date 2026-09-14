@@ -9,7 +9,7 @@ const Footer = () => {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.3 });
 
   return (
-    <footer ref={ref} className="relative bg-tinta text-papel overflow-hidden">
+    <footer ref={ref} className="bloque-invertido relative bg-tinta text-papel overflow-hidden">
       {/* Halo de acento sutil */}
       <div className="pointer-events-none absolute -bottom-32 -right-20 h-[420px] w-[420px] rounded-full bg-celeste/15 blur-[130px]" />
 
@@ -37,7 +37,7 @@ const Footer = () => {
               href="https://www.instagram.com/odisea.uy/"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-white transition-all"
+              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-accent-foreground transition-all"
               aria-label="Síguenos en Instagram"
             >
               <Instagram className="w-5 h-5" />
@@ -46,7 +46,7 @@ const Footer = () => {
               href="https://wa.me/59892592179"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-white transition-all"
+              className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-accent-foreground transition-all"
               aria-label="Contáctanos por WhatsApp"
             >
               <img src={whatsappLogo} alt="WhatsApp" className="w-5 h-5" />

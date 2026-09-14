@@ -1,6 +1,7 @@
 import { useState, lazy, Suspense } from "react";
 import { Instagram } from "lucide-react";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
+import { playHover, playThud } from "@/lib/spookySound";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
 import { EventTicket } from "@/lib/ticketTypes";
 
@@ -46,9 +47,12 @@ const EventCard = ({
 
   return (
     <>
-      <article className="card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px]">
+      <article
+        onMouseEnter={playHover}
+        className="evento-card card-techno overflow-hidden flex flex-col h-full w-[280px] md:w-[320px]"
+      >
         {/* Event Image */}
-        <div className="relative aspect-[4/3] bg-papel overflow-hidden border-b border-border">
+        <div className="evento-media relative aspect-[4/3] bg-papel overflow-hidden border-b border-border">
           <img
             src={image}
             alt={name}
@@ -63,13 +67,15 @@ const EventCard = ({
             }}
           />
           {/* Date badge estilo ticket */}
-          <div className="absolute top-3 left-3 bg-celeste text-white px-3 py-1.5 rounded-full shadow-sm">
+          <div className="evento-fecha absolute top-3 left-3 z-[2] bg-celeste text-accent-foreground px-3 py-1.5 rounded-full shadow-sm">
             <span className="text-xs font-semibold tracking-[0.12em] uppercase">{date}</span>
           </div>
 
           {isSoldOut && (
-            <div className="absolute inset-0 bg-tinta/65 backdrop-blur-[1px] flex items-center justify-center">
-              <span className="title-display text-4xl md:text-5xl text-white bg-charrua rounded-lg px-5 py-1.5 -rotate-6 shadow-[var(--shadow-lg)]">
+            <div // --velo y no --tinta: el velo tiene que oscurecer la foto SIEMPRE, y
+            // con el tema oscuro "tinta" es el hueso, así que la aclaraba.
+            className="absolute inset-0 z-[2] bg-velo/70 backdrop-blur-[1px] flex items-center justify-center">
+              <span className="evento-agotado title-display text-4xl md:text-5xl text-white bg-charrua rounded-lg px-5 py-1.5 -rotate-6 shadow-[var(--shadow-lg)]">
                 AGOTADO
               </span>
             </div>
@@ -96,7 +102,12 @@ const EventCard = ({
 
           <div className="flex gap-2 mt-auto">
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                // En celular no hay hover: si el sonido no está también acá,
+                // desde un teléfono el sitio es mudo.
+                playThud();
+                setIsModalOpen(true);
+              }}
               disabled={isSoldOut}
               className="btn-techno flex-1 text-xs py-2.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >

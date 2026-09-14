@@ -95,7 +95,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v12_birthday_signups.sql` → `v13_payment_accounts.sql` →
 `v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
-`v18_delivery_ticket_types.sql`.
+`v18_delivery_ticket_types.sql` → `v19_site_settings.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -211,6 +211,37 @@ no vende **se muestran igual**: si no, al guardar se borraría un desglose que n
 borrar. Acceso a datos en `src/lib/deliveries.ts` (`saveDeliveryTickets`, `ticketsSummary`);
 `createDelivery` ahora devuelve el `id` porque el desglose se guarda después.
 
+**v19 — Ajustes del sitio + tema estacional.** Para Halloween 2026 la landing cambia de
+paleta. La pregunta era dónde vive el interruptor: en el código (deploy para prenderlo y otro
+para apagarlo) o en la base (se prende desde el panel). Va en la base, y el motivo es
+operativo: el sitio está **vendiendo entradas**, así que si el tema se ve mal en un celular a
+las 3 de la mañana se apaga en 5 segundos en vez de esperar un deploy. Tabla `site_settings`
+clave/valor — **genérica y no una tabla `theme`** porque cuesta lo mismo y la próxima bandera
+global (un banner de aviso, "preventa cerrada") no va a necesitar otra migración. RLS:
+**lectura pública** (la landing tiene que saber qué pintar antes de que nadie inicie sesión;
+lo que se expone es el nombre de un tema) y **escritura sólo admin** — el operador no toca la
+cara pública del sitio. Está en la publicación de realtime: al prender el tema, las pestañas
+ya abiertas cambian solas. El valor **no se valida en la DB** a propósito (un CHECK con los
+nombres de los temas obligaría a migrar cada vez que se agrega uno, y mete reglas de UN valor
+en una tabla genérica): valida el front en `src/lib/siteSettings.ts`, que cae en `base` ante
+cualquier valor que no reconoce.
+
+Front: `src/contexts/ThemeContext.tsx` lee el valor, lo escucha por realtime y lo escribe como
+`data-theme` en `<html>`, que es donde `index.css` redefine los tokens. Dos detalles que
+explican el diseño:
+
+1. **El panel queda afuera.** Los tokens son globales, así que `data-theme` en `<html>` pintaría
+   también Admin — que es herramienta de trabajo interna y nadie de afuera ve. La única forma
+   de excluirlo es no poner el atributo en esa ruta (`isThemedPath`). Envolver el panel y
+   redefinir los tokens ahí **no sirve**: modales y toasts salen por portal, fuera del wrapper.
+2. **Anti-flash.** El valor viene por red: sin nada más, cada carga pinta la paleta clara y
+   después salta a la oscura. Un script inline en `index.html` aplica el último tema conocido
+   (cacheado en `localStorage` por el provider) antes de que React monte.
+
+UI: pestaña **Apariencia** en el panel (`AppearanceAdmin` en `Admin.tsx`), **sólo admin**. Las
+muestras de color de esa pestaña están escritas a mano y no salen de los tokens a propósito:
+como el panel no se tematiza, `bg-celeste` ahí siempre daría el naranja de siempre.
+
 **Importar la planilla histórica:** `scripts/planilla-a-sql.mjs` convierte los CSV exportados
 de Google Sheets (una hoja por fecha) en un SQL para pegar en el SQL Editor. Detecta las
 columnas por el nombre del encabezado (el total es la columna sin título, anterior al nombre),
@@ -320,6 +351,220 @@ parser detecta y deja marcada en el resumen y en las notas de la entrega.
 > ahora lo comparten el buscador y el parser. Usa `\p{M}` y no un rango `[U+0300-U+036F]`
 > a propósito: el rango obliga a escribir marcas combinantes en el fuente, que se pegan al
 > carácter anterior en cualquier editor.
+
+## 6.3 Tema Halloween (sin migración)
+
+El tema que prende el interruptor de v19. Vive entero en `[data-theme="halloween"]`
+dentro de `src/index.css`: **ningún componente sabe que este tema existe**, sólo se
+redefinen tokens. Con el tema apagado el sitio queda exactamente como estaba —
+verificado: fondo blanco, Inter Tight, logo negro, cero nodos de decoración.
+
+**Paleta** (del flyer de "Halloween Colonia" y de la referencia de la calabaza): noche
+verde azulada `#0B1D22` de fondo, hueso `#E8EFEE` de texto, calabaza `#FA7A1E` de acento
+y un verde espectral `#4FD1B3` como secundario. El acento casi no se mueve porque **el
+naranja de ODÍSEA ya era el de la calabaza**: lo que cambia es el fondo, y por eso el tema
+no se lee como un disfraz pegado encima. El rojo de error se **aclara** a `#FF5A47`:
+`#E54B3C` se lee bien sobre blanco pero queda apagado sobre la noche.
+
+**Contraste:** `--accent-foreground` pasa a tinta oscura y `.btn-celeste` dejó de usar
+`text-white`. Blanco sobre `#FA7A1E` da **2.7:1** y no pasa; la tinta da 7:1. El mismo
+cambio en el badge de fecha de `EventCard`. En la paleta base el token sigue siendo
+blanco, así que ahí no cambia nada.
+
+**Tipografía — Creepster, pero sólo en la vidriera.** `--font-scream` es un token aparte
+de `--font-display` y se define **únicamente** bajo `[data-surface="vidriera"]`, que
+ThemeContext pone sólo en `/`. El motivo es concreto: `.title-sport` lo usan **todas** las
+páginas —"INICIAR SESIÓN", los encabezados de Términos, los números del dashboard—, así
+que ponerlo en la raíz del tema metía una tipografía de terror justo donde la persona
+tiene algo que completar. El color del tema sí llega a registro, login y perfil; la
+tipografía no. Creepster trae un solo peso, así que el `font-black` y el tracking negativo
+que le sientan a Inter Tight se corrigen en el mismo selector. (Se verificó que la fuente
+trae los acentos del español: sin eso, la Í de "ODÍSEA" caía a Inter Tight y se veía rota.)
+
+**Vista previa por URL:** `?tema=halloween` fuerza un tema sólo para quien abre ese link,
+sin escribir en la DB ni en el cache. Sin esto, la única forma de ver cómo quedó era
+prenderlo **para todos** — que es exactamente la prueba que uno quiere hacer antes de
+prenderlo. El panel sigue mostrando el tema guardado (`siteTheme`), no el de la vista previa.
+
+**Decoración: qué se intentó y por qué se sacó.** `SpookyLayer` llegó a tener murciélagos
+cruzando, hojas cayendo, ojos que seguían el cursor y una luna, todo dibujado a mano en SVG y
+repartido en tres planos de profundidad. **No funcionó y se quitó entero** (queda en el commit
+`945b51b`). Tres motivos, y el tercero es el que importa para el futuro:
+
+1. **Tapaba las cards.** La capa estaba en `z-30`, o sea por encima del contenido, así que los
+   bichos cruzaban por delante de las tarjetas de evento. Error de diseño, no de ajuste.
+2. **Iba demasiado rápido.** El plano "frente" cruzaba la pantalla en ~7 segundos y las hojas
+   giraban 720° en 4.
+3. **Una figura dibujada a mano en SVG tiene un techo bajo.** Se probó agregando planos,
+   desenfoque, dos recortes de hoja, velocidades y direcciones distintas: seguía leyéndose como
+   calcomanías sobre un color liso. No es un problema de cantidad ni de parámetros. **Si alguna
+   vez se quiere atmósfera, va por una imagen real de fondo, no por más SVG.**
+
+Queda sólo el **grano** de película (`.spooky-grano`, `z-40`, estático, `mix-blend-mode:
+overlay` para conservar los negros). Sobrevive porque no es una figura sino una textura: no
+tiene silueta que pueda verse mal, no se mueve, y estar por encima del contenido no molesta
+porque no tapa nada. No se anima a propósito — obligaría a repintar la pantalla entera 60 veces
+por segundo por algo que nadie nota conscientemente.
+
+> **Dos trampas encontradas por el camino, por si se vuelve a animar algo.**
+>
+> `animationiteration` **burbujea**: las capas internas con animación propia (unas alas que
+> aletean cada 0.4s) suben su evento al contenedor, y un handler que resortea al recibirlo se
+> dispara dos veces por segundo, dejando al elemento clavado en el arranque. Hay que filtrar
+> con `e.target !== e.currentTarget`.
+>
+> Un `animation-delay` **positivo** deja al elemento visible y quieto en su posición natural
+> —el borde de la pantalla— hasta que le toca arrancar. Eso es lo que hacía que "aparecieran
+> todos en el borde". Se resuelve con retrasos **negativos** (entra ya a mitad de recorrido) y
+> `animation-fill-mode: backwards`.
+
+**Animaciones con Lottie (`SpookyLottie`).** Después de que la decoración en SVG a mano
+fracasara, la conclusión fue que **el dibujo no puede salir de acá**. Lottie reproduce
+animaciones exportadas de After Effects por ilustradores; el componente sólo las pone en
+pantalla. Las dos las eligió el autor en LottieFiles (filtro **Free** = *Lottie Simple License*:
+uso comercial permitido, sin atribución obligatoria).
+
+**Bandada de murciélagos (`SpookyBats`, en el hero).** Cuatro, a distintas alturas, tamaños,
+velocidades y direcciones — uno solo y quieto en un rincón se lee como un sticker pegado, que
+fue el primer intento. **Van lentos**: el más rápido tarda ~38s en cruzar (la decoración vieja
+lo hacía en 7 y se sentía agresiva). Los **tres tonos** —negro, gris y blanco— salen de pisar
+por CSS los rellenos que Lottie escribe en el SVG, así no hace falta un `.json` por color; el
+negro va más grande y más opaco porque sobre la noche casi no se ve. El ancho llega por
+variable (`--bat-ancho`) y el CSS lo acota con `min(..., 38vw)`: responsivo sin un `@media`
+aparte.
+
+**Arañas (`SpookySpiders`, en la sección de eventos).** Dos grupos con reglas distintas:
+
+- **Una cuelga del título** "PRÓXIMOS EVENTOS", cambiando de letra en cada ciclo. Es la única que
+  se muda. Antes también se anclaba a las tarjetas y quedaba en lugares raros — el autor lo
+  describió como que "hacía lo que quería".
+- **Tres cuelgan por DEBAJO de las tarjetas**, quietas, en colores distintos y a alturas
+  escalonadas. El hilo nace detrás de la card (van en `z-0`) y sólo asoma la araña por abajo, así
+  que no tapan nada.
+
+> **La caja de la animación NO es el bicho, y el bicho se mueve.** Ésta es la trampa del archivo
+> y costó tres intentos. Primero: el dibujo ocupa sólo del 5% al 23% de su contenedor y el 77% de
+> abajo está vacío, porque la telaraña cuelga muy por encima del viewBox — calcular el alto del
+> contenedor para "llegar" a un punto deja la araña flotando. Segundo, y menos obvio: **la araña
+> sube y baja por el hilo durante el ciclo**, así que medir un solo fotograma da un valor que no
+> vale para el resto y la deja colgando lejísimos del anclaje.
+>
+> La solución es recorrer el ciclo con `goToAndStop` (16 muestras) y quedarse con **los dos
+> extremos**, porque cada grupo necesita uno distinto: la del título se ancla al **promedio** —así
+> oscila alrededor del borde de las letras— y las de abajo al **mínimo**, que es su punto más
+> alto, para no meterse nunca detrás de la tarjeta.
+>
+> La medición va sobre los `path` y **no** sobre `getBBox()`: los rects de los `path` llevan
+> aplicadas las transformaciones de Lottie, mientras que `getBBox()` devuelve coordenadas sin
+> transformar, fuera del viewBox.
+
+> **Se observa la sección con `ResizeObserver`, no la ventana.** Las tarjetas llegan de Supabase
+> **después** de que la araña termina de cargar (su `.json` es local e instantáneo), así que en la
+> primera medición no hay ninguna card y las de abajo se quedaban sin posición, fuera de pantalla.
+> Cuando los eventos aparecen, la sección cambia de alto y el observer dispara el recálculo. De
+> paso cubre el redimensionado y el apilado en celular, así que reemplaza al listener de `resize`.
+
+> **Cuidado con el "negro".** Los colores se pisan por CSS sobre los rellenos del SVG (igual que
+> los murciélagos: una silueta plana por variante, sin un `.json` por color). El primer intento
+> usó `#071A21`, que sobre el fondo del tema (`#0B1D22`) da contraste **1.05**: invisible. El tono
+> oscuro es un gris azulado `#2C4B55` — contraste 1.85, se lee como araña oscura de verdad.
+
+Medir el DOM resuelve la responsividad sola: en celular las tarjetas se apilan y todo se
+recalcula, sin un `@media` que mantener. Se recalcula también al cambiar el tamaño de ventana.
+
+**Iconos monocromos sobre botón claro.** El logo de WhatsApp es un PNG **blanco** (medido:
+`rgb(254,254,254)`). En la paleta base el botón `btn-techno` es tinta oscura y se lee perfecto;
+con el tema, "tinta" es el hueso y el botón queda claro, así que el icono **desaparecía**. Se
+invierte por CSS, acotado a `.btn-techno`: el mismo logo en el footer sí está sobre fondo oscuro
+y ahí tiene que seguir blanco.
+
+**La regla que todas respetan, y que la decoración anterior no respetaba: van DETRÁS del
+contenido.** Los murciélagos viven en `z-0` dentro del hero —la única sección sin tarjetas—. La
+araña va en `z-0` contra el `z-10` del contenedor de eventos: cuando le queda una tarjeta
+delante, **gana la tarjeta**. Verificado forzándola encima de una card: los cuatro puntos de
+muestra resuelven a la tarjeta.
+
+**Peso.** El runtime va en su propio chunk y se consulta **primero el JSON**: si no está, la
+función retorna **antes** del `import`, así esos 300 KB no se descargan nunca. Con brotli —lo
+que sirve Vercel— el total agregado es ~82 KB: murciélago 2, araña 16 (ese JSON es repetitivo y
+comprime ×25), runtime 64.
+
+> **Para cambiar una animación:** bajar el `.json` de lottiefiles.com y reemplazar el archivo en
+> `public/`. Si distrae, lo primero que se toca es la **opacidad**, después la velocidad (prop
+> `speed`). El `fetch` **no** usa `cache: "force-cache"`: el navegador se quedaría con la
+> animación vieja al cambiarla. Y el `catch` **avisa por consola en desarrollo** — un catch mudo
+> acá ya costó un rato de no entender por qué el contenedor quedaba vacío.
+
+**Sonido (`src/lib/spookySound.ts` + `SoundToggle`):** apagado por defecto, con la
+preferencia guardada. Tres restricciones lo definen: el navegador **bloquea el audio
+automático** (por eso el AudioContext se crea recién al tocar el altavoz, que es el gesto
+que lo habilita); nadie quiere sonido que no pidió en un sitio que **vende entradas**; y
+los sonidos cortos se **sintetizan con Web Audio**, sin archivos ni licencias. Al restaurar
+la preferencia de una visita anterior se arma un escuchador de un solo uso para el primer
+gesto —si no, el botón diría "prendido" y no sonaría nada— y ahí no suena el golpe de
+confirmación, que salido de la nada sobresalta.
+
+> **El ambiente necesita un archivo y es opcional.** `public/halloween-ambiente.mp3`
+> (viento, aullido lejano). Sintetizarlo con osciladores suena a módem, así que tiene que
+> ser un audio real **libre de derechos**. Si el archivo no está, el `error` del elemento
+> `<audio>` apaga esa parte y **no se vuelve a intentar**: los sonidos de interacción andan
+> igual. Hoy no está puesto.
+
+**Las cards en el tema.** Se encienden por dentro con un `box-shadow` **inset** y no con una
+capa `::after` encima: una sombra interior se pinta sobre el fondo pero DEBAJO del contenido,
+así que no le tira naranja al texto ni a los botones. Queda algo prendida siempre, porque en
+celular no hay hover y si el efecto dependiera sólo de él desde un teléfono no existiría; se
+intensifica con `:hover`, `:focus-within` y `:active`. La foto lleva viñeteado para que deje de
+ser un rectángulo pegado sobre la noche (en `z-1`; la fecha y el sello van en `z-2` o quedarían
+tapados). El CSS se engancha de clases propias (`.evento-card`, `.evento-media`, `.evento-fecha`,
+`.evento-agotado`, `.promo-card--destacada`) y **nunca de utilidades de Tailwind**: esas clases
+existen para pintar, no para identificar una variante, y usar `:not(.bg-celeste)` para detectar
+la promo destacada ya generó selectores raros en el build.
+
+**Barrido de contraste.** `--accent-foreground` existe para esto: blanco sobre el naranja del
+tema da **2,7:1**. Se reemplazó `text-white` por `text-accent-foreground` en los seis lugares que
+lo tenían junto a `bg-celeste` (header, footer, promos, ErrorBoundary, botones) — quedan en 7:1.
+En la paleta base el token sigue siendo blanco, así que ahí no cambió nada. El sello AGOTADO usa
+un rojo propio y profundo, porque el `--charrua` del tema es claro a propósito (para que un error
+grite sobre la noche) y con blanco encima no se leería.
+
+**Sin parpadeo al cargar: dos arreglos, dos causas.** (1) El `data-theme` se ponía al
+instante pero el CSS de la app no estaba en el primer cuadro —en dev Vite lo inyecta por JS,
+y aun en producción React tiene que montar—, así que el navegador pintaba su blanco por
+defecto. Hay un `<style>` **crítico** en `index.html` con el fondo del tema; es el único lugar
+donde `--papel` y `--tinta` están duplicados como hex, porque tiene que funcionar antes de que
+exista la hoja que define los tokens. (2) Para el visitante **nuevo** el valor tardaba ~600ms
+en llegar (medido) y ningún truco de cliente lo evita: el dato no está. El plugin `bakeTheme`
+de `vite.config.ts` lo lee **en tiempo de build** y lo escribe en el `<html>`, así el primer
+cuadro sale correcto sin depender de la red. Falla en silencio: si Supabase no contesta
+durante el build no inyecta nada y el sitio se comporta como antes — un deploy no se cae
+porque no se pudo averiguar un color. En ejecución `localStorage` y la consulta lo siguen
+pisando, así que cambiar el tema sin redeployar sigue andando. Por esto el script inline ahora
+también **quita** el atributo (antes sólo lo ponía): hace falta en `/admin` y para cuando la
+base dice `base` pero el build trae otro tema.
+
+**El sonido viene PRENDIDO** (decisión del autor). El navegador igual no deja sonar nada hasta
+el primer gesto —Chrome y Safari lo prohíben—, así que el altavoz aparece prendido y el audio
+arranca cuando la persona toca algo. Se escuchan tres tipos de gesto porque un scroll con la
+rueda **no** cuenta como activación. Quien lo apaga (se guarda un `"0"`) no se lo vuelve a
+encontrar prendido.
+
+**Tipografía en las pantallas de entrada.** `ENTRADA_PATHS` (en `ThemeContext`) es la lista
+explícita de rutas que llevan Creepster: la home, login, registro, recuperar y reset. Es una
+lista y no "todo menos el panel" porque en esas pantallas `.title-sport` marca **un solo
+título corto**, mientras que en Términos, Privacidad y Perfil marca **cada encabezado de
+sección** — ahí una tipografía de terror vuelve ilegible un texto legal. Los formularios no se
+tocan: etiquetas, campos y errores siguen en Inter Tight, que es donde la legibilidad decide
+si alguien termina de registrarse. **La misma lista está duplicada en el script de
+`index.html`**: si no coinciden, el título parpadea de Inter Tight a Creepster al montar React.
+
+**Bloques que se invierten (`.bloque-invertido`).** El footer y la tarjeta de "Hablá con
+nosotros" usan `bg-tinta text-papel` a propósito: en la paleta base son una banda oscura sobre
+papel blanco. Con el tema, invertir daba una banda **clara** sobre la noche — un slab blanco
+enorme al pie. Se arregla intercambiando los dos tokens **sólo dentro del bloque**: el markup
+no cambia, cambia qué significan esas palabras ahí adentro. Por lo mismo, el velo de
+**AGOTADO** pasó de `bg-tinta/65` a `bg-velo/70`: tiene que oscurecer la foto siempre, y con
+el tema "tinta" es el hueso, así que la aclaraba.
 
 **v17 — Rechazar una solicitud la borra.** El `status = 'rechazado'` de v16 era un registro
 que **ninguna lista mostraba** pero que **sí sumaba en las tarjetas de totales** (el resumen

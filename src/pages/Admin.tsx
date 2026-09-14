@@ -39,6 +39,7 @@ import {
   Star,
   ClipboardPaste,
   AlertTriangle,
+  Palette,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import whatsappLogo from "@/assets/whatsapp-logo.png";
@@ -118,6 +119,8 @@ import {
   sortEventTickets,
 } from "@/lib/ticketTypes";
 import { supabase } from "@/lib/supabase";
+import { useTheme } from "@/contexts/ThemeContext";
+import { SITE_THEMES, SiteTheme, THEME_LABELS } from "@/lib/siteSettings";
 import { toast } from "sonner";
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -128,6 +131,7 @@ type Tab =
   | "tickets"
   | "accounts"
   | "users"
+  | "appearance"
   | "deliveries"
   | "birthdays";
 
@@ -208,6 +212,12 @@ const Admin = () => {
                 active={activeTab === "users"}
                 onClick={() => setTab("users")}
               />
+              <SidebarLink
+                icon={<Palette className="w-4 h-4" />}
+                label="Apariencia"
+                active={activeTab === "appearance"}
+                onClick={() => setTab("appearance")}
+              />
             </>
           )}
           <SidebarLink
@@ -255,6 +265,7 @@ const Admin = () => {
               {activeTab === "tickets" && "Tipos de entrada"}
               {activeTab === "accounts" && "Cobros"}
               {activeTab === "users" && "Comunidad"}
+              {activeTab === "appearance" && "Cara del sitio"}
               {activeTab === "deliveries" && "Envío de entradas"}
               {activeTab === "birthdays" && "Promo cumpleaños"}
             </p>
@@ -264,6 +275,7 @@ const Admin = () => {
               {activeTab === "tickets" && "ENTRADAS"}
               {activeTab === "accounts" && "CUENTAS"}
               {activeTab === "users" && "USUARIOS"}
+              {activeTab === "appearance" && "APARIENCIA"}
               {activeTab === "deliveries" && "ENTREGAS"}
               {activeTab === "birthdays" && "CUMPLEAÑOS"}
             </h1>
@@ -290,6 +302,7 @@ const Admin = () => {
         {activeTab === "tickets" && <TicketTypesAdmin />}
         {activeTab === "accounts" && <AccountsAdmin />}
         {activeTab === "users" && <UsersAdmin />}
+        {activeTab === "appearance" && <AppearanceAdmin />}
         {activeTab === "deliveries" && <DeliveriesAdmin />}
         {activeTab === "birthdays" && <BirthdaysAdmin />}
       </main>
@@ -4891,6 +4904,148 @@ const calcAge = (birth: string) => {
   const m = now.getMonth() - b.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
   return age;
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Apariencia — tema estacional del sitio (v19)
+// ────────────────────────────────────────────────────────────────────────────
+/**
+ * Las muestras de color están escritas a mano y no salen de los tokens a
+ * propósito: el panel NO se tematiza (ver isThemedPath en ThemeContext), así
+ * que acá `bg-celeste` siempre daría el naranja de ODÍSEA. Para ver de qué
+ * color es un tema hay que pintarlo literal.
+ */
+const THEME_SWATCHES: Record<SiteTheme, { colors: string[]; caption: string }> = {
+  base: {
+    colors: ["#FFFFFF", "#141414", "#F25C26", "#E54B3C"],
+    caption: "Papel blanco, tinta y acento naranja. La identidad de siempre.",
+  },
+  halloween: {
+    colors: ["#0B1D22", "#E8EFEE", "#FA7A1E", "#4FD1B3"],
+    caption: "Noche verde azulada y fuego de calabaza, tomado del flyer de Halloween Colonia.",
+  },
+};
+
+const AppearanceAdmin = () => {
+  const { siteTheme: theme, loading, setTheme } = useTheme();
+  const confirm = useConfirm();
+  const [saving, setSaving] = useState<SiteTheme | null>(null);
+
+  const handlePick = async (next: SiteTheme) => {
+    if (next === theme) return;
+
+    // Cambia la cara pública del sitio para todo el mundo y al instante: se
+    // pregunta antes, como al borrar un evento.
+    const ok = await confirm({
+      title: next === "base" ? "Volver al tema de siempre" : `Activar el tema ${THEME_LABELS[next]}`,
+      description:
+        next === "base"
+          ? "El sitio vuelve a la paleta original de ODÍSEA para todos los visitantes, ahora mismo."
+          : `Todos los visitantes van a ver el sitio con la paleta ${THEME_LABELS[next]} a partir de este momento. Lo podés apagar desde acá cuando quieras.`,
+      confirmText: next === "base" ? "Volver al original" : "Activar",
+    });
+    if (!ok) return;
+
+    setSaving(next);
+    try {
+      await setTheme(next);
+      toast.success(
+        next === "base"
+          ? "El sitio volvió al tema de siempre"
+          : `Tema ${THEME_LABELS[next]} activado`
+      );
+    } catch (err) {
+      // Se distingue la tabla ausente del rechazo de RLS: mandar a revisar la
+      // sesión cuando lo que falta es la migración es mandar al lugar
+      // equivocado.
+      //
+      // El código que importa es PGRST205, no 42P01: entre el cliente y la DB
+      // está PostgREST, que resuelve las tablas contra su propia caché de
+      // esquema y contesta con SU código antes de que la consulta llegue a
+      // Postgres. El 42P01 de Postgres se deja porque puede aparecer si la
+      // tabla se borra con la caché ya cargada.
+      const code = (err as { code?: string } | null)?.code;
+      toast.error(
+        code === "PGRST205" || code === "42P01"
+          ? "Falta correr la migración v19_site_settings.sql en Supabase."
+          : "No se pudo cambiar el tema. ¿Seguís con sesión de admin?"
+      );
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Cargando…</p>;
+  }
+
+  return (
+    <div className="max-w-3xl">
+      <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+        Cambia la paleta de la parte pública del sitio (home, registro, login y perfil).
+        El cambio es inmediato para todos: quien tenga el sitio abierto lo ve cambiar sin recargar.
+        Este panel no cambia de color, para que siga siendo legible mientras trabajás.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {SITE_THEMES.map((t) => {
+          const isActive = t === theme;
+          const swatch = THEME_SWATCHES[t];
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => handlePick(t)}
+              disabled={saving !== null}
+              aria-pressed={isActive}
+              className={`text-left border rounded-2xl p-5 transition-all disabled:opacity-60 disabled:cursor-wait ${
+                isActive
+                  ? "border-celeste ring-2 ring-celeste/20 bg-celeste/[0.04]"
+                  : "border-border hover:border-tinta/30 hover:-translate-y-0.5"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-sport text-xl font-black tracking-wide text-tinta">
+                  {THEME_LABELS[t].toUpperCase()}
+                </span>
+                {isActive && (
+                  <span className="badge-celeste">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Activo
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-1.5 mb-3">
+                {swatch.colors.map((c) => (
+                  <span
+                    key={c}
+                    className="h-9 flex-1 rounded-lg border border-tinta/10"
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+
+              <p className="text-xs text-muted-foreground leading-relaxed">{swatch.caption}</p>
+
+              {!isActive && (
+                <span className="inline-block mt-3 text-xs font-semibold uppercase tracking-wider text-celeste-deep">
+                  {saving === t ? "Activando…" : "Activar"}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="text-xs text-muted-foreground mt-5">
+        Para ver cómo quedó, abrí{" "}
+        <Link to="/" className="text-celeste-deep font-semibold hover:underline">
+          el sitio
+        </Link>{" "}
+        en otra pestaña.
+      </p>
+    </div>
+  );
 };
 
 export default Admin;
