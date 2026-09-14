@@ -418,37 +418,38 @@ por segundo por algo que nadie nota conscientemente.
 > todos en el borde". Se resuelve con retrasos **negativos** (entra ya a mitad de recorrido) y
 > `animation-fill-mode: backwards`.
 
-**Animaciones con Lottie ().** Después de que la decoración en SVG a mano
+**Animaciones con Lottie (`SpookyLottie`).** Después de que la decoración en SVG a mano
 fracasara, la conclusión fue que **el dibujo no puede salir de acá**. Lottie reproduce
 animaciones exportadas de After Effects por ilustradores; el componente sólo las pone en
-pantalla. Hoy hay dos, las dos elegidas por el autor en LottieFiles (filtro **Free** = *Lottie
+pantalla. Hoy hay dos, ambas elegidas por el autor en LottieFiles (filtro **Free** = *Lottie
 Simple License*: uso comercial permitido, sin atribución obligatoria):
 
-- **Murciélago** — , en el hero, arriba a la derecha. Se le
+- **Murciélago** — `public/halloween-bat.json`, en el hero, arriba a la derecha. Se le
   **recolorearon los 21 rellenos** del marrón grisáceo original a los tonos del tema: sobre la
-  noche verde azulada el marrón queda barroso en vez de leerse como silueta. Lleva
-   del archivo y un ancho acotado — con  el SVG se estira a todo el
-  hero y el murciélago queda con dos metros de envergadura tapando el logo.
-- **Araña** — , colgando en la sección de eventos en una
-  posición horizontal al azar que se resortea cada ciclo, desvaneciéndose antes de mudarse
-  (cambiar de lugar a plena vista se lee como un salto).
+  noche verde azulada ese marrón queda barroso en vez de leerse como silueta. Lleva el
+  `aspect-ratio` del archivo y un ancho acotado — con `inset: 0` el SVG se estira a todo el
+  hero y el murciélago termina con dos metros de envergadura tapando el logo (pasó).
+- **Araña** — `public/halloween-spider.json`, colgando en la sección de eventos en una posición
+  horizontal al azar que se resortea en cada ciclo, desvaneciéndose antes de mudarse: cambiar
+  de lugar a plena vista se lee como un salto.
 
 **La regla que las dos respetan, y que la decoración anterior no respetaba: van DETRÁS del
 contenido.** El murciélago se declara primero en el DOM dentro del hero —la única sección sin
-tarjetas—. La araña va en  contra el  del contenedor de eventos: cuando le queda
-una tarjeta delante, **gana la tarjeta**, así que puede colgar en cualquier lado sin tapar
-nunca nada que haya que leer o tocar. Verificado forzándola sobre una card: los cuatro puntos
-de muestra resuelven a la tarjeta.
+tarjetas—. La araña va en `z-0` contra el `z-10` del contenedor de eventos: cuando le queda una
+tarjeta delante, **gana la tarjeta**, así que puede colgar en cualquier lado sin tapar nunca
+nada que haya que leer o tocar. Verificado forzándola encima de una card: los cuatro puntos de
+muestra resuelven a la tarjeta.
 
 **Peso.** El runtime va en su propio chunk y se consulta **primero el JSON**: si no está, la
-función retorna **antes** del , así esos 300 KB no se descargan nunca. Con brotli
-—que es lo que sirve Vercel— el total agregado es ~82 KB: murciélago 2, araña 16 (el JSON es
-repetitivo y comprime x25), runtime 64.
+función retorna **antes** del `import`, así esos 300 KB no se descargan nunca. Con brotli —que
+es lo que sirve Vercel— el total agregado es ~82 KB: murciélago 2, araña 16 (ese JSON es
+repetitivo y comprime ×25), runtime 64.
 
-> **Para cambiar una animación:** bajar el  de lottiefiles.com y reemplazar el archivo
-> en . Si distrae, lo primero que se toca es la **opacidad** (> y el keyframe ), después la velocidad (). El  **no** usa
-> : el navegador se quedaría con la animación vieja al cambiarla. Y el
->  **avisa por consola en desarrollo** — un catch mudo acá ya costó un rato de no
+> **Para cambiar una animación:** bajar el `.json` de lottiefiles.com y reemplazar el archivo en
+> `public/`. Si distrae, lo primero que se toca es la **opacidad** (`.hero-lottie.lottie--visible`
+> y el keyframe `spookyAranaVida`), después la velocidad (prop `speed`). El `fetch` **no** usa
+> `cache: "force-cache"`: el navegador se quedaría con la animación vieja al cambiarla. Y el
+> `catch` **avisa por consola en desarrollo** — un catch mudo acá ya costó un rato de no
 > entender por qué el contenedor quedaba vacío.
 
 **Sonido (`src/lib/spookySound.ts` + `SoundToggle`):** apagado por defecto, con la
