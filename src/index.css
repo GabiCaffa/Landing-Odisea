@@ -403,158 +403,17 @@
   background: hsl(var(--tinta)) !important;
   border: 1px solid hsl(0 0% 100% / 0.22) !important;
   color: hsl(var(--papel)) !important;
-}/* ─── Capa de Halloween ──────────────────────────────────────────────────── */
-/* Sólo se monta con el tema prendido (ver SpookyLayer.tsx). Todo se anima con
-   transform y opacity: nada obliga a recalcular layout por cuadro.
-   z-30 la deja sobre el contenido (z-10/z-20) y bajo header y modales (z-50).
+}/* ─── Atmósfera del tema Halloween ───────────────────────────────────────── */
+/* Acá vivían murciélagos, hojas, ojos, niebla y una luna, todos dibujados a
+   mano en SVG. Se sacaron: se leían como calcomanías, iban demasiado rápido y
+   —peor— la capa estaba en z-30, POR ENCIMA de las cards, cruzándoles por
+   delante. Están en el commit 945b51b por si alguna vez se rescata algo.
 
-   Las posiciones, tamaños y tiempos NO están acá: los sortea el componente y
-   los pasa como custom properties. Acá vive sólo la FORMA del movimiento. */
+   Queda sólo el grano, que no es una figura sino una textura: no tiene
+   silueta que pueda verse mal, no se mueve, y estar por encima del contenido
+   no molesta a nada porque no tapa nada. Es lo que hace que un color plano
+   deje de parecer plano. */
 
-.spooky-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-/* ── Murciélago: cruzar + subir y bajar + aletear, una capa cada cosa ── */
-/* Van separadas porque se componen: si el aleteo y el avance compartieran
-   transform, el segundo pisaría al primero. */
-
-.spooky-bat {
-  position: absolute;
-  left: 0;
-  will-change: transform;
-  animation-name: spookyBatCross;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  /* Durante cualquier espera muestra el fotograma inicial (fuera de pantalla)
-     y no su posición natural, que es la esquina y se ve. */
-  animation-fill-mode: backwards;
-}
-
-.spooky-bat--rtl { animation-name: spookyBatCrossRtl; }
-
-.spooky-bat-bob {
-  display: block;
-  animation-name: spookyBatBob;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  animation-direction: alternate;
-}
-
-.spooky-bat-wings {
-  display: block;
-  color: hsl(var(--tinta));
-  transform-origin: center;
-  animation-name: spookyFlap;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-@keyframes spookyBatCross {
-  from { transform: translate3d(-22vw, 0, 0); }
-  to   { transform: translate3d(122vw, 0, 0); }
-}
-@keyframes spookyBatCrossRtl {
-  from { transform: translate3d(122vw, 0, 0); }
-  to   { transform: translate3d(-22vw, 0, 0); }
-}
-@keyframes spookyBatBob {
-  from { transform: translate3d(0, 0, 0); }
-  to   { transform: translate3d(0, calc(var(--spooky-bob, 26px) * -1), 0); }
-}
-@keyframes spookyFlap {
-  0%, 100% { transform: scaleY(1); }
-  50%      { transform: scaleY(0.72); }
-}
-
-/* ── Hoja: caer + zigzaguear + girar, también en capas ── */
-/* La caída tiene que ser lineal y constante. Si el zigzag viviera en el mismo
-   transform, cada vaivén aceleraría o frenaría la bajada. */
-
-.spooky-leaf {
-  position: absolute;
-  top: 0;
-  will-change: transform;
-  animation-name: spookyLeafFall;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  animation-fill-mode: backwards;
-}
-
-.spooky-leaf-sway {
-  display: block;
-  animation-name: spookyLeafSway;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  animation-direction: alternate;
-}
-
-.spooky-leaf-spin {
-  display: block;
-  animation-name: spookyLeafSpin;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-/* No todas del mismo naranja: todas iguales parecen confeti. El verde
-   espectral sale poco, es el acento raro y no un color más. */
-.spooky-leaf--celeste { color: hsl(var(--celeste)); }
-.spooky-leaf--celeste-deep { color: hsl(var(--celeste-deep)); }
-.spooky-leaf--espectro { color: hsl(var(--espectro)); }
-
-@keyframes spookyLeafFall {
-  0%   { transform: translate3d(0, -16vh, 0); }
-  100% { transform: translate3d(0, 114vh, 0); }
-}
-@keyframes spookyLeafSway {
-  from { transform: translate3d(calc(var(--spooky-sway, 40px) * -0.5), 0, 0); }
-  to   { transform: translate3d(calc(var(--spooky-sway, 40px) * 0.5), 0, 0); }
-}
-@keyframes spookyLeafSpin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(var(--spooky-spin, 360deg)); }
-}
-
-/* ── Niebla baja ── */
-/* Dos bandas y no una: una sola se lee como un degradado quieto. Se mueven a
-   velocidades muy distintas, que es lo que da la sensación de volumen.
-   Sin `filter: blur`: el degradado radial ya es suave, y desenfocar una
-   superficie de este tamaño se rasteriza en cada cuadro para nada. */
-.spooky-niebla {
-  position: absolute;
-  left: -30%;
-  right: -30%;
-  bottom: -5vh;
-  height: 28vh;
-  pointer-events: none;
-  background: radial-gradient(58% 100% at 50% 100%, hsl(195 45% 34% / 0.42), transparent 72%);
-  animation: spookyNiebla 46s ease-in-out infinite alternate;
-}
-
-.spooky-niebla--b {
-  bottom: -9vh;
-  height: 21vh;
-  opacity: 0.55;
-  background: radial-gradient(50% 100% at 45% 100%, hsl(166 35% 38% / 0.3), transparent 74%);
-  animation-duration: 71s;
-  animation-direction: alternate-reverse;
-}
-
-@keyframes spookyNiebla {
-  from { transform: translate3d(-7%, 0, 0) scaleX(1); }
-  to   { transform: translate3d(7%, 0, 0) scaleX(1.14); }
-}
-
-/* ── Grano de película ── */
-/* Va por encima de todo (z-40, pero bajo header y modales): es la película en
-   la que está filmada la escena, no un objeto dentro de ella. Estático a
-   propósito — un grano animado obliga a repintar la pantalla entera 60 veces
-   por segundo para un efecto que casi no se nota.
-   `overlay` conserva los negros; con opacidad plana quedaría una neblina gris. */
 .spooky-grano {
   position: fixed;
   inset: 0;
@@ -563,85 +422,6 @@
   opacity: 0.05;
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-/* ── Ojos en la oscuridad ── */
-/* z-29: apenas por detrás de hojas y murciélagos, para que se lean como algo
-   que está más atrás, entre las sombras. */
-.spooky-ojos {
-  position: fixed;
-  inset: 0;
-  z-index: 29;
-  pointer-events: none;
-  --mirada-x: 0;
-  --mirada-y: 0;
-}
-
-.spooky-ojos-par {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  opacity: 0;
-  animation-name: spookyOjosVida;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  animation-fill-mode: backwards;
-}
-
-.spooky-ojo {
-  position: relative;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 42%, #FFE6B0 0%, hsl(var(--celeste)) 48%, hsl(var(--celeste-deep)) 100%);
-  box-shadow: 0 0 15px 2px hsl(var(--celeste) / 0.5);
-  transform-origin: center;
-  animation-name: spookyParpadeo;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-.spooky-ojo--espectral {
-  background: radial-gradient(circle at 50% 42%, #D9FFF3 0%, hsl(var(--espectro)) 48%, hsl(166 52% 32%) 100%);
-  box-shadow: 0 0 15px 2px hsl(var(--espectro) / 0.45);
-}
-
-.spooky-pupila {
-  position: absolute;
-  inset: 24%;
-  border-radius: 50%;
-  background: hsl(193 75% 4%);
-  /* La mirada es un vector -1..1 que escribe el componente. Cada pupila lo
-     multiplica por SU radio, así un ojo grande la mueve más que uno chico y
-     los dos terminan apuntando al mismo punto. */
-  transform: translate(
-    calc(var(--mirada-x) * var(--ojo-radio, 2px)),
-    calc(var(--mirada-y) * var(--ojo-radio, 2px))
-  );
-  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-
-/* Mientras no haya cursor (celular, o antes del primer movimiento) las pupilas
-   derivan solas. Quietas se ven de muñeco. */
-.spooky-ojos:not([data-mirando]) .spooky-pupila {
-  animation: spookyMiradaOciosa 7s ease-in-out infinite alternate;
-}
-
-@keyframes spookyMiradaOciosa {
-  from { transform: translate(calc(var(--ojo-radio, 2px) * -0.7), calc(var(--ojo-radio, 2px) * -0.25)); }
-  to   { transform: translate(calc(var(--ojo-radio, 2px) * 0.7), calc(var(--ojo-radio, 2px) * 0.35)); }
-}
-
-@keyframes spookyOjosVida {
-  0%   { opacity: 0; }
-  14%  { opacity: var(--ojo-opacidad, 0.8); }
-  80%  { opacity: var(--ojo-opacidad, 0.8); }
-  100% { opacity: 0; }
-}
-
-/* Abierto casi todo el ciclo, con DOS parpadeos seguidos y después una pausa
-   larga. Un parpadeo regular se lee como un LED; así se lee como un ojo. */
-@keyframes spookyParpadeo {
-  0%, 44%, 49%, 54%, 100% { transform: scaleY(1); }
-  46.5%, 51.5% { transform: scaleY(0.08); }
 }
 
 /* ─── Cards de evento en el tema Halloween ───────────────────────────────── */
@@ -732,48 +512,6 @@
 :root[data-theme="halloween"] .promo-card--destacada:hover,
 :root[data-theme="halloween"] .promo-card--destacada:focus-within {
   box-shadow: 0 0 48px -6px hsl(var(--celeste) / 0.55), var(--shadow-lg);
-}
-
-/* ── Luna del hero ── */
-/* Tres cosas que la primera versión tenía mal y explican por qué se veía como
-   una mancha gris y no como una luna:
-     · Centrada detrás del logo, competía con él. Va arriba a la derecha, como
-       en la imagen de referencia.
-     · Enorme y al 17% de opacidad: a esa transparencia los cráteres no se ven
-       y sólo queda la silueta del disco. Más chica y más brillante.
-     · Borde duro sin halo. Una luna en el cielo tiene el disco nítido PERO un
-       resplandor grande alrededor; sin él se lee como un círculo pegado. */
-:root[data-theme="halloween"] .hero-luna {
-  position: absolute;
-  top: 4%;
-  right: 8%;
-  width: min(34vw, 260px);
-  aspect-ratio: 1;
-  max-width: 62%;
-  border-radius: 50%;
-  pointer-events: none;
-  opacity: 0.34;
-  background:
-    radial-gradient(circle at 63% 30%, hsl(196 14% 58% / 0.5) 0%, transparent 15%),
-    radial-gradient(circle at 37% 60%, hsl(196 14% 55% / 0.42) 0%, transparent 12%),
-    radial-gradient(circle at 56% 73%, hsl(196 14% 57% / 0.34) 0%, transparent 8%),
-    radial-gradient(circle at 30% 26%, hsl(196 14% 60% / 0.3) 0%, transparent 7%),
-    radial-gradient(circle at 44% 40%, #F5F9F7 0%, #DCE7E4 60%, #A6BCB8 100%);
-  /* El halo: lo que la hace estar EN el cielo y no encima. */
-  box-shadow:
-    0 0 60px 10px hsl(171 20% 90% / 0.16),
-    0 0 160px 50px hsl(196 30% 70% / 0.09),
-    0 0 260px 100px hsl(var(--celeste) / 0.05);
-}
-
-/* En celular se va casi al borde para no quedar detrás del texto del hero. */
-@media (max-width: 640px) {
-  :root[data-theme="halloween"] .hero-luna {
-    top: 2%;
-    right: -6%;
-    width: 46vw;
-    opacity: 0.28;
-  }
 }
 
 /* ── Bloques que se invierten contra la página ── */

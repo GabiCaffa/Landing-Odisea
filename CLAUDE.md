@@ -386,12 +386,37 @@ sin escribir en la DB ni en el cache. Sin esto, la única forma de ver cómo que
 prenderlo **para todos** — que es exactamente la prueba que uno quiere hacer antes de
 prenderlo. El panel sigue mostrando el tema guardado (`siteTheme`), no el de la vista previa.
 
-**Decoración (`SpookyLayer`):** murciélagos cruzando y hojas cayendo, en `z-30` (sobre el
-contenido, bajo header y modales). Sólo se monta con el tema prendido, `pointer-events:
-none` + `aria-hidden`, y **no se renderiza** con `prefers-reduced-motion` — como acá la
-animación *es* el elemento, congelarlo no tendría sentido. Todo se anima con `transform` y
-`opacity`. Va montada **sólo en `Index`**: en el registro o el login distraería de lo único
-que esas páginas tienen que lograr.
+**Decoración: qué se intentó y por qué se sacó.** `SpookyLayer` llegó a tener murciélagos
+cruzando, hojas cayendo, ojos que seguían el cursor y una luna, todo dibujado a mano en SVG y
+repartido en tres planos de profundidad. **No funcionó y se quitó entero** (queda en el commit
+`945b51b`). Tres motivos, y el tercero es el que importa para el futuro:
+
+1. **Tapaba las cards.** La capa estaba en `z-30`, o sea por encima del contenido, así que los
+   bichos cruzaban por delante de las tarjetas de evento. Error de diseño, no de ajuste.
+2. **Iba demasiado rápido.** El plano "frente" cruzaba la pantalla en ~7 segundos y las hojas
+   giraban 720° en 4.
+3. **Una figura dibujada a mano en SVG tiene un techo bajo.** Se probó agregando planos,
+   desenfoque, dos recortes de hoja, velocidades y direcciones distintas: seguía leyéndose como
+   calcomanías sobre un color liso. No es un problema de cantidad ni de parámetros. **Si alguna
+   vez se quiere atmósfera, va por una imagen real de fondo, no por más SVG.**
+
+Queda sólo el **grano** de película (`.spooky-grano`, `z-40`, estático, `mix-blend-mode:
+overlay` para conservar los negros). Sobrevive porque no es una figura sino una textura: no
+tiene silueta que pueda verse mal, no se mueve, y estar por encima del contenido no molesta
+porque no tapa nada. No se anima a propósito — obligaría a repintar la pantalla entera 60 veces
+por segundo por algo que nadie nota conscientemente.
+
+> **Dos trampas encontradas por el camino, por si se vuelve a animar algo.**
+>
+> `animationiteration` **burbujea**: las capas internas con animación propia (unas alas que
+> aletean cada 0.4s) suben su evento al contenedor, y un handler que resortea al recibirlo se
+> dispara dos veces por segundo, dejando al elemento clavado en el arranque. Hay que filtrar
+> con `e.target !== e.currentTarget`.
+>
+> Un `animation-delay` **positivo** deja al elemento visible y quieto en su posición natural
+> —el borde de la pantalla— hasta que le toca arrancar. Eso es lo que hacía que "aparecieran
+> todos en el borde". Se resuelve con retrasos **negativos** (entra ya a mitad de recorrido) y
+> `animation-fill-mode: backwards`.
 
 **Sonido (`src/lib/spookySound.ts` + `SoundToggle`):** apagado por defecto, con la
 preferencia guardada. Tres restricciones lo definen: el navegador **bloquea el audio
@@ -446,37 +471,6 @@ el primer gesto —Chrome y Safari lo prohíben—, así que el altavoz aparece 
 arranca cuando la persona toca algo. Se escuchan tres tipos de gesto porque un scroll con la
 rueda **no** cuenta como activación. Quien lo apaga (se guarda un `"0"`) no se lo vuelve a
 encontrar prendido.
-
-**Profundidad: por qué la primera versión se veía infantil.** No era la cantidad de bichos:
-estaban todos a la misma distancia —misma opacidad, mismo foco, velocidades parecidas— y el
-ojo lee eso como calcomanías sobre un color liso. Ahora cada murciélago y cada hoja se sortea
-en uno de tres planos (`PLANOS` en `SpookyLayer`): **fondo** chico, tenue, lento y apenas
-desenfocado; **medio** nítido; **frente** grande, rápido y *más* desenfocado — lo que está muy
-cerca de una cámara también sale fuera de foco, y ese detalle es el que convence. Se suma la
-**luna** arriba a la derecha (los murciélagos necesitan contra qué recortarse: en la imagen de
-referencia se leen porque cruzan delante de ella), **niebla baja** en dos bandas a velocidades
-distintas —una sola se lee como un degradado quieto— y **grano** de película estático en z-40
-con `mix-blend-mode: overlay`, que conserva los negros. El grano no se anima a propósito:
-obligaría a repintar la pantalla entera 60 veces por segundo por algo que casi no se nota.
-
-**Ojos (`SpookyEyes`).** Lo único de la decoración que reacciona a la persona: pares que se
-abren, parpadean dos veces seguidas —un parpadeo regular se lee como un LED—, **siguen al
-cursor** y se desvanecen. La mirada es **una sola cuenta para todos**: un `pointermove` con
-`requestAnimationFrame` escribe dos custom properties en el contenedor y cada pupila las
-multiplica por *su* radio, así los ojos grandes mueven más la pupila y todos apuntan al mismo
-punto. Con estado de React por par, el mouse dispararía un re-render por píxel. En celular no
-hay cursor: mientras no haya `data-mirando`, las pupilas derivan solas (quietas se ven de
-muñeco).
-
-> **Ojo con `animationiteration`: burbujea.** Las capas internas tienen animación propia (las
-> alas aletean cada 0.4s, la hoja gira, el ojo parpadea) y cada vuelta sube al contenedor. Sin
-> el `e.target !== e.currentTarget`, el murciélago se resorteaba dos veces por segundo y se
-> quedaba clavado en el arranque sin cruzar nunca. Mismo filtro en los ojos.
-
-> **Y con `animation-delay` positivo:** durante la espera el elemento no tiene transform
-> aplicada y se queda **visible en su posición natural** —el borde izquierdo—, que es por qué
-> "aparecían todos en el borde". Los retrasos iniciales son **negativos** (entran ya a mitad de
-> recorrido) y el CSS lleva `animation-fill-mode: backwards` como red de seguridad.
 
 **Tipografía en las pantallas de entrada.** `ENTRADA_PATHS` (en `ThemeContext`) es la lista
 explícita de rutas que llevan Creepster: la home, login, registro, recuperar y reset. Es una
