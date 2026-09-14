@@ -4954,8 +4954,17 @@ const AppearanceAdmin = () => {
           ? "El sitio volvió al tema de siempre"
           : `Tema ${THEME_LABELS[next]} activado`
       );
-    } catch {
-      toast.error("No se pudo cambiar el tema. ¿Seguís con sesión de admin?");
+    } catch (err) {
+      // Se distingue la tabla ausente del rechazo de RLS: mandar a revisar la
+      // sesión cuando lo que falta es la migración es mandar al lugar
+      // equivocado, y el error de Postgres ya lo dice (42P01 = relation does
+      // not exist).
+      const code = (err as { code?: string } | null)?.code;
+      toast.error(
+        code === "42P01"
+          ? "Falta correr la migración v19_site_settings.sql en Supabase."
+          : "No se pudo cambiar el tema. ¿Seguís con sesión de admin?"
+      );
     } finally {
       setSaving(null);
     }
