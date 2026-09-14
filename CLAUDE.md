@@ -442,15 +442,27 @@ aparte.
   escalonadas. El hilo nace detrás de la card (van en `z-0`) y sólo asoma la araña por abajo, así
   que no tapan nada.
 
-> **La caja de la animación NO es el bicho.** Es la trampa del archivo y costó dos intentos: el
-> dibujo ocupa sólo **del 5% al 23%** de su contenedor y el 77% de abajo está vacío, porque la
-> telaraña cuelga muy por encima del viewBox. Calcular el alto del contenedor para "llegar" a un
-> punto deja la araña flotando mucho más arriba. La solución es no adivinar: se **mide dónde caen
-> los pies del dibujo ya renderizado** y se resta ese offset.
+> **La caja de la animación NO es el bicho, y el bicho se mueve.** Ésta es la trampa del archivo
+> y costó tres intentos. Primero: el dibujo ocupa sólo del 5% al 23% de su contenedor y el 77% de
+> abajo está vacío, porque la telaraña cuelga muy por encima del viewBox — calcular el alto del
+> contenedor para "llegar" a un punto deja la araña flotando. Segundo, y menos obvio: **la araña
+> sube y baja por el hilo durante el ciclo**, así que medir un solo fotograma da un valor que no
+> vale para el resto y la deja colgando lejísimos del anclaje.
 >
-> La medición va sobre los `path`, **no** sobre `getBBox()`: los rects de los `path` llevan
+> La solución es recorrer el ciclo con `goToAndStop` (16 muestras) y quedarse con **los dos
+> extremos**, porque cada grupo necesita uno distinto: la del título se ancla al **promedio** —así
+> oscila alrededor del borde de las letras— y las de abajo al **mínimo**, que es su punto más
+> alto, para no meterse nunca detrás de la tarjeta.
+>
+> La medición va sobre los `path` y **no** sobre `getBBox()`: los rects de los `path` llevan
 > aplicadas las transformaciones de Lottie, mientras que `getBBox()` devuelve coordenadas sin
-> transformar y acá da valores fuera del viewBox, inservibles.
+> transformar, fuera del viewBox.
+
+> **Se observa la sección con `ResizeObserver`, no la ventana.** Las tarjetas llegan de Supabase
+> **después** de que la araña termina de cargar (su `.json` es local e instantáneo), así que en la
+> primera medición no hay ninguna card y las de abajo se quedaban sin posición, fuera de pantalla.
+> Cuando los eventos aparecen, la sección cambia de alto y el observer dispara el recálculo. De
+> paso cubre el redimensionado y el apilado en celular, así que reemplaza al listener de `resize`.
 
 > **Cuidado con el "negro".** Los colores se pisan por CSS sobre los rellenos del SVG (igual que
 > los murciélagos: una silueta plana por variante, sin un `.json` por color). El primer intento

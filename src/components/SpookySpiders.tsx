@@ -40,22 +40,59 @@ interface Puesto {
 const SpookySpiders = () => {
   const refTitulo = useRef<HTMLDivElement>(null);
   const refsAbajo = useRef<(HTMLDivElement | null)[]>([]);
-  /** Distancia del borde superior del contenedor hasta los pies del dibujo. */
-  const pieRef = useRef(0);
+  /**
+   * Los pies del dibujo, en px desde el borde superior del contenedor, en sus
+   * dos extremos del ciclo. La araña sube y baja por el hilo, así que un solo
+   * valor no alcanza y cada grupo necesita un extremo distinto.
+   */
+  const pieRef = useRef({ min: 0, max: 0 });
 
   const [titulo, setTitulo] = useState<Puesto | null>(null);
   const [abajo, setAbajo] = useState<Puesto[]>([]);
 
-  /** Mide en el SVG ya renderizado hasta dónde llega el dibujo. */
-  const medirPie = useCallback(() => {
+  /**
+   * Mide hasta dónde llega el dibujo dentro de su caja **recorriendo todo el
+   * ciclo** con `goToAndStop`, y se queda con los dos extremos.
+   *
+   * Medir un solo fotograma fue el error anterior: la araña sube y baja por el
+   * hilo durante la animación, así que el fotograma inicial da un valor que no
+   * vale para el resto del ciclo — y quedaba colgando lejísimos del anclaje.
+   *
+   * Se guardan los dos extremos porque cada grupo necesita uno distinto: la del
+   * título oscila alrededor del promedio, y las de abajo se anclan por el
+   * mínimo (su punto más alto) para no meterse nunca detrás de la tarjeta.
+   */
+  const medirPie = useCallback((anim?: { totalFrames?: number; goToAndStop?: (f: number, isFrame: boolean) => void; play?: () => void }) => {
     const el = refTitulo.current;
     if (!el) return false;
-    const cont = el.getBoundingClientRect();
-    const rects = [...el.querySelectorAll("path")]
-      .map((p) => p.getBoundingClientRect())
-      .filter((r) => r.width > 0.5 && r.height > 0.5);
-    if (!rects.length) return false;
-    pieRef.current = Math.max(...rects.map((r) => r.bottom)) - cont.top;
+
+    const fondoDelDibujo = () => {
+      const cont = el.getBoundingClientRect();
+      const rects = [...el.querySelectorAll("path")]
+        .map((p) => p.getBoundingClientRect())
+        .filter((r) => r.width > 0.5 && r.height > 0.5);
+      return rects.length ? Math.max(...rects.map((r) => r.bottom)) - cont.top : null;
+    };
+
+    const muestras: number[] = [];
+    const total = anim?.totalFrames;
+    if (anim?.goToAndStop && total) {
+      // 16 muestras a lo largo del ciclo: alcanza para los dos extremos sin
+      // trabar la página recorriendo fotograma por fotograma.
+      for (let i = 0; i < 16; i++) {
+        anim.goToAndStop((total * i) / 16, true);
+        const v = fondoDelDibujo();
+        if (v !== null) muestras.push(v);
+      }
+      anim.play?.();
+    } else {
+      const v = fondoDelDibujo();
+      if (v !== null) muestras.push(v);
+    }
+
+    if (!muestras.length) return false;
+    // Los dos extremos, porque cada grupo necesita uno distinto (ver `recolocar`).
+    pieRef.current = { min: Math.min(...muestras), max: Math.max(...muestras) };
     return true;
   }, []);
 
@@ -73,7 +110,9 @@ const SpookySpiders = () => {
       const i = 1 + Math.floor(Math.random() * 4);
       setTitulo({
         left: aPorcentaje(tr.left + (tr.width * i) / 5),
-        pie: tr.bottom - sr.top - 8 - pieRef.current,
+        // El PROMEDIO de los extremos: la araña oscila alrededor del borde del
+        // título en vez de tocarlo sólo una vez por vuelta.
+        pie: tr.bottom - sr.top - 8 - (pieRef.current.min + pieRef.current.max) / 2,
       });
     }
 
@@ -86,28 +125,46 @@ const SpookySpiders = () => {
       cards.slice(0, COLORES.length).map((cr, i) => ({
         // Descentradas entre sí para que no se lean como tres clones.
         left: aPorcentaje(cr.left + cr.width * (0.3 + i * 0.2)),
-        // Debajo del borde inferior de la tarjeta, a alturas distintas.
-        pie: cr.bottom - sr.top + 34 + i * 22 - pieRef.current,
+        // El MÍNIMO: es el punto más ALTO del vaivén. Anclando ahí, ni en su
+        // momento más alto la araña se mete detrás de la tarjeta — que la
+        // taparía, porque van en z-0.
+        pie: cr.bottom - sr.top + 26 + i * 20 - pieRef.current.min,
       }))
     );
   }, []);
 
-  const alCargar = useCallback(() => {
-    if (medirPie()) recolocar();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const alCargar = useCallback((anim: any) => {
+    if (medirPie(anim)) recolocar();
   }, [medirPie, recolocar]);
 
+  /**
+   * Se observa la SECCIÓN, no sólo la ventana.
+   *
+   * Las tarjetas llegan de Supabase **después** de que la araña termina de
+   * cargar (su .json es local e instantáneo), así que al medir por primera vez
+   * todavía no hay ninguna card y las de abajo se quedaban sin posición, fuera
+   * de pantalla. Cuando los eventos aparecen, la sección cambia de alto y el
+   * observer dispara el recálculo.
+   *
+   * De paso cubre el redimensionado de ventana y el apilado en celular, así que
+   * reemplaza al listener de `resize`.
+   */
   useEffect(() => {
+    const sec = refTitulo.current?.closest("section");
+    if (!sec) return;
     let t = 0;
-    const onResize = () => {
+    const recalcular = () => {
       clearTimeout(t);
       t = window.setTimeout(() => {
         medirPie();
         recolocar();
-      }, 200);
+      }, 150);
     };
-    window.addEventListener("resize", onResize);
+    const obs = new ResizeObserver(recalcular);
+    obs.observe(sec);
     return () => {
-      window.removeEventListener("resize", onResize);
+      obs.disconnect();
       clearTimeout(t);
     };
   }, [medirPie, recolocar]);

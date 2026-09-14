@@ -29,8 +29,13 @@ interface Props {
   className?: string;
   /** Por debajo de 1 = más lento que como lo exportó el ilustrador. */
   speed?: number;
-  /** Se llama cuando el dibujo ya está en el DOM y se puede medir. */
-  onReady?: () => void;
+  /**
+   * Se llama cuando el dibujo ya está en el DOM. Recibe la instancia de Lottie
+   * para poder recorrer fotogramas con `goToAndStop` y medir el dibujo en
+   * distintos momentos del ciclo, no sólo en el inicial.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onReady?: (anim: any) => void;
 }
 
 const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
@@ -73,7 +78,7 @@ const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
         });
         anim.setSpeed(speed);
         setListo(true);
-        onReadyRef.current?.();
+        onReadyRef.current?.(anim);
       } catch (err) {
         // En producción es decoración opcional: si el archivo no está o el JSON
         // es inválido, no pasa nada. En desarrollo SÍ se avisa — un catch mudo
