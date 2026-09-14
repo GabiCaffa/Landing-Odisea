@@ -72,7 +72,9 @@ const EventCard = ({
           </div>
 
           {isSoldOut && (
-            <div className="absolute inset-0 z-[2] bg-tinta/65 backdrop-blur-[1px] flex items-center justify-center">
+            <div // --velo y no --tinta: el velo tiene que oscurecer la foto SIEMPRE, y
+            // con el tema oscuro "tinta" es el hueso, así que la aclaraba.
+            className="absolute inset-0 z-[2] bg-velo/70 backdrop-blur-[1px] flex items-center justify-center">
               <span className="evento-agotado title-display text-4xl md:text-5xl text-white bg-charrua rounded-lg px-5 py-1.5 -rotate-6 shadow-[var(--shadow-lg)]">
                 AGOTADO
               </span>

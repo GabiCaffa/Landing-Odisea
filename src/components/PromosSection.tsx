@@ -325,7 +325,7 @@ const BottomCta = () => {
   return (
     <div
       ref={ref}
-      className={`mt-5 bg-tinta text-papel rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-700 delay-300 shadow-[var(--shadow-lg)] ${
+      className={`bloque-invertido mt-5 bg-tinta text-papel rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-700 delay-300 shadow-[var(--shadow-lg)] ${
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
       }`}
     >

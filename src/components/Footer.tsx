@@ -9,7 +9,7 @@ const Footer = () => {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.3 });
 
   return (
-    <footer ref={ref} className="relative bg-tinta text-papel overflow-hidden">
+    <footer ref={ref} className="bloque-invertido relative bg-tinta text-papel overflow-hidden">
       {/* Halo de acento sutil */}
       <div className="pointer-events-none absolute -bottom-32 -right-20 h-[420px] w-[420px] rounded-full bg-celeste/15 blur-[130px]" />
 

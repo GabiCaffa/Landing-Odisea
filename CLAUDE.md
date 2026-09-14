@@ -426,6 +426,75 @@ En la paleta base el token sigue siendo blanco, así que ahí no cambió nada. E
 un rojo propio y profundo, porque el `--charrua` del tema es claro a propósito (para que un error
 grite sobre la noche) y con blanco encima no se leería.
 
+**Sin parpadeo al cargar: dos arreglos, dos causas.** (1) El `data-theme` se ponía al
+instante pero el CSS de la app no estaba en el primer cuadro —en dev Vite lo inyecta por JS,
+y aun en producción React tiene que montar—, así que el navegador pintaba su blanco por
+defecto. Hay un `<style>` **crítico** en `index.html` con el fondo del tema; es el único lugar
+donde `--papel` y `--tinta` están duplicados como hex, porque tiene que funcionar antes de que
+exista la hoja que define los tokens. (2) Para el visitante **nuevo** el valor tardaba ~600ms
+en llegar (medido) y ningún truco de cliente lo evita: el dato no está. El plugin `bakeTheme`
+de `vite.config.ts` lo lee **en tiempo de build** y lo escribe en el `<html>`, así el primer
+cuadro sale correcto sin depender de la red. Falla en silencio: si Supabase no contesta
+durante el build no inyecta nada y el sitio se comporta como antes — un deploy no se cae
+porque no se pudo averiguar un color. En ejecución `localStorage` y la consulta lo siguen
+pisando, así que cambiar el tema sin redeployar sigue andando. Por esto el script inline ahora
+también **quita** el atributo (antes sólo lo ponía): hace falta en `/admin` y para cuando la
+base dice `base` pero el build trae otro tema.
+
+**El sonido viene PRENDIDO** (decisión del autor). El navegador igual no deja sonar nada hasta
+el primer gesto —Chrome y Safari lo prohíben—, así que el altavoz aparece prendido y el audio
+arranca cuando la persona toca algo. Se escuchan tres tipos de gesto porque un scroll con la
+rueda **no** cuenta como activación. Quien lo apaga (se guarda un `"0"`) no se lo vuelve a
+encontrar prendido.
+
+**Profundidad: por qué la primera versión se veía infantil.** No era la cantidad de bichos:
+estaban todos a la misma distancia —misma opacidad, mismo foco, velocidades parecidas— y el
+ojo lee eso como calcomanías sobre un color liso. Ahora cada murciélago y cada hoja se sortea
+en uno de tres planos (`PLANOS` en `SpookyLayer`): **fondo** chico, tenue, lento y apenas
+desenfocado; **medio** nítido; **frente** grande, rápido y *más* desenfocado — lo que está muy
+cerca de una cámara también sale fuera de foco, y ese detalle es el que convence. Se suma la
+**luna** arriba a la derecha (los murciélagos necesitan contra qué recortarse: en la imagen de
+referencia se leen porque cruzan delante de ella), **niebla baja** en dos bandas a velocidades
+distintas —una sola se lee como un degradado quieto— y **grano** de película estático en z-40
+con `mix-blend-mode: overlay`, que conserva los negros. El grano no se anima a propósito:
+obligaría a repintar la pantalla entera 60 veces por segundo por algo que casi no se nota.
+
+**Ojos (`SpookyEyes`).** Lo único de la decoración que reacciona a la persona: pares que se
+abren, parpadean dos veces seguidas —un parpadeo regular se lee como un LED—, **siguen al
+cursor** y se desvanecen. La mirada es **una sola cuenta para todos**: un `pointermove` con
+`requestAnimationFrame` escribe dos custom properties en el contenedor y cada pupila las
+multiplica por *su* radio, así los ojos grandes mueven más la pupila y todos apuntan al mismo
+punto. Con estado de React por par, el mouse dispararía un re-render por píxel. En celular no
+hay cursor: mientras no haya `data-mirando`, las pupilas derivan solas (quietas se ven de
+muñeco).
+
+> **Ojo con `animationiteration`: burbujea.** Las capas internas tienen animación propia (las
+> alas aletean cada 0.4s, la hoja gira, el ojo parpadea) y cada vuelta sube al contenedor. Sin
+> el `e.target !== e.currentTarget`, el murciélago se resorteaba dos veces por segundo y se
+> quedaba clavado en el arranque sin cruzar nunca. Mismo filtro en los ojos.
+
+> **Y con `animation-delay` positivo:** durante la espera el elemento no tiene transform
+> aplicada y se queda **visible en su posición natural** —el borde izquierdo—, que es por qué
+> "aparecían todos en el borde". Los retrasos iniciales son **negativos** (entran ya a mitad de
+> recorrido) y el CSS lleva `animation-fill-mode: backwards` como red de seguridad.
+
+**Tipografía en las pantallas de entrada.** `ENTRADA_PATHS` (en `ThemeContext`) es la lista
+explícita de rutas que llevan Creepster: la home, login, registro, recuperar y reset. Es una
+lista y no "todo menos el panel" porque en esas pantallas `.title-sport` marca **un solo
+título corto**, mientras que en Términos, Privacidad y Perfil marca **cada encabezado de
+sección** — ahí una tipografía de terror vuelve ilegible un texto legal. Los formularios no se
+tocan: etiquetas, campos y errores siguen en Inter Tight, que es donde la legibilidad decide
+si alguien termina de registrarse. **La misma lista está duplicada en el script de
+`index.html`**: si no coinciden, el título parpadea de Inter Tight a Creepster al montar React.
+
+**Bloques que se invierten (`.bloque-invertido`).** El footer y la tarjeta de "Hablá con
+nosotros" usan `bg-tinta text-papel` a propósito: en la paleta base son una banda oscura sobre
+papel blanco. Con el tema, invertir daba una banda **clara** sobre la noche — un slab blanco
+enorme al pie. Se arregla intercambiando los dos tokens **sólo dentro del bloque**: el markup
+no cambia, cambia qué significan esas palabras ahí adentro. Por lo mismo, el velo de
+**AGOTADO** pasó de `bg-tinta/65` a `bg-velo/70`: tiene que oscurecer la foto siempre, y con
+el tema "tinta" es el hueso, así que la aclaraba.
+
 **v17 — Rechazar una solicitud la borra.** El `status = 'rechazado'` de v16 era un registro
 que **ninguna lista mostraba** pero que **sí sumaba en las tarjetas de totales** (el resumen
 contaba `rows`, las listas `verified`): el panel decía que había cumpleañeros cargados que no

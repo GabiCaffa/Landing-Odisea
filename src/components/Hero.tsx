@@ -17,6 +17,11 @@ const Hero = () => {
     >
       {/* ─── Fondo minimal ───────────────────────────────────────────────── */}
 
+      {/* Luna llena: le da a los murciélagos algo contra qué recortarse.
+          En la imagen de referencia se leen justamente porque cruzan DELANTE
+          de la luna; sin ella cruzan la nada y se ven planos. */}
+      {theme === "halloween" && <div className="hero-luna" aria-hidden="true" />}
+
       {/* Halo de acento muy sutil */}
       <div className="pointer-events-none absolute -top-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-celeste/10 blur-[120px]" />
 

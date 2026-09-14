@@ -72,8 +72,10 @@
           if (t === 'base') return quitar();
           if (!t || !/^[a-z-]{1,32}$/.test(t)) return;
           el.dataset.theme = t;
-          // La tipografía estacional es sólo de la home (ver isShowcasePath).
-          if (location.pathname === '/') el.dataset.surface = 'vidriera';
+          // Tiene que coincidir con ENTRADA_PATHS de ThemeContext: si no,
+          // el título parpadea de Inter Tight a Creepster al montar React.
+          var ENTRADA = ['/', '/login', '/registro', '/recuperar', '/reset-password'];
+          if (ENTRADA.indexOf(location.pathname) !== -1) el.dataset.surface = 'vidriera';
           else delete el.dataset.surface;
         }
 

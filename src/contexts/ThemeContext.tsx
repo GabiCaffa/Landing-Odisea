@@ -51,15 +51,21 @@ const PREVIEW_PARAM = "tema";
 const isThemedPath = (pathname: string) => !pathname.startsWith("/admin");
 
 /**
- * La home es la vidriera: la única pantalla donde la tipografía estacional
- * tiene sentido. En registro, login y perfil los títulos siguen en Inter Tight.
+ * Dónde se usa la tipografía estacional. La home más las pantallas de entrada.
  *
- * No es una cuestión de gusto: `.title-sport` lo usan TODAS las páginas
- * (incluido "INICIAR SESIÓN" y los encabezados de Términos), y una tipografía
- * de terror ahí se lee peor justo donde la persona tiene algo que completar.
- * El color del tema sí llega a esas páginas; la tipografía no.
+ * La lista es explícita y no "todo menos el panel" por un motivo concreto:
+ * `.title-sport` lo usan TODAS las páginas, pero en la home, el login y el
+ * registro es **un solo título corto** por pantalla, mientras que en Términos,
+ * Privacidad y Perfil marca CADA encabezado de sección. Ahí una tipografía de
+ * terror convierte un texto legal en algo ilegible.
+ *
+ * Los formularios de estas rutas no se tocan: etiquetas, campos y mensajes de
+ * error siguen en Inter Tight, que es donde la legibilidad decide si alguien
+ * termina de registrarse o abandona.
  */
-const isShowcasePath = (pathname: string) => pathname === "/";
+const ENTRADA_PATHS = new Set(["/", "/login", "/registro", "/recuperar", "/reset-password"]);
+
+const isShowcasePath = (pathname: string) => ENTRADA_PATHS.has(pathname);
 
 /** 'base' = sin atributos, así el CSS de :root queda tal cual. */
 const applyTheme = (theme: SiteTheme, showcase: boolean) => {

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
+import SpookyEyes from "./SpookyEyes";
 
 /**
- * Capa decorativa del tema Halloween: murciélagos cruzando y hojas cayendo,
- * tomados de la imagen de referencia (calabaza, luna, murciélagos).
+ * Capa decorativa del tema Halloween: murciélagos, hojas, niebla y grano.
  *
  * Tres reglas que la mantienen inofensiva:
  *
@@ -16,66 +16,97 @@ import { useTheme } from "@/contexts/ThemeContext";
  *
  * Va en z-30: por encima del contenido (z-10/z-20) y por debajo del header y
  * los modales (z-50), así nunca tapa nada con lo que haya que interactuar.
- * Todo se anima con `transform` y `opacity` — nada que obligue al navegador a
- * recalcular layout en cada cuadro.
  *
- * **Nada está fijo.** La primera versión tenía las posiciones escritas a mano
- * y se notaba: las hojas caían siempre por las mismas columnas y los
- * murciélagos siempre a la misma altura, así que el conjunto se leía como un
- * patrón pegado en los bordes. Acá cada elemento se sortea al montar y **se
- * vuelve a sortear cada vez que termina su vuelta** (`onAnimationIteration`),
- * que es lo que hace que no se repita nunca en lugar de ser un loop.
+ * **PLANOS.** La versión anterior se veía plana y de calcomanía, y el motivo no
+ * era la cantidad de bichos: estaban todos a la MISMA distancia —misma opacidad,
+ * mismo foco, velocidades parecidas—, y el ojo lee eso como stickers sobre un
+ * color liso. Acá cada elemento se sortea en uno de tres planos:
+ *
+ *   fondo  → chico, tenue, lento y apenas desenfocado
+ *   medio  → nítido, es el plano "real"
+ *   frente → grande, rápido y MÁS desenfocado — lo que está muy cerca de una
+ *            cámara también sale fuera de foco, y ese detalle es justamente el
+ *            que convence de que hay profundidad
+ *
+ * **Nada está fijo:** cada elemento se sortea al montar y se vuelve a sortear
+ * al terminar su vuelta, así no se repite nunca en lugar de ser un bucle.
  */
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
 
+// ─── Planos ─────────────────────────────────────────────────────────────────
+
+type Plano = "fondo" | "medio" | "frente";
+
+/** Cuántos de cada plano: el medio manda, el frente es un acento. */
+const REPARTO: readonly Plano[] = [
+  "fondo", "fondo", "fondo",
+  "medio", "medio", "medio", "medio",
+  "frente",
+];
+
+const PLANOS: Record<Plano, {
+  escala: [number, number];
+  opacidad: [number, number];
+  /** Multiplicador de duración: más lejos, más lento. */
+  lentitud: [number, number];
+  blur: number;
+}> = {
+  fondo:  { escala: [0.32, 0.5],  opacidad: [0.14, 0.24], lentitud: [1.7, 2.4], blur: 1.4 },
+  medio:  { escala: [0.7, 1],     opacidad: [0.34, 0.5],  lentitud: [0.9, 1.3], blur: 0 },
+  frente: { escala: [1.5, 2.2],   opacidad: [0.42, 0.6],  lentitud: [0.4, 0.62], blur: 4.5 },
+};
+
 // ─── Murciélagos ────────────────────────────────────────────────────────────
 
 interface Bat {
-  /** % de la altura de la ventana. Se evita la franja del header. */
+  plano: Plano;
   top: number;
-  scale: number;
+  escala: number;
+  opacidad: number;
+  blur: number;
   duration: number;
   delay: number;
-  opacity: number;
   /** Cruzan para los dos lados: uno solo se lee como desfile. */
   toLeft: boolean;
-  /** Cuánto sube y baja mientras cruza. */
   bob: number;
 }
 
 const newBat = (firstRun: boolean): Bat => {
-  const duration = rand(15, 30);
+  const plano = pick(REPARTO);
+  const p = PLANOS[plano];
+  const duration = rand(17, 26) * rand(...p.lentitud);
   return {
-    top: rand(8, 78),
-    scale: rand(0.55, 1.05),
+    plano,
+    top: rand(6, 80),
+    escala: rand(...p.escala),
+    opacidad: rand(...p.opacidad),
+    blur: p.blur,
     duration,
-    // NEGATIVO a propósito. Con un delay positivo el elemento se queda quieto en
-    // su posición natural —el borde izquierdo— hasta que le toca arrancar, y se
-    // ve un murciélago estacionado en la esquina. Con uno negativo entra ya a
-    // mitad de recorrido, así que al cargar la página están repartidos.
-    // Al respawnear va en 0: el elemento viene de terminar la vuelta y arranca
-    // de nuevo desde fuera de pantalla.
+    // NEGATIVO a propósito. Con un delay positivo el elemento se queda quieto
+    // en su posición natural —el borde izquierdo— hasta que le toca arrancar, y
+    // se ve un murciélago estacionado en la esquina. Con uno negativo entra ya
+    // a mitad de recorrido, así que al cargar están repartidos.
     delay: firstRun ? -rand(0, duration) : 0,
-    opacity: rand(0.32, 0.6),
-    toLeft: Math.random() < 0.4,
-    bob: rand(14, 42),
+    toLeft: Math.random() < 0.45,
+    bob: rand(12, 46),
   };
 };
 
 // ─── Hojas ──────────────────────────────────────────────────────────────────
 
 interface Leaf {
-  /** % del ancho. */
+  plano: Plano;
   left: number;
   size: number;
+  opacidad: number;
+  blur: number;
   duration: number;
   delay: number;
-  /** Cuánto se desplaza de lado mientras cae. */
   sway: number;
   swayDuration: number;
-    spin: number;
+  spin: number;
   spinDuration: number;
   tone: "celeste" | "celeste-deep" | "espectro";
   variant: 0 | 1;
@@ -84,27 +115,28 @@ interface Leaf {
 const LEAF_TONES = ["celeste", "celeste-deep", "celeste", "celeste-deep", "espectro"] as const;
 
 const newLeaf = (firstRun: boolean): Leaf => {
-  const duration = rand(12, 26);
+  const plano = pick(REPARTO);
+  const p = PLANOS[plano];
+  const duration = rand(13, 22) * rand(...p.lentitud);
   return {
-    left: rand(2, 96),
-    size: rand(16, 30),
+    plano,
+    left: rand(-2, 100),
+    size: rand(17, 27) * rand(...p.escala) * 1.35,
+    opacidad: rand(...p.opacidad) + 0.25,
+    blur: p.blur,
     duration,
-    // Negativo, por lo mismo que el murciélago: si no, la hoja espera arriba a
-    // la izquierda, visible y quieta, hasta que le llega el turno.
     delay: firstRun ? -rand(0, duration) : 0,
-    sway: rand(18, 70),
+    sway: rand(18, 74),
     swayDuration: rand(2.5, 6),
-    // El giro va para los dos lados.
-  spin: rand(-1, 1) < 0 ? -rand(180, 720) : rand(180, 720),
+    spin: Math.random() < 0.5 ? -rand(180, 720) : rand(180, 720),
     spinDuration: rand(4, 11),
-    // El verde espectral aparece poco: es el acento raro, no un color más.
     tone: pick(LEAF_TONES),
     variant: Math.random() < 0.5 ? 0 : 1,
   };
 };
 
-const BAT_COUNT = 3;
-const LEAF_COUNT = 11;
+const BAT_COUNT = 5;
+const LEAF_COUNT = 14;
 
 // ─── Dibujos ────────────────────────────────────────────────────────────────
 
@@ -124,11 +156,7 @@ const BatShape = () => (
   </svg>
 );
 
-/**
- * Dos hojas distintas: la 0 es ancha y lobulada, la 1 más fina y curvada. Que
- * no sean todas el mismo recorte es la mitad de lo que hace que el conjunto no
- * se lea como un sello repetido.
- */
+/** Dos recortes distintos: uno solo se lee como sello repetido. */
 const LeafShape = ({ variant }: { variant: 0 | 1 }) => (
   <svg viewBox="0 0 24 30" width="100%" height="100%">
     {variant === 0 ? (
@@ -139,11 +167,7 @@ const LeafShape = ({ variant }: { variant: 0 | 1 }) => (
         />
         <path
           d="M12 4.5v19M12 11l4.6-3.2M12 11L7.4 7.8M12 16.5l5-3.4M12 16.5l-5-3.4M12 24v4.5"
-          stroke="currentColor"
-          strokeWidth="1.1"
-          strokeLinecap="round"
-          fill="none"
-          opacity="0.45"
+          stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.45"
         />
       </>
     ) : (
@@ -154,11 +178,7 @@ const LeafShape = ({ variant }: { variant: 0 | 1 }) => (
         />
         <path
           d="M13.4 3.6C11.6 9 10.2 15.6 9.4 23.5M12 10.6l4.6-1.6M10.6 16l4.8-2.2M9.4 23.5l-2.6 4"
-          stroke="currentColor"
-          strokeWidth="1.1"
-          strokeLinecap="round"
-          fill="none"
-          opacity="0.45"
+          stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.45"
         />
       </>
     )}
@@ -166,6 +186,8 @@ const LeafShape = ({ variant }: { variant: 0 | 1 }) => (
 );
 
 // ─── Capa ───────────────────────────────────────────────────────────────────
+
+const st = (o: Record<string, string | number>) => o as React.CSSProperties;
 
 const SpookyLayer = () => {
   const { theme } = useTheme();
@@ -179,7 +201,6 @@ const SpookyLayer = () => {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  // Se sortea una vez al montar: cada carga de la página es distinta.
   const [bats, setBats] = useState<Bat[]>(() =>
     Array.from({ length: BAT_COUNT }, () => newBat(true))
   );
@@ -187,14 +208,13 @@ const SpookyLayer = () => {
     Array.from({ length: LEAF_COUNT }, () => newLeaf(true))
   );
 
-  // Al terminar una vuelta, ese elemento se vuelve a sortear. Es lo que evita
-  // que a los 30 segundos se note el bucle.
-  //
-  // El `target !== currentTarget` NO es de adorno: `animationiteration`
-  // BURBUJEA. Las capas de adentro tienen animación propia —las alas aletean
-  // cada 0.4s, la hoja zigzaguea y gira— y cada vuelta de ésas sube hasta acá.
-  // Sin el filtro, el murciélago se resorteaba dos veces por segundo y se
-  // quedaba clavado en el arranque sin cruzar nunca.
+  /**
+   * El `target !== currentTarget` NO es de adorno: `animationiteration`
+   * BURBUJEA. Las capas de adentro tienen animación propia —las alas aletean
+   * cada 0.4s, la hoja zigzaguea y gira— y cada vuelta de ésas sube hasta acá.
+   * Sin el filtro, el murciélago se resorteaba dos veces por segundo y se
+   * quedaba clavado en el arranque sin cruzar nunca.
+   */
   const onIteration = useCallback(
     (e: React.AnimationEvent<HTMLElement>, respawn: () => void) => {
       if (e.target !== e.currentTarget) return;
@@ -210,84 +230,95 @@ const SpookyLayer = () => {
     setLeaves((prev) => prev.map((l, j) => (j === i ? newLeaf(false) : l)));
   }, []);
 
-  const style = useMemo(
-    () => (extra: Record<string, string | number>) => extra as React.CSSProperties,
-    []
-  );
-
   if (theme !== "halloween" || reducedMotion) return null;
 
   return (
-    <div className="spooky-layer" aria-hidden="true">
-      {bats.map((bat, i) => (
-        <span
-          key={`bat-${i}`}
-          className={`spooky-bat${bat.toLeft ? " spooky-bat--rtl" : ""}`}
-          onAnimationIteration={(e) => onIteration(e, () => respawnBat(i))}
-          style={style({
-            top: `${bat.top}%`,
-            opacity: bat.opacity,
-            animationDuration: `${bat.duration}s`,
-            animationDelay: `${bat.delay}s`,
-          })}
-        >
+    <>
+      <div className="spooky-layer" aria-hidden="true">
+        {bats.map((bat, i) => (
           <span
-            className="spooky-bat-bob"
-            style={style({
-              animationDuration: `${bat.duration / 5}s`,
-              "--spooky-bob": `${bat.bob}px`,
+            key={`bat-${i}`}
+            className={`spooky-bat${bat.toLeft ? " spooky-bat--rtl" : ""}`}
+            onAnimationIteration={(e) => onIteration(e, () => respawnBat(i))}
+            style={st({
+              top: `${bat.top}%`,
+              opacity: bat.opacidad,
+              animationDuration: `${bat.duration}s`,
+              animationDelay: `${bat.delay}s`,
             })}
           >
             <span
-              className="spooky-bat-wings"
-              style={style({
-                width: `${76 * bat.scale}px`,
-                height: `${30 * bat.scale}px`,
-                // Los chicos aletean más rápido, como los de verdad.
-                animationDuration: `${0.36 + bat.scale * 0.22}s`,
+              className="spooky-bat-bob"
+              style={st({
+                animationDuration: `${bat.duration / 5}s`,
+                "--spooky-bob": `${bat.bob}px`,
               })}
             >
-              <BatShape />
+              <span
+                className="spooky-bat-wings"
+                style={st({
+                  width: `${76 * bat.escala}px`,
+                  height: `${30 * bat.escala}px`,
+                  // Los chicos aletean más rápido, como los de verdad.
+                  animationDuration: `${0.34 + bat.escala * 0.2}s`,
+                  filter: bat.blur ? `blur(${bat.blur}px)` : undefined,
+                })}
+              >
+                <BatShape />
+              </span>
             </span>
           </span>
-        </span>
-      ))}
+        ))}
 
-      {leaves.map((leaf, i) => (
-        <span
-          key={`leaf-${i}`}
-          className="spooky-leaf"
-          onAnimationIteration={(e) => onIteration(e, () => respawnLeaf(i))}
-          style={style({
-            left: `${leaf.left}%`,
-            animationDuration: `${leaf.duration}s`,
-            animationDelay: `${leaf.delay}s`,
-          })}
-        >
-          {/* El vaivén y el giro van en capas propias: así la caída es una
-              línea recta y constante, y el zigzag no la acelera ni la frena. */}
+        {leaves.map((leaf, i) => (
           <span
-            className="spooky-leaf-sway"
-            style={style({
-              animationDuration: `${leaf.swayDuration}s`,
-              "--spooky-sway": `${leaf.sway}px`,
+            key={`leaf-${i}`}
+            className="spooky-leaf"
+            onAnimationIteration={(e) => onIteration(e, () => respawnLeaf(i))}
+            style={st({
+              left: `${leaf.left}%`,
+              opacity: leaf.opacidad,
+              animationDuration: `${leaf.duration}s`,
+              animationDelay: `${leaf.delay}s`,
             })}
           >
+            {/* El vaivén y el giro van en capas propias: así la caída es una
+                línea recta y constante, y el zigzag no la acelera ni la frena. */}
             <span
-              className={`spooky-leaf-spin spooky-leaf--${leaf.tone}`}
-              style={style({
-                width: `${leaf.size}px`,
-                height: `${leaf.size * 1.25}px`,
-                animationDuration: `${leaf.spinDuration}s`,
-                "--spooky-spin": `${leaf.spin}deg`,
+              className="spooky-leaf-sway"
+              style={st({
+                animationDuration: `${leaf.swayDuration}s`,
+                "--spooky-sway": `${leaf.sway}px`,
               })}
             >
-              <LeafShape variant={leaf.variant} />
+              <span
+                className={`spooky-leaf-spin spooky-leaf--${leaf.tone}`}
+                style={st({
+                  width: `${leaf.size}px`,
+                  height: `${leaf.size * 1.25}px`,
+                  animationDuration: `${leaf.spinDuration}s`,
+                  "--spooky-spin": `${leaf.spin}deg`,
+                  filter: leaf.blur ? `blur(${leaf.blur}px)` : undefined,
+                })}
+              >
+                <LeafShape variant={leaf.variant} />
+              </span>
             </span>
           </span>
-        </span>
-      ))}
-    </div>
+        ))}
+
+        {/* Niebla baja: dos bandas que derivan a distinta velocidad. Dos y no
+            una porque una sola se lee como un degradado quieto. */}
+        <span className="spooky-niebla spooky-niebla--a" />
+        <span className="spooky-niebla spooky-niebla--b" />
+      </div>
+
+      {/* El grano va aparte y por encima de todo (z-40): es la "película" en la
+          que está filmada la escena, no un objeto dentro de ella. */}
+      <div className="spooky-grano" aria-hidden="true" />
+
+      <SpookyEyes />
+    </>
   );
 };
 
