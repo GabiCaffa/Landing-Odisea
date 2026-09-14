@@ -29,12 +29,18 @@ interface Props {
   className?: string;
   /** Por debajo de 1 = más lento que como lo exportó el ilustrador. */
   speed?: number;
+  /** Se llama cuando el dibujo ya está en el DOM y se puede medir. */
+  onReady?: () => void;
 }
 
-const SpookyLottie = ({ src, className = "", speed = 0.5 }: Props) => {
+const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
   const { theme } = useTheme();
   const contenedor = useRef<HTMLDivElement>(null);
   const [listo, setListo] = useState(false);
+
+  // En un ref: cambiar el callback no tiene por qué reiniciar la animación.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   useEffect(() => {
     if (theme !== "halloween") return;
@@ -67,6 +73,7 @@ const SpookyLottie = ({ src, className = "", speed = 0.5 }: Props) => {
         });
         anim.setSpeed(speed);
         setListo(true);
+        onReadyRef.current?.();
       } catch (err) {
         // En producción es decoración opcional: si el archivo no está o el JSON
         // es inválido, no pasa nada. En desarrollo SÍ se avisa — un catch mudo

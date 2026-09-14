@@ -436,16 +436,31 @@ aparte.
 **Araña (`SpookySpider`, en la sección de eventos).** **Se ancla a elementos reales, no a un
 porcentaje.** La primera versión sorteaba un `left` a ciegas y la mitad de las veces caía en el
 vacío al lado del título. Ahora mide el DOM en cada ciclo y elige entre siete anclajes: cuatro
-sobre las letras del título y uno por tarjeta, colgando **hasta el borde superior** de la card.
+sobre las letras del título y uno por tarjeta, colgando hasta el borde superior de la card.
 
-> Primero probé los huecos *entre* tarjetas, pero miden ~32px y la araña 64-100: quedaba casi
-> toda escondida. Colgando hasta el borde superior, el cuerpo queda en el aire —visible— y los
-> pocos píxeles que se solapan los tapa la tarjeta. Y como `left` posiciona el **borde
-> izquierdo** y el anclaje apunta al **centro**, lleva `transform: translateX(-50%)`; sin eso
-> quedaba corrida media anchura y no colgaba de lo que debía.
+> **La caja de la animación NO es el bicho.** Esto costó un rato y es la trampa menos obvia del
+> archivo: el dibujo ocupa sólo **del 5% al 23%** de su contenedor y el 77% de abajo está vacío
+> (la telaraña cuelga muy por encima del viewBox). Calcular el alto del contenedor para "llegar"
+> al título dejaba la araña flotando mucho más arriba — el usuario lo describió como que
+> "troleaba". La solución es no adivinar: se **mide dónde caen los pies del dibujo ya
+> renderizado** y se posiciona el contenedor restando ese offset.
+>
+> La medición va sobre los `path`, no sobre `getBBox()`: los rects de los `path` llevan aplicadas
+> las transformaciones de Lottie, mientras que `getBBox()` devuelve coordenadas sin transformar
+> y acá da valores fuera del viewBox, que no sirven para nada.
+
+> Probé primero los huecos *entre* tarjetas, pero miden ~32px y la araña 64-100: quedaba casi
+> toda escondida. Y como `left` posiciona el **borde izquierdo** mientras el anclaje apunta al
+> **centro**, lleva `transform: translateX(-50%)`.
 
 Medir el DOM resuelve la responsividad sola: en celular las tarjetas se apilan y los anclajes se
 recalculan, sin un `@media` que mantener. Se recalcula también al cambiar el tamaño de ventana.
+
+**Iconos monocromos sobre botón claro.** El logo de WhatsApp es un PNG **blanco** (medido:
+`rgb(254,254,254)`). En la paleta base el botón `btn-techno` es tinta oscura y se lee perfecto;
+con el tema, "tinta" es el hueso y el botón queda claro, así que el icono **desaparecía**. Se
+invierte por CSS, acotado a `.btn-techno`: el mismo logo en el footer sí está sobre fondo oscuro
+y ahí tiene que seguir blanco.
 
 **La regla que todas respetan, y que la decoración anterior no respetaba: van DETRÁS del
 contenido.** Los murciélagos viven en `z-0` dentro del hero —la única sección sin tarjetas—. La

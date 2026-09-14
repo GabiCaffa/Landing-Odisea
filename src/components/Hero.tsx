@@ -38,11 +38,6 @@ const Hero = () => {
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          {/* Eyebrow */}
-          <div className="flex items-center gap-3 mb-4">
-            <span className="h-px w-8 bg-celeste" />
-            <span className="eyebrow">Productora de eventos</span>
-          </div>
 
           {/* Logo */}
           <img
@@ -53,9 +48,9 @@ const Hero = () => {
 
           {/* Tagline grande */}
           <h1 className="title-display text-[2.25rem] leading-[0.95] sm:text-5xl md:text-6xl text-tinta mb-4">
-            EXPERIENCIAS QUE
+            Cada evento es  
             <br />
-            <span className="highlight-celeste">TRASCIENDEN</span>
+            <span className="highlight-celeste">irrepetible</span>
           </h1>
 
           {/* Subtexto */}

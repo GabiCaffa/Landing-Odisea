@@ -610,7 +610,8 @@
    cualquier posición sin tapar nunca nada que haya que leer o tocar. */
 :root[data-theme="halloween"] .spooky-arana {
   position: absolute;
-  top: 0;
+  /* El `top` lo pone el componente: sale de medir dónde caen los pies del
+     dibujo, porque la caja de la animación es mucho más alta que el bicho. */
   z-index: 0;
   /* El `left` que calcula el componente apunta al CENTRO del anclaje (una
      letra del título, una tarjeta), pero `left` posiciona el borde izquierdo:
@@ -638,4 +639,16 @@
 :root[data-theme="halloween"] .spooky-arana-lottie svg {
   width: 100%;
   height: 100%;
+}
+
+/* ── Iconos monocromos sobre botón claro ── */
+/* El logo de WhatsApp es un PNG blanco (medido: rgb(254,254,254)). En la
+   paleta base el botón `btn-techno` es tinta oscura y el blanco se lee
+   perfecto; con el tema, "tinta" es el hueso y el botón queda CLARO, así que
+   el icono desaparecía. Se invierte para que acompañe al texto oscuro.
+
+   Va acotado a `.btn-techno`: el mismo logo en el footer sí está sobre fondo
+   oscuro y ahí tiene que seguir blanco. */
+:root[data-theme="halloween"] .btn-techno img {
+  filter: invert(1);
 }
