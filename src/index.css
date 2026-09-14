@@ -533,42 +533,76 @@
    que las dos respetan es la que la decoración anterior no respetaba: **van
    detrás del contenido**, nunca encima. */
 
-/* Murciélago del hero. Va dentro del hero —la única sección sin tarjetas— y
-   declarado primero en el DOM, que es lo que lo deja pintado debajo del texto.
-   Aparece con un fundido largo: el JSON puede tardar y que algo se materialice
-   de golpe en el hero se lee como un salto. */
-:root[data-theme="halloween"] .hero-lottie {
+/* ── Bandada de murciélagos (hero) ── */
+/* Dentro del hero —la única sección sin tarjetas— y en z-0, por debajo de su
+   contenido. Cruzar + subir y bajar + aletear van en capas separadas: si el
+   avance y el vaivén compartieran `transform`, uno pisaría al otro. */
+
+:root[data-theme="halloween"] .spooky-bats {
   position: absolute;
-  /* Tamaño de criatura, NO "inset: 0". Con inset, el SVG se estira a todo el
-     hero y el murciélago queda con una envergadura de dos metros tapando el
-     logo — que fue exactamente lo que pasó al principio. */
-  top: 7%;
-  right: 4%;
-  width: clamp(130px, 19vw, 250px);
-  aspect-ratio: 760 / 500;   /* el del archivo: si no, se deforma */
-  max-width: 55%;
+  inset: 0;
   z-index: 0;
+  overflow: hidden;
   pointer-events: none;
+}
+
+:root[data-theme="halloween"] .spooky-bat-vuelo {
+  position: absolute;
+  left: 0;
+  will-change: transform;
+  animation-name: batCruza;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  /* Durante cualquier espera muestra el fotograma inicial (fuera de pantalla)
+     y no su posición natural, que es el borde y se ve. */
+  animation-fill-mode: backwards;
+}
+
+:root[data-theme="halloween"] .spooky-bat-vuelo--rtl { animation-name: batCruzaRtl; }
+
+:root[data-theme="halloween"] .spooky-bat-vaiven {
+  display: block;
+  animation-name: batVaiven;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/* El ancho lo sortea el componente y llega por variable; el `min` con vw lo
+   acota en celular sin necesidad de un @media aparte. */
+:root[data-theme="halloween"] .spooky-bat-dibujo {
+  width: min(var(--bat-ancho, 90px), 38vw);
+  aspect-ratio: 760 / 500;   /* el del archivo: si no, se deforma */
   opacity: 0;
-  transition: opacity 1200ms ease;
+  transition: opacity 900ms ease;
 }
 
-/* En celular se corre más al borde para no quedar sobre el logo. */
-@media (max-width: 640px) {
-  :root[data-theme="halloween"] .hero-lottie {
-    top: 5%;
-    right: -4%;
-    width: 46vw;
-  }
+/* La opacidad final la decide el contenedor (cada murciélago tiene la suya);
+   acá sólo se revela cuando Lottie terminó de cargar. */
+:root[data-theme="halloween"] .spooky-bat-dibujo.lottie--visible { opacity: 1; }
+
+:root[data-theme="halloween"] .spooky-bat-dibujo svg { width: 100%; height: 100%; }
+
+/* Los tres tonos. Se pisan los rellenos que Lottie escribe en el SVG, así no
+   hace falta un .json por color: queda una silueta plana, que es como se lee
+   un murciélago en el cielo. */
+:root[data-theme="halloween"] .spooky-bat-dibujo--negro svg path { fill: #04121A !important; }
+:root[data-theme="halloween"] .spooky-bat-dibujo--gris svg path { fill: #7E918E !important; }
+:root[data-theme="halloween"] .spooky-bat-dibujo--blanco svg path { fill: #E8EFEE !important; }
+
+/* Lentos: el más rápido tarda ~38s en cruzar. La decoración anterior lo hacía
+   en 7 y se sentía agresiva. */
+@keyframes batCruza {
+  from { transform: translate3d(-24vw, 0, 0); }
+  to   { transform: translate3d(124vw, 0, 0); }
 }
-
-/* La opacidad es LO PRIMERO que hay que tocar si la animación distrae.
-   Entre 0.15 y 0.35 suele ser el rango donde suma sin robar atención. */
-:root[data-theme="halloween"] .hero-lottie.lottie--visible { opacity: 0.22; }
-
-:root[data-theme="halloween"] .hero-lottie svg {
-  width: 100%;
-  height: 100%;
+@keyframes batCruzaRtl {
+  from { transform: translate3d(124vw, 0, 0); }
+  to   { transform: translate3d(-24vw, 0, 0); }
+}
+@keyframes batVaiven {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, calc(var(--vaiven, 28px) * -1), 0); }
 }
 
 /* Araña de la sección de eventos. `z-0` contra el `z-10` del contenido: cuando
@@ -578,12 +612,14 @@
   position: absolute;
   top: 0;
   z-index: 0;
+  /* El `left` que calcula el componente apunta al CENTRO del anclaje (una
+     letra del título, una tarjeta), pero `left` posiciona el borde izquierdo:
+     sin esto la araña queda corrida media anchura y no cuelga de lo que
+     debía. */
+  transform: translateX(-50%);
   width: clamp(64px, 8.5vw, 100px);
-  /* Alta a propósito: el hilo arranca en el borde de la sección y la araña
-     tiene que terminar A LA ALTURA de las tarjetas. Como va en z-0, cuando le
-     queda una tarjeta delante la tarjeta gana y sólo se la ve en los huecos:
-     así cuelga "entre" las cards sin taparlas nunca. */
-  height: clamp(300px, 42vw, 520px);
+  /* El alto lo pone el componente: sale de medir el título o la tarjeta a la
+     que se ancla, así la responsividad se resuelve sola. */
   pointer-events: none;
   opacity: 0;
   animation: spookyAranaVida 34s ease-in-out infinite;
