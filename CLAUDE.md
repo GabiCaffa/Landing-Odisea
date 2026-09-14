@@ -95,7 +95,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v12_birthday_signups.sql` → `v13_payment_accounts.sql` →
 `v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
-`v18_delivery_ticket_types.sql`.
+`v18_delivery_ticket_types.sql` → `v19_site_settings.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -210,6 +210,37 @@ desglose y avisa si no coinciden. Al editar, los tipos que la entrega tiene pero
 no vende **se muestran igual**: si no, al guardar se borraría un desglose que nadie pidió
 borrar. Acceso a datos en `src/lib/deliveries.ts` (`saveDeliveryTickets`, `ticketsSummary`);
 `createDelivery` ahora devuelve el `id` porque el desglose se guarda después.
+
+**v19 — Ajustes del sitio + tema estacional.** Para Halloween 2026 la landing cambia de
+paleta. La pregunta era dónde vive el interruptor: en el código (deploy para prenderlo y otro
+para apagarlo) o en la base (se prende desde el panel). Va en la base, y el motivo es
+operativo: el sitio está **vendiendo entradas**, así que si el tema se ve mal en un celular a
+las 3 de la mañana se apaga en 5 segundos en vez de esperar un deploy. Tabla `site_settings`
+clave/valor — **genérica y no una tabla `theme`** porque cuesta lo mismo y la próxima bandera
+global (un banner de aviso, "preventa cerrada") no va a necesitar otra migración. RLS:
+**lectura pública** (la landing tiene que saber qué pintar antes de que nadie inicie sesión;
+lo que se expone es el nombre de un tema) y **escritura sólo admin** — el operador no toca la
+cara pública del sitio. Está en la publicación de realtime: al prender el tema, las pestañas
+ya abiertas cambian solas. El valor **no se valida en la DB** a propósito (un CHECK con los
+nombres de los temas obligaría a migrar cada vez que se agrega uno, y mete reglas de UN valor
+en una tabla genérica): valida el front en `src/lib/siteSettings.ts`, que cae en `base` ante
+cualquier valor que no reconoce.
+
+Front: `src/contexts/ThemeContext.tsx` lee el valor, lo escucha por realtime y lo escribe como
+`data-theme` en `<html>`, que es donde `index.css` redefine los tokens. Dos detalles que
+explican el diseño:
+
+1. **El panel queda afuera.** Los tokens son globales, así que `data-theme` en `<html>` pintaría
+   también Admin — que es herramienta de trabajo interna y nadie de afuera ve. La única forma
+   de excluirlo es no poner el atributo en esa ruta (`isThemedPath`). Envolver el panel y
+   redefinir los tokens ahí **no sirve**: modales y toasts salen por portal, fuera del wrapper.
+2. **Anti-flash.** El valor viene por red: sin nada más, cada carga pinta la paleta clara y
+   después salta a la oscura. Un script inline en `index.html` aplica el último tema conocido
+   (cacheado en `localStorage` por el provider) antes de que React monte.
+
+UI: pestaña **Apariencia** en el panel (`AppearanceAdmin` en `Admin.tsx`), **sólo admin**. Las
+muestras de color de esa pestaña están escritas a mano y no salen de los tokens a propósito:
+como el panel no se tematiza, `bg-celeste` ahí siempre daría el naranja de siempre.
 
 **Importar la planilla histórica:** `scripts/planilla-a-sql.mjs` convierte los CSV exportados
 de Google Sheets (una hoja por fecha) en un SQL para pegar en el SQL Editor. Detecta las

@@ -22,6 +22,25 @@
     
     <!-- Preconnect a Supabase: adelanta DNS+TLS para datos e imágenes de eventos -->
     <link rel="preconnect" href="https://ccdhjqqyriejeddbcpuu.supabase.co" crossorigin />
+    <!-- Tema estacional: se aplica ANTES de que React monte.
+         El valor real vive en la DB (site_settings, v19) y llega por red; si
+         esperáramos a eso, cada carga mostraría un flash de la paleta clara
+         antes de saltar a la oscura. Acá se usa el último tema conocido,
+         cacheado en localStorage por ThemeContext. -->
+    <script>
+      (function () {
+        try {
+          // El panel no se tematiza (ver isThemedPath en ThemeContext).
+          if (location.pathname.indexOf('/admin') === 0) return;
+          var t = localStorage.getItem('odisea:theme');
+          // El regex es para no escribir en el DOM lo que haya quedado en
+          // storage: sólo un nombre de tema tiene esta forma.
+          if (t && t !== 'base' && /^[a-z-]{1,32}$/.test(t)) {
+            document.documentElement.dataset.theme = t;
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
