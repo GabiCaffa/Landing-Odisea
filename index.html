@@ -22,6 +22,24 @@
     
     <!-- Preconnect a Supabase: adelanta DNS+TLS para datos e imágenes de eventos -->
     <link rel="preconnect" href="https://ccdhjqqyriejeddbcpuu.supabase.co" crossorigin />
+    <!-- Pintado crítico del tema ───────────────────────────────────────────
+         El script de abajo pone `data-theme` de inmediato, pero el CSS de la
+         app NO está todavía: en desarrollo lo inyecta JavaScript y en
+         producción, aunque sea un <link>, React todavía tiene que montar. Sin
+         esto el primer cuadro se pinta con el fondo claro por defecto del
+         navegador y recién después salta al oscuro — que es exactamente el
+         destello que se veía.
+
+         Los colores van escritos a mano y no como tokens a propósito: esto
+         tiene que funcionar ANTES de que exista la hoja de estilos que define
+         los tokens. Si se cambia --papel o --tinta en index.css, cambiar
+         también acá. Son los dos únicos valores duplicados. -->
+    <style>
+      html { background: #FFFFFF; }
+      html[data-theme="halloween"],
+      html[data-theme="halloween"] body { background: #0B1D22; color: #E8EFEE; }
+    </style>
+
     <!-- Tema estacional: se aplica ANTES de que React monte.
          El valor manda desde la DB (site_settings, v19) y viaja por red; si
          esperáramos al bundle, cada carga mostraría un destello de la paleta
@@ -40,28 +58,49 @@
          cualquier script anti-parpadeo: tiene que correr antes que la app. -->
     <script>
       (function () {
-        // El panel no se tematiza (ver isThemedPath en ThemeContext).
-        if (location.pathname.indexOf('/admin') === 0) return;
+        var el = document.documentElement;
+
+        function quitar() {
+          delete el.dataset.theme;
+          delete el.dataset.surface;
+        }
 
         function apply(t) {
-          if (!t || t === 'base' || !/^[a-z-]{1,32}$/.test(t)) return;
-          var el = document.documentElement;
+          // 'base' es la AUSENCIA de tema. Tiene que poder quitar el atributo,
+          // no sólo poner: el build puede venir horneado con un tema que desde
+          // entonces se apagó en el panel.
+          if (t === 'base') return quitar();
+          if (!t || !/^[a-z-]{1,32}$/.test(t)) return;
           el.dataset.theme = t;
           // La tipografía estacional es sólo de la home (ver isShowcasePath).
           if (location.pathname === '/') el.dataset.surface = 'vidriera';
+          else delete el.dataset.surface;
         }
+
+        // El panel no se tematiza (ver isThemedPath en ThemeContext). Se QUITA
+        // y no se ignora, porque el atributo puede venir escrito en el HTML.
+        if (location.pathname.indexOf('/admin') === 0) return quitar();
+
+        // Si el HTML ya viene horneado (ver bakeTheme en vite.config.ts), esto
+        // reafirma el data-surface que el build no puede saber: index.html se
+        // sirve para todas las rutas.
+        if (el.dataset.theme) apply(el.dataset.theme);
 
         // ?tema=... gana y no consulta nada: es la vista previa.
         var preview = new URLSearchParams(location.search).get('tema');
         if (preview) { apply(preview); return; }
 
-        try { apply(localStorage.getItem('odisea:theme')); } catch (e) {}
+        try {
+          var guardado = localStorage.getItem('odisea:theme');
+          if (guardado) apply(guardado);
+        } catch (e) {}
 
-        // Adelanto del valor real para quien no tiene cache.
+        // Valor real de la base, para el que no tiene cache y por si cambió
+        // desde el último deploy.
         try {
           var url = '%VITE_SUPABASE_URL%';
           var key = '%VITE_SUPABASE_ANON_KEY%';
-          if (url.indexOf('http') !== 0) return; // sin env (dev sin .env): se deja al bundle
+          if (url.indexOf('http') !== 0) return; // sin env: se deja al bundle
           fetch(url + '/rest/v1/site_settings?select=value&key=eq.theme', {
             headers: { apikey: key, Authorization: 'Bearer ' + key },
           })

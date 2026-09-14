@@ -4,14 +4,14 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { loadSoundPreference, setSoundEnabled } from "@/lib/spookySound";
 
 /**
- * Altavoz del tema Halloween. Apagado por defecto, siempre visible mientras el
+ * Altavoz del tema Halloween. Prendido por defecto, siempre visible mientras el
  * tema esté prendido y con la preferencia guardada entre visitas.
  *
- * La restauración merece una nota. Si en una visita anterior lo dejó prendido,
- * el botón aparece prendido — pero el navegador **no deja sonar nada** hasta
- * que la persona toque algo. Así que se arma un escuchador de un solo uso para
- * el primer gesto y ahí arranca el audio, sin el golpe de confirmación (no
- * acaba de apretar nada: un ruido de la nada sobresalta).
+ * **Viene prendido por defecto**, pero el navegador **no deja sonar nada**
+ * hasta que la persona toque algo — Chrome y Safari lo prohíben y no hay forma
+ * de saltearlo. Así que se arma un escuchador de un solo uso para el primer
+ * gesto y ahí arranca el audio, sin el golpe de confirmación (nadie apretó
+ * nada: un ruido de la nada sobresalta).
  *
  * Sin eso el botón mentiría: diría "prendido" y no sonaría nada hasta un
  * apagar-y-prender que nadie va a adivinar.
@@ -34,12 +34,11 @@ const SoundToggle = () => {
       setSoundEnabled(true, { confirm: false });
       remove();
     };
-    const remove = () => {
-      window.removeEventListener("pointerdown", start);
-      window.removeEventListener("keydown", start);
-    };
-    window.addEventListener("pointerdown", start, { once: true });
-    window.addEventListener("keydown", start, { once: true });
+    // Varios tipos de gesto porque el navegador sólo considera "activación"
+    // algunos: un scroll con la rueda NO cuenta, un toque o una tecla sí.
+    const GESTOS = ["pointerdown", "keydown", "touchstart"] as const;
+    const remove = () => GESTOS.forEach((g) => window.removeEventListener(g, start));
+    GESTOS.forEach((g) => window.addEventListener(g, start, { once: true }));
     return remove;
   }, [theme]);
 

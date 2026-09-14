@@ -7,10 +7,11 @@
  *    sonar nada hasta que la persona interactúa con la página. No es algo que
  *    se pueda saltear, así que el AudioContext se crea recién cuando se toca
  *    el botón de altavoz — que es, justamente, el gesto que lo habilita.
- * 2. **Nadie quiere sonido que no pidió.** El sitio se abre en el trabajo y en
- *    el ómnibus, y acá se venden entradas: un ruido inesperado es la forma más
- *    rápida de que cierren la pestaña. Arranca en `false` y la preferencia
- *    queda guardada.
+ * 2. **Viene PRENDIDO por defecto** (decisión del autor). El navegador igual no
+ *    deja sonar nada hasta el primer gesto, así que en la práctica el audio
+ *    arranca cuando la persona toca algo, no al abrir. El altavoz siempre está
+ *    a la vista para apagarlo, y esa decisión queda guardada: quien lo apaga no
+ *    se lo vuelve a encontrar prendido.
  * 3. **Los sonidos cortos se sintetizan, no se descargan.** Sin archivos, sin
  *    licencias y sin peso. El único archivo es el ambiente, que es opcional:
  *    si no está, el resto funciona igual.
@@ -36,11 +37,17 @@ let ambientUnavailable = false;
 
 // ─── Preferencia ────────────────────────────────────────────────────────────
 
+/**
+ * Prendido salvo que la persona lo haya apagado explícitamente. El `!== "0"`
+ * y no `=== "1"` es justamente eso: sin nada guardado, prendido; sólo un "0"
+ * —que sólo escribe el botón— lo deja apagado.
+ */
 export const loadSoundPreference = (): boolean => {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "1";
+    return localStorage.getItem(STORAGE_KEY) !== "0";
   } catch {
-    return false;
+    // Storage bloqueado (incógnito): se respeta el default.
+    return true;
   }
 };
 
