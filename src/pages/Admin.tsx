@@ -4957,11 +4957,16 @@ const AppearanceAdmin = () => {
     } catch (err) {
       // Se distingue la tabla ausente del rechazo de RLS: mandar a revisar la
       // sesión cuando lo que falta es la migración es mandar al lugar
-      // equivocado, y el error de Postgres ya lo dice (42P01 = relation does
-      // not exist).
+      // equivocado.
+      //
+      // El código que importa es PGRST205, no 42P01: entre el cliente y la DB
+      // está PostgREST, que resuelve las tablas contra su propia caché de
+      // esquema y contesta con SU código antes de que la consulta llegue a
+      // Postgres. El 42P01 de Postgres se deja porque puede aparecer si la
+      // tabla se borra con la caché ya cargada.
       const code = (err as { code?: string } | null)?.code;
       toast.error(
-        code === "42P01"
+        code === "PGRST205" || code === "42P01"
           ? "Falta correr la migración v19_site_settings.sql en Supabase."
           : "No se pudo cambiar el tema. ¿Seguís con sesión de admin?"
       );

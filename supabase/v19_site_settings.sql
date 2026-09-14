@@ -65,12 +65,19 @@ create policy "site_settings_update_admin" on public.site_settings
 create policy "site_settings_delete_admin" on public.site_settings
   for delete using (public.is_admin());
 
--- ─── 3) Realtime ────────────────────────────────────────────────────────────
+-- ─── 3) Realtime (mejor esfuerzo, NO puede voltear el script) ───────────────
 -- Para que al prender el tema las pestañas YA ABIERTAS cambien solas, sin que
 -- nadie recargue. El `if not exists` es porque `alter publication ... add table`
 -- falla si la tabla ya está en la publicación (y esto tiene que poder correrse
 -- dos veces).
-do $$
+--
+-- Va envuelto en un `exception when others` por algo concreto: el SQL Editor de
+-- Supabase corre TODO el script en una sola transacción, así que un error acá
+-- —la publicación que no existe, permisos sobre ella— revierte hasta la
+-- creación de la tabla, y uno se queda con "lo corrí y no pasó nada". El
+-- realtime es una comodidad (que las pestañas abiertas cambien solas); la tabla
+-- y sus políticas no. Si esto falla, avisa y el resto queda igual aplicado.
+do $
 begin
   if not exists (
     select 1 from pg_publication_tables
@@ -80,7 +87,9 @@ begin
   ) then
     alter publication supabase_realtime add table public.site_settings;
   end if;
-end $$;
+exception when others then
+  raise notice 'No se pudo agregar site_settings a supabase_realtime (%): el tema va a funcionar igual, pero las pestañas abiertas necesitan recargar.', sqlerrm;
+end $;
 
 -- ─── 4) Seed ────────────────────────────────────────────────────────────────
 -- Arranca en 'base': correr esta migración NO cambia cómo se ve el sitio.
