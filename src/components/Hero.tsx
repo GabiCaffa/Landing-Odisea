@@ -21,7 +21,7 @@ const Hero = () => {
       {/* Animación de fondo. Va primero en el DOM a propósito: lo que se
           declara antes se pinta debajo, así queda DETRÁS del texto del hero.
           Y vive sólo acá, que es la única sección sin tarjetas. */}
-      <SpookyLottie />
+      <SpookyLottie src="/halloween-bat.json" className="hero-lottie" speed={0.45} />
 
       {/* Halo de acento muy sutil */}
       <div className="pointer-events-none absolute -top-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-celeste/10 blur-[120px]" />

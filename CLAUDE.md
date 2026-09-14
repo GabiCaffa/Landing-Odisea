@@ -418,40 +418,38 @@ por segundo por algo que nadie nota conscientemente.
 > todos en el borde". Se resuelve con retrasos **negativos** (entra ya a mitad de recorrido) y
 > `animation-fill-mode: backwards`.
 
-**Animación de fondo con Lottie (`SpookyLottie`).** Después de que la decoración en SVG a mano
+**Animaciones con Lottie ().** Después de que la decoración en SVG a mano
 fracasara, la conclusión fue que **el dibujo no puede salir de acá**. Lottie reproduce
-animaciones exportadas desde After Effects por ilustradores: el trazo lo hace alguien que sabe
-dibujar y el código sólo lo pone en pantalla.
+animaciones exportadas de After Effects por ilustradores; el componente sólo las pone en
+pantalla. Hoy hay dos, las dos elegidas por el autor en LottieFiles (filtro **Free** = *Lottie
+Simple License*: uso comercial permitido, sin atribución obligatoria):
 
-Cuatro reglas, todas sacadas de lo que falló antes:
+- **Murciélago** — , en el hero, arriba a la derecha. Se le
+  **recolorearon los 21 rellenos** del marrón grisáceo original a los tonos del tema: sobre la
+  noche verde azulada el marrón queda barroso en vez de leerse como silueta. Lleva
+   del archivo y un ancho acotado — con  el SVG se estira a todo el
+  hero y el murciélago queda con dos metros de envergadura tapando el logo.
+- **Araña** — , colgando en la sección de eventos en una
+  posición horizontal al azar que se resortea cada ciclo, desvaneciéndose antes de mudarse
+  (cambiar de lugar a plena vista se lee como un salto).
 
-1. **Detrás del contenido y sólo en el hero.** La capa vieja estaba en `z-30`, encima de todo,
-   y cruzaba por delante de las cards. Ésta vive dentro del hero —la única sección sin
-   tarjetas— y se declara **primero en el DOM**, que es lo que la deja pintada debajo del
-   texto. No se intenta cubrir toda la página: las secciones de abajo tienen fondo opaco, así
-   que una capa fija detrás sería invisible de todos modos.
-2. **Lenta.** `VELOCIDAD = 0.45`, o sea menos de la mitad de como la exportó el ilustrador.
-   Parte de lo que se veía mal antes era la velocidad, no sólo el dibujo.
-3. **El runtime se carga aparte y sólo si hace falta.** Se consulta **primero el JSON**; si no
-   está, la función retorna **antes** del `import("lottie-web")`, así el chunk de 300 KB no se
-   descarga nunca. En desarrollo sí aparece descargado, porque Vite pre-empaqueta las
-   dependencias al arrancar — eso es del dev server, no de producción.
-4. **Sin archivo no pasa nada.** Igual que el audio: sin `public/halloween-lottie.json` el
-   contenedor queda vacío en opacidad 0 y el sitio sigue idéntico.
+**La regla que las dos respetan, y que la decoración anterior no respetaba: van DETRÁS del
+contenido.** El murciélago se declara primero en el DOM dentro del hero —la única sección sin
+tarjetas—. La araña va en  contra el  del contenedor de eventos: cuando le queda
+una tarjeta delante, **gana la tarjeta**, así que puede colgar en cualquier lado sin tapar
+nunca nada que haya que leer o tocar. Verificado forzándola sobre una card: los cuatro puntos
+de muestra resuelven a la tarjeta.
 
-> **Cómo cambiar la animación.** Bajar el `.json` de [lottiefiles.com](https://lottiefiles.com)
-> —filtrando por **Free**, que es la *Lottie Simple License*: permite uso comercial y **no
-> exige atribución**— y guardarlo como `public/halloween-lottie.json`. Nada más. Conviene una
-> animación de **silueta sobre fondo transparente** (un murciélago, un cuervo, humo): las que
-> traen fondo propio o muchos colores pelean con la paleta. Si distrae, lo primero que hay que
-> tocar es la **opacidad** de `.hero-lottie--visible` en `index.css` (0.2–0.4 es el rango
-> razonable), y después `VELOCIDAD`.
+**Peso.** El runtime va en su propio chunk y se consulta **primero el JSON**: si no está, la
+función retorna **antes** del , así esos 300 KB no se descargan nunca. Con brotli
+—que es lo que sirve Vercel— el total agregado es ~82 KB: murciélago 2, araña 16 (el JSON es
+repetitivo y comprime x25), runtime 64.
 
-> **Dos trampas del camino.** El `fetch` **no** lleva `cache: "force-cache"`: parece un ahorro
-> y es un footgun — el navegador se queda con la copia vieja sin revalidar, así que cambiar de
-> animación no se vería. Y el `catch` **avisa por consola en desarrollo** (`import.meta.env.DEV`):
-> un catch mudo acá ya costó un rato de no entender por qué el contenedor quedaba vacío. En
-> producción sigue callado, porque es decoración opcional.
+> **Para cambiar una animación:** bajar el  de lottiefiles.com y reemplazar el archivo
+> en . Si distrae, lo primero que se toca es la **opacidad** (> y el keyframe ), después la velocidad (). El  **no** usa
+> : el navegador se quedaría con la animación vieja al cambiarla. Y el
+>  **avisa por consola en desarrollo** — un catch mudo acá ya costó un rato de no
+> entender por qué el contenedor quedaba vacío.
 
 **Sonido (`src/lib/spookySound.ts` + `SoundToggle`):** apagado por defecto, con la
 preferencia guardada. Tres restricciones lo definen: el navegador **bloquea el audio
