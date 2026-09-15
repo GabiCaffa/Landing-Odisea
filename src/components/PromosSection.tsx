@@ -1,8 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
-import TicketPurchaseModal from "./TicketPurchaseModal";
-import BirthdayPromoModal from "./BirthdayPromoModal";
+// Diferido, igual que en EventCard: arrastra PhoneInput -> libphonenumber.
+// Estaba importado directo acá, y por eso esos ~35 KB seguían entrando en la
+// carga inicial de la home aunque EventCard ya lo tuviera diferido.
+const TicketPurchaseModal = lazy(() => import("./TicketPurchaseModal"));
+// Diferido: arrastra PhoneInput -> libphonenumber (~35 KB comprimido) y sólo
+// hace falta si alguien abre la promo de cumpleaños.
+const BirthdayPromoModal = lazy(() => import("./BirthdayPromoModal"));
 import { EventTicket } from "@/lib/ticketTypes";
 import { playThud } from "@/lib/spookySound";
 
@@ -20,9 +25,9 @@ const promos = [
   {
     number: "01",
     tag: "PROMO GRUPOS",
-    title: "Vengan juntos,\nuno entra gratis.",
+    title: "Vengan juntos,\npara acceder a beneficios.",
     description:
-      "Comprá 5 entradas juntos y la sexta es nuestra. Coordiná con tu grupo y paguen en un solo pago para acceder al beneficio.",
+      "Coordiná con tu grupo y paguen en un solo pago para acceder al beneficio.",
     cta: "Consultar por WhatsApp",
     ctaHref:
       "https://wa.me/59892592179?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Grupos",
@@ -136,10 +141,15 @@ const PromosSection = () => {
       )}
 
       {/* Promo cumpleaños: la solicitud se carga desde el sitio, sólo con cuenta */}
-      <BirthdayPromoModal isOpen={showBirthday} onClose={() => setShowBirthday(false)} />
+      {showBirthday && (
+        <Suspense fallback={null}>
+          <BirthdayPromoModal isOpen onClose={() => setShowBirthday(false)} />
+        </Suspense>
+      )}
 
       {/* Ticket modal reutilizado */}
       {selectedEvent && (
+        <Suspense fallback={null}>
         <TicketPurchaseModal
           isOpen={isModalOpen}
           onClose={() => { setIsModalOpen(false); setSelectedEvent(null); }}
@@ -149,6 +159,7 @@ const PromosSection = () => {
           eventLocation={selectedEvent.location}
           tickets={selectedEvent.tickets}
         />
+        </Suspense>
       )}
     </section>
   );

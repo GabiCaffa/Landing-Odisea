@@ -1,7 +1,7 @@
 import { Instagram } from "lucide-react";
 import { Link } from "react-router-dom";
 import odiseaLogoWhite from "@/assets/odisea-logo-white.png";
-import whatsappLogo from "@/assets/whatsapp-logo.png";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 
 const Footer = () => {
@@ -49,7 +49,7 @@ const Footer = () => {
               className="p-3 rounded-full border border-papel/15 hover:border-celeste hover:bg-celeste hover:text-accent-foreground transition-all"
               aria-label="Contáctanos por WhatsApp"
             >
-              <img src={whatsappLogo} alt="WhatsApp" className="w-5 h-5" />
+              <WhatsAppIcon className="w-5 h-5" />
             </a>
           </div>
 

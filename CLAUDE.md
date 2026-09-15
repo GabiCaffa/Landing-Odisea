@@ -582,6 +582,76 @@ archivo del bucket.
 > alguna vez se quiere un vencimiento, el molde es el `pg_cron` de `v8_cleanup_unconfirmed`.
 
 ---
+## 6.4 Rendimiento de la landing
+
+PageSpeed (móvil) daba **66/100**. Todo lo de abajo se midió sobre el sitio real antes y
+después; ningún número es estimado.
+
+**Imágenes: 990 KB → 277 KB (−72%).** Los flyers se suben a Supabase Storage tal como los manda
+el diseñador —hasta 533 KB— y se muestran a 318 px. Supabase tiene habilitado el endpoint de
+transformación (`/storage/v1/render/image/public/…?width=&quality=`), que redimensiona al vuelo y
+**negocia WebP por el `Accept` del navegador**. `src/lib/imagenes.ts` arma esa URL más un `srcset`
+de 320/480/640/960 con `sizes`, así el celular baja la variante chica. No hay que resubir nada.
+
+> El `<img>` lleva `width`/`height` explícitos. **No fijan el tamaño** —de eso se encarga el CSS—
+> sino la proporción, para que el navegador reserve el espacio antes de que llegue la foto. Sin
+> eso la tarjeta salta al cargar, que era el "salto de layout" que marcaba PageSpeed.
+
+**Iconos: −82 KB.** El logo de WhatsApp eran dos PNG de 360×360 mostrados a **16×16**. Ahora es
+`WhatsAppIcon`, un SVG en línea con `currentColor`. De paso resolvió solo un parche: el PNG blanco
+desaparecía sobre el botón claro del tema y había un `filter: invert(1)` para taparlo. Un icono
+que hereda el color del texto no puede volver a tener ese problema.
+
+**Fuentes.** Los imports genéricos de `@fontsource` traen los **seis** subsets (cirílico, griego,
+vietnamita…): 43 bloques `@font-face`, 14,8 KB del CSS que bloquea el render, en un sitio en
+español. Pasan a `latin-NNN.css`: **43 → 7** bloques, el CSS baja de 102,9 a 89,8 KB.
+
+> **No se sacó el peso 800** aunque no tenga usos como clase de Tailwind (sí lo usa la regla base
+> de los `h1..h6`). El navegador **sólo descarga las fuentes que efectivamente usa**, así que ese
+> archivo nunca se bajaba: quitarlo ahorraba 300 bytes de CSS y arriesgaba cambiar el grosor de
+> los títulos. `font-display: swap` ya estaba — lo pone `@fontsource`.
+
+**Caché.** Los archivos de `/assets/` llevan hash de contenido en el nombre y Vercel los servía
+con `max-age=0, must-revalidate`: cada visita repetida revalidaba el bundle entero. El bloque
+`headers` de `vercel.json` los pasa a un año + `immutable`. Los de `/public/` **no** llevan hash,
+así que van a una semana con `stale-while-revalidate` — un año ahí sería una trampa: cambiar la
+animación o el audio no llegaría nunca. `index.html` sigue sin cachearse: lleva el tema escrito
+por `bakeTheme` y es lo que apunta a los assets con hash.
+
+**JS de la carga inicial: 297 KB → 173 KB (−42%).** `manualChunks` parte el bundle por librería —
+hacía falta para diagnosticar (con 741 KB en un archivo no se ve qué pesa) y ayuda al caché, ya
+que el código de terceros deja de invalidarse cada vez que se toca una línea del sitio. Con la
+división a la vista aparecieron dos cosas que no tenían por qué estar en la carga inicial:
+
+- **libphonenumber (35 KB).** `EventCard` ya difería `TicketPurchaseModal`, pero `PromosSection`
+  lo importaba **directo** para la card "Precio Directo", así que la cadena entraba igual. Los dos
+  modales pasan a `lazy` + `Suspense`.
+- **lottie-web (77 KB).** Es decoración y arrancaba a los 33 ms. Ahora espera a
+  `requestIdleCallback`: medido, llega a los **4741 ms**, con la página ya usable.
+
+> **Trampa de `manualChunks`:** no alcanza con quitarle el nombre a un chunk dinámico. Sin un
+> `return` explícito, `lottie-web` caía en el `return 'vendor'` final — y `vendor` **sí** se
+> precarga, así que la decoración se colaba en la carga inicial escondida ahí (medido: vendor pasó
+> de 49 a 128 KB antes de que me diera cuenta).
+
+**Hilo principal.** Dos cosas nuestras lo estaban cargando:
+
+- **El grano tenía `mix-blend-mode: overlay`.** Conservaba mejor los negros, pero un blend sobre
+  una capa fija a pantalla completa obliga al navegador a recomponer **todo lo que hay debajo** en
+  una sola capa, en cada pintado — carísimo para una textura que casi no se nota. Ahora es
+  opacidad plana (0.035); sobre fondo oscuro el resultado es prácticamente igual.
+- **Los ocho Lottie corrían siempre.** Lottie dibuja cada cuadro desde JavaScript, así que cada
+  instancia cuesta hilo principal esté o no en pantalla — y las ocho nunca se ven juntas.
+  `SpookyLottie` ahora las pausa con un `IntersectionObserver` (margen de 200 px para que no se
+  vea "arrancar" al entrar) y con la pestaña en segundo plano. Medido en el hero: **3 de 4 arañas
+  pausadas**; al bajar a eventos se invierte.
+
+> **Las imágenes de 5-11 MB de `src/assets/` NO se publican.** Vite sólo empaqueta lo que se
+> importa, y de esa carpeta se importan cuatro archivos. El resto (`sunset.png`, `saltocarru.png`,
+> las fotos de carrusel…) son ~59 MB de peso muerto **del repo**, no del sitio: molestan al clonar,
+> no al visitante. Se pueden borrar, pero no cambian el rendimiento.
+
+
 
 ## 7. Branding / UI
 

@@ -1,7 +1,8 @@
 import { useState, lazy, Suspense } from "react";
 import { Instagram } from "lucide-react";
-import whatsappLogo from "@/assets/whatsapp-logo.png";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { playHover, playThud } from "@/lib/spookySound";
+import { imagenRedimensionada, srcSetRedimensionado, PROPORCION_EVENTO } from "@/lib/imagenes";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
 import { EventTicket } from "@/lib/ticketTypes";
 
@@ -54,8 +55,20 @@ const EventCard = ({
         {/* Event Image */}
         <div className="evento-media relative aspect-[4/3] bg-papel overflow-hidden border-b border-border">
           <img
-            src={image}
+            // El original pesa hasta 533 KB para mostrarse a 318 px: se pide
+            // redimensionado a Supabase, que además devuelve WebP.
+            src={imagenRedimensionada(image, 640)}
+            srcSet={srcSetRedimensionado(image) || undefined}
+            // La tarjeta mide 280 px en celular y 320 en escritorio: con esto
+            // el navegador baja la variante que corresponde a su pantalla en
+            // vez de la más grande.
+            sizes="(min-width: 768px) 320px, 280px"
             alt={name}
+            // width/height NO fijan el tamaño —de eso se encarga el CSS— sino
+            // la proporción, para que el navegador reserve el espacio antes de
+            // que llegue la foto. Sin esto la tarjeta salta al cargar.
+            width={PROPORCION_EVENTO.width}
+            height={PROPORCION_EVENTO.height}
             loading="lazy"
             decoding="async"
             className="w-full h-full"
@@ -111,7 +124,7 @@ const EventCard = ({
               disabled={isSoldOut}
               className="btn-techno flex-1 text-xs py-2.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <img src={whatsappLogo} alt="WhatsApp" className="w-4 h-4" />
+              <WhatsAppIcon className="w-4 h-4" />
               <span>{isSoldOut ? "Agotado" : "Comprar"}</span>
             </button>
 

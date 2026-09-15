@@ -54,8 +54,11 @@ const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
     let cancelado = false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let anim: any = null;
+    let io: IntersectionObserver | null = null;
+    let onVisibilidad: (() => void) | null = null;
+    let enPantalla = false;
 
-    (async () => {
+    const cargar = async () => {
       try {
         // El archivo primero: si no está, ni siquiera se descarga el runtime.
         // Sin `cache: "force-cache"`: parece un ahorro y es un footgun — el
@@ -79,6 +82,37 @@ const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
         anim.setSpeed(speed);
         setListo(true);
         onReadyRef.current?.(anim);
+
+        /**
+         * Sólo se anima lo que se está viendo.
+         *
+         * Lottie dibuja cada cuadro desde JavaScript, así que **cada instancia
+         * cuesta hilo principal todo el tiempo**, esté o no en pantalla. Entre
+         * los murciélagos del hero y las arañas de eventos hay ocho corriendo a
+         * la vez, y nunca se ven todas juntas: cuando se mira el hero, las
+         * arañas están a dos pantallas de distancia gastando cuadros para nada.
+         *
+         * Se pausa también con la pestaña en segundo plano. El navegador frena
+         * los rAF, pero no siempre del todo, y una pestaña que quedó abierta no
+         * tiene por qué seguir dibujando arañas.
+         */
+        const visible = () =>
+          document.visibilityState === "visible" && enPantalla;
+
+        io = new IntersectionObserver(
+          ([e]) => {
+            enPantalla = e.isIntersecting;
+            if (visible()) anim.play();
+            else anim.pause();
+          },
+          // Un margen generoso: que empiece a animarse justo antes de entrar,
+          // para que no se vea "arrancar" al aparecer.
+          { rootMargin: "200px" }
+        );
+        io.observe(contenedor.current);
+
+        onVisibilidad = () => (visible() ? anim.play() : anim.pause());
+        document.addEventListener("visibilitychange", onVisibilidad);
       } catch (err) {
         // En producción es decoración opcional: si el archivo no está o el JSON
         // es inválido, no pasa nada. En desarrollo SÍ se avisa — un catch mudo
@@ -86,10 +120,38 @@ const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
         // vacío.
         if (import.meta.env.DEV) console.warn(`[lottie] ${src} no cargó:`, err);
       }
-    })();
+    };
+
+    /**
+     * Se espera a que el navegador esté OCIOSO antes de tocar nada.
+     *
+     * El runtime son ~77 KB comprimidos y esto es decoración: no tiene por qué
+     * competir con el primer render ni con los datos de los eventos. Medido,
+     * arrancaba a los 33ms junto con todo lo crítico.
+     *
+     * Safari no tiene `requestIdleCallback`, así que ahí se usa un temporizador.
+     * El `timeout` del idle es la red de seguridad para una pestaña que nunca
+     * llega a estar ociosa: igual carga, sólo que tarde.
+     */
+    const rIC = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    });
+
+    let idleId = 0;
+    let timerId = 0;
+    if (rIC.requestIdleCallback) {
+      idleId = rIC.requestIdleCallback(() => void cargar(), { timeout: 4000 });
+    } else {
+      timerId = window.setTimeout(() => void cargar(), 1500);
+    }
 
     return () => {
       cancelado = true;
+      if (idleId && rIC.cancelIdleCallback) rIC.cancelIdleCallback(idleId);
+      if (timerId) clearTimeout(timerId);
+      if (io) io.disconnect();
+      if (onVisibilidad) document.removeEventListener("visibilitychange", onVisibilidad);
       if (anim) anim.destroy();
     };
   }, [theme, src, speed]);

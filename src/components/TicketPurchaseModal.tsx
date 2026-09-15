@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, Gift, Sparkles, Check } from "lucide-react";
-import whatsappLogo from "@/assets/whatsapp-logo.png";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
 import { useAuth } from "@/contexts/AuthContext";
@@ -391,7 +391,7 @@ const TicketPurchaseModal = ({
               disabled={!isFormValid}
               className="btn-techno w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <img src={whatsappLogo} alt="WhatsApp" className="w-5 h-5" />
+              <WhatsAppIcon className="w-5 h-5" />
               <span>Enviar por WhatsApp</span>
             </button>
 

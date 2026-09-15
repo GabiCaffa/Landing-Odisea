@@ -42,7 +42,7 @@ import {
   Palette,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
-import whatsappLogo from "@/assets/whatsapp-logo.png";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { useConfirm } from "@/components/ConfirmDialog";
 import LoadingScreen from "@/components/LoadingScreen";
 import {
@@ -2161,7 +2161,7 @@ const EventCardPreview = ({
             disabled
             className="btn-techno flex-1 text-xs py-2 px-3 opacity-90 cursor-default"
           >
-            <img src={whatsappLogo} alt="WhatsApp" className="w-4 h-4" />
+            <WhatsAppIcon className="w-4 h-4" />
             <span>{status === "agotado" ? "Agotado" : `Comprar · desde $${price}`}</span>
           </button>
         </div>
