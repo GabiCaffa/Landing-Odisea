@@ -593,9 +593,22 @@ transformación (`/storage/v1/render/image/public/…?width=&quality=`), que red
 **negocia WebP por el `Accept` del navegador**. `src/lib/imagenes.ts` arma esa URL más un `srcset`
 de 320/480/640/960 con `sizes`, así el celular baja la variante chica. No hay que resubir nada.
 
+> **`resize=contain` no es opcional: sin eso el servidor RECORTA.** El modo por defecto de
+> Supabase es `cover`, que rellena la caja pedida cortando lo que sobra. Con `?width=480` a
+> secas sobre un flyer vertical de 800×1000 **no escala**: devuelve `480×1000`, o sea le corta
+> los dos costados al dibujo, y después el CSS lo recorta otra vez contra el 4:3 de la tarjeta.
+> Se veía un pedazo del medio del flyer. Sólo se salvaban los **cuadrados**, porque ahí el
+> ancho pedido ya era mayor que el original y no había nada que recortar — por eso mirando una
+> sola imagen el problema puede no aparecer. Medido con `contain`: proporción intacta y **menos
+> peso** (70 KB contra 134), porque el recorte conservaba el alto completo de 1000 px. Los
+> cuatro flyers a 480w pasan de 277 a **151 KB**. Verificado por píxeles: el encuadre recortado
+> se desviaba 29/255 del original y con el arreglo se desvía 2 (ruido de recompresión).
+
 > El `<img>` lleva `width`/`height` explícitos. **No fijan el tamaño** —de eso se encarga el CSS—
 > sino la proporción, para que el navegador reserve el espacio antes de que llegue la foto. Sin
-> eso la tarjeta salta al cargar, que era el "salto de layout" que marcaba PageSpeed.
+> eso la tarjeta salta al cargar, que era el "salto de layout" que marcaba PageSpeed. Son la
+> proporción de la **caja** (4:3, la del `aspect-[4/3]` del contenedor), no la del flyer: el
+> encuadre lo decide `object-fit`/`object-position`, que es donde el admin lo ajusta.
 
 **Iconos: −82 KB.** El logo de WhatsApp eran dos PNG de 360×360 mostrados a **16×16**. Ahora es
 `WhatsAppIcon`, un SVG en línea con `currentColor`. De paso resolvió solo un parche: el PNG blanco
