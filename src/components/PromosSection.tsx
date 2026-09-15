@@ -20,9 +20,9 @@ const promos = [
   {
     number: "01",
     tag: "PROMO GRUPOS",
-    title: "Vengan juntos,\nuno entra gratis.",
+    title: "Vengan juntos,\npara acceder a beneficios.",
     description:
-      "Comprá 5 entradas juntos y la sexta es nuestra. Coordiná con tu grupo y paguen en un solo pago para acceder al beneficio.",
+      "Coordiná con tu grupo y paguen en un solo pago para acceder al beneficio.",
     cta: "Consultar por WhatsApp",
     ctaHref:
       "https://wa.me/59892592179?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Grupos",

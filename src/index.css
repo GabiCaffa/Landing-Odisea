@@ -1,12 +1,16 @@
-@import '@fontsource/inter-tight/400.css';
-@import '@fontsource/inter-tight/500.css';
-@import '@fontsource/inter-tight/600.css';
-@import '@fontsource/inter-tight/700.css';
-@import '@fontsource/inter-tight/800.css';
-@import '@fontsource/inter-tight/900.css';
+/* Sólo el subset LATINO. Los imports genéricos de @fontsource traen los seis
+   subsets (cirílico, griego, vietnamita…): 43 bloques @font-face, 14,8 KB del
+   CSS que bloquea el render, para un sitio en español. Las tildes, la ñ y los
+   signos de apertura entran todos en U+0000-00FF. */
+@import '@fontsource/inter-tight/latin-400.css';
+@import '@fontsource/inter-tight/latin-500.css';
+@import '@fontsource/inter-tight/latin-600.css';
+@import '@fontsource/inter-tight/latin-700.css';
+@import '@fontsource/inter-tight/latin-800.css';
+@import '@fontsource/inter-tight/latin-900.css';
 /* Sólo se usa en el tema Halloween. El archivo de fuente no se descarga
    mientras nada se renderice con ella. */
-@import '@fontsource/creepster';
+@import '@fontsource/creepster/latin-400.css';
 
 @tailwind base;
 @tailwind components;
@@ -641,17 +645,6 @@
   height: 100%;
 }
 
-/* ── Iconos monocromos sobre botón claro ── */
-/* El logo de WhatsApp es un PNG blanco (medido: rgb(254,254,254)). En la
-   paleta base el botón `btn-techno` es tinta oscura y el blanco se lee
-   perfecto; con el tema, "tinta" es el hueso y el botón queda CLARO, así que
-   el icono desaparecía. Se invierte para que acompañe al texto oscuro.
-
-   Va acotado a `.btn-techno`: el mismo logo en el footer sí está sobre fondo
-   oscuro y ahí tiene que seguir blanco. */
-:root[data-theme="halloween"] .btn-techno img {
-  filter: invert(1);
-}
 
 /* ── Colores de las arañas ── */
 /* Se pisan los rellenos que Lottie escribe en el SVG, igual que con los

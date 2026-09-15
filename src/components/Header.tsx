@@ -4,7 +4,7 @@ import { LogOut, ShieldCheck, User as UserIcon, UserCircle } from "lucide-react"
 import odiseaLogoDark from "@/assets/odisea-logo-black.png";
 import odiseaLogoLight from "@/assets/odisea-logo-white.png";
 import { useTheme } from "@/contexts/ThemeContext";
-import whatsappLogo2 from "@/assets/whatsapp-logo2.png";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { useAuth, isStaffRole } from "@/contexts/AuthContext";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
@@ -202,7 +202,7 @@ const Header = () => {
               rel="noopener noreferrer"
               className="btn-techno-outline text-xs py-2 px-3"
             >
-              <img src={whatsappLogo2} alt="WhatsApp" className="w-4 h-4" />
+              <WhatsAppIcon className="w-4 h-4" />
             </a>
           </div>
         </div>
