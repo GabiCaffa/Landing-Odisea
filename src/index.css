@@ -423,8 +423,13 @@
   inset: 0;
   z-index: 40;
   pointer-events: none;
-  opacity: 0.05;
-  mix-blend-mode: overlay;
+  /* SIN mix-blend-mode. Se veía apenas mejor —conservaba los negros— pero un
+     blend sobre una capa fija a pantalla completa obliga al navegador a
+     recomponer TODO lo que hay debajo en una sola capa para mezclarlo, en cada
+     pintado. Es de lo más caro que puede hacer una textura que casi no se nota.
+     Con opacidad plana y un poco más baja el resultado es prácticamente igual
+     sobre un fondo oscuro, y no cuesta nada. */
+  opacity: 0.035;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
