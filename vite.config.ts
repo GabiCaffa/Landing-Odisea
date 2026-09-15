@@ -72,6 +72,41 @@ export default defineConfig(({ mode }) => {
       mode === "development" && componentTagger(),
       bakeTheme(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY),
     ].filter(Boolean),
+    build: {
+      rollupOptions: {
+        output: {
+          /**
+           * Se separan las librerías grandes en chunks propios.
+           *
+           * Dos motivos. Uno de diagnóstico: con todo en un solo archivo de
+           * 741 KB no hay forma de saber qué pesa. Y uno de caché: ahora que
+           * /assets/ va con "immutable" a un año, el código de terceros —que
+           * cambia cuando se actualiza una dependencia, o sea casi nunca— deja
+           * de invalidarse cada vez que se toca una línea del sitio.
+           */
+          manualChunks(id: string) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('@supabase')) return 'supabase';
+            // lottie-web queda FUERA de todo grupo, con un return vacío.
+            //
+            // No alcanza con no nombrarlo: sin esta línea cae en el return
+            // "vendor" de abajo, y vendor SÍ se precarga — la decoración se
+            // colaba en la carga inicial escondida ahí (medido: vendor pasó de
+            // 49 a 128 KB). Devolviendo undefined, Rollup lo trata como lo que
+            // es: el chunk del import() dinámico, que sólo baja cuando se pide.
+            if (id.includes('lottie-web')) return;
+            if (id.includes('libphonenumber')) return 'telefono';
+            if (id.includes('recharts') || id.includes('d3-')) return 'graficos';
+            if (id.includes('@radix-ui')) return 'radix';
+            if (id.includes('react-router')) return 'router';
+            // React va aparte y JUNTO: separar react de react-dom o del
+            // scheduler rompe el orden de inicialización.
+            if (/[\/]node_modules[\/](react|react-dom|scheduler)[\/]/.test(id)) return 'react';
+            return 'vendor';
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

@@ -1,8 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
-import TicketPurchaseModal from "./TicketPurchaseModal";
-import BirthdayPromoModal from "./BirthdayPromoModal";
+// Diferido, igual que en EventCard: arrastra PhoneInput -> libphonenumber.
+// Estaba importado directo acá, y por eso esos ~35 KB seguían entrando en la
+// carga inicial de la home aunque EventCard ya lo tuviera diferido.
+const TicketPurchaseModal = lazy(() => import("./TicketPurchaseModal"));
+// Diferido: arrastra PhoneInput -> libphonenumber (~35 KB comprimido) y sólo
+// hace falta si alguien abre la promo de cumpleaños.
+const BirthdayPromoModal = lazy(() => import("./BirthdayPromoModal"));
 import { EventTicket } from "@/lib/ticketTypes";
 import { playThud } from "@/lib/spookySound";
 
@@ -136,10 +141,15 @@ const PromosSection = () => {
       )}
 
       {/* Promo cumpleaños: la solicitud se carga desde el sitio, sólo con cuenta */}
-      <BirthdayPromoModal isOpen={showBirthday} onClose={() => setShowBirthday(false)} />
+      {showBirthday && (
+        <Suspense fallback={null}>
+          <BirthdayPromoModal isOpen onClose={() => setShowBirthday(false)} />
+        </Suspense>
+      )}
 
       {/* Ticket modal reutilizado */}
       {selectedEvent && (
+        <Suspense fallback={null}>
         <TicketPurchaseModal
           isOpen={isModalOpen}
           onClose={() => { setIsModalOpen(false); setSelectedEvent(null); }}
@@ -149,6 +159,7 @@ const PromosSection = () => {
           eventLocation={selectedEvent.location}
           tickets={selectedEvent.tickets}
         />
+        </Suspense>
       )}
     </section>
   );

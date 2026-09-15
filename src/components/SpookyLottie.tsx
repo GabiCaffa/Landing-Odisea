@@ -55,7 +55,7 @@ const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let anim: any = null;
 
-    (async () => {
+    const cargar = async () => {
       try {
         // El archivo primero: si no está, ni siquiera se descarga el runtime.
         // Sin `cache: "force-cache"`: parece un ahorro y es un footgun — el
@@ -86,10 +86,36 @@ const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
         // vacío.
         if (import.meta.env.DEV) console.warn(`[lottie] ${src} no cargó:`, err);
       }
-    })();
+    };
+
+    /**
+     * Se espera a que el navegador esté OCIOSO antes de tocar nada.
+     *
+     * El runtime son ~77 KB comprimidos y esto es decoración: no tiene por qué
+     * competir con el primer render ni con los datos de los eventos. Medido,
+     * arrancaba a los 33ms junto con todo lo crítico.
+     *
+     * Safari no tiene `requestIdleCallback`, así que ahí se usa un temporizador.
+     * El `timeout` del idle es la red de seguridad para una pestaña que nunca
+     * llega a estar ociosa: igual carga, sólo que tarde.
+     */
+    const rIC = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    });
+
+    let idleId = 0;
+    let timerId = 0;
+    if (rIC.requestIdleCallback) {
+      idleId = rIC.requestIdleCallback(() => void cargar(), { timeout: 4000 });
+    } else {
+      timerId = window.setTimeout(() => void cargar(), 1500);
+    }
 
     return () => {
       cancelado = true;
+      if (idleId && rIC.cancelIdleCallback) rIC.cancelIdleCallback(idleId);
+      if (timerId) clearTimeout(timerId);
       if (anim) anim.destroy();
     };
   }, [theme, src, speed]);
