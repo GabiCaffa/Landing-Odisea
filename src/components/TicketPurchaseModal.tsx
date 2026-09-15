@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Gift, Sparkles, Check } from "lucide-react";
+import { X, Check } from "lucide-react";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
@@ -33,7 +33,7 @@ const TicketPurchaseModal = ({
   eventLocation,
   tickets,
 }: TicketPurchaseModalProps) => {
-  const { currentUser, checkBirthdayPromo, claimBirthdayPromo } = useAuth();
+  const { currentUser } = useAuth();
 
   const [step, setStep] = useState<Step>("auth-prompt");
 
@@ -47,9 +47,6 @@ const TicketPurchaseModal = ({
     email: "",
     phone: "",
   });
-
-  const [birthdayEligible, setBirthdayEligible] = useState(false);
-  const [birthdayApplied, setBirthdayApplied] = useState(false);
 
   // Cuenta de cobro del evento (la carga el admin desde el panel).
   const [account, setAccount] = useState<PaymentAccount | null>(null);
@@ -71,18 +68,6 @@ const TicketPurchaseModal = ({
       setStep("auth-prompt");
     }
   }, [isOpen, currentUser]);
-
-  // Detectar elegibilidad cumple cuando se abre y el user está logueado
-  useEffect(() => {
-    if (!isOpen || !currentUser || !eventId) return;
-    let active = true;
-    checkBirthdayPromo(eventId).then((res) => {
-      if (active) setBirthdayEligible(res.canClaim);
-    });
-    return () => {
-      active = false;
-    };
-  }, [isOpen, currentUser, eventId, checkBirthdayPromo]);
 
   // Datos de transferencia del evento. Si el evento no tiene cuenta (o falla la
   // consulta) no inventamos nada: se oculta el bloque y se pide por WhatsApp.
@@ -114,18 +99,6 @@ const TicketPurchaseModal = ({
 
   const getSelectedTickets = () => tickets.filter((t) => quantities[t.name] > 0);
 
-  const handleClaimBirthday = async () => {
-    if (!eventId) return;
-    const result = await claimBirthdayPromo(eventId);
-    if (!result.ok) {
-      toast.error(result.error ?? "No se pudo aplicar la promo");
-      return;
-    }
-    setBirthdayApplied(true);
-    setBirthdayEligible(false);
-    toast.success("Promo cumpleaños aplicada");
-  };
-
   const buildMessage = () => {
     const selected = getSelectedTickets();
     if (selected.length === 0) return null;
@@ -144,7 +117,6 @@ const TicketPurchaseModal = ({
       eventDate,
       items: selected.map((t) => ({ name: t.name, qty: quantities[t.name], price: t.price })),
       total: calculateTotal(),
-      birthdayPromo: birthdayApplied,
       account,
     });
   };
@@ -200,7 +172,7 @@ const TicketPurchaseModal = ({
         {step === "auth-prompt" ? (
           <AuthPromptStep
             subtitle="Si ya tenés cuenta, tus datos se completan solos. Si no, podés continuar como invitado."
-            loginHint="Acelera la compra y desbloquea beneficios (promo cumpleaños, etc.)"
+            loginHint="Acelera la compra: tus datos se completan solos"
             registerHint="Te lleva un minuto y queda guardado para próximas compras"
             onContinue={() => setStep("purchase")}
           />
@@ -214,36 +186,6 @@ const TicketPurchaseModal = ({
                   Conectado como{" "}
                   <span className="font-semibold text-foreground">{currentUser.firstName}</span>.
                   Tus datos ya están cargados.
-                </p>
-              </div>
-            )}
-
-            {/* Promo cumpleaños */}
-            {birthdayEligible && !birthdayApplied && (
-              <div className="p-4 rounded-xl border border-border bg-secondary/50 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Gift className="w-5 h-5" />
-                  <h4 className="font-semibold tracking-wide">¡TENÉS BENEFICIO CUMPLEAÑOS!</h4>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Tu fecha de nacimiento cae cerca de este evento. Aplicá el beneficio y avisanos
-                  por WhatsApp para coordinar.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleClaimBirthday}
-                  className="inline-flex items-center gap-2 bg-foreground text-background px-4 py-2 text-xs tracking-wider uppercase hover:bg-foreground/90"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Aplicar promo cumpleaños
-                </button>
-              </div>
-            )}
-            {birthdayApplied && (
-              <div className="flex items-center gap-2 p-3 border border-foreground bg-foreground text-background">
-                <Sparkles className="w-4 h-4" />
-                <p className="text-xs tracking-wide uppercase font-semibold">
-                  Promo cumpleaños aplicada · Aviso en el mensaje de WhatsApp
                 </p>
               </div>
             )}

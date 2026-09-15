@@ -20,6 +20,20 @@ export const MSG = {
   greeting: "Buenas! Soy",
   event: "Quiero comprar para",
   total: "TOTAL:",
+  /**
+   * **El sitio ya NO escribe esta línea; sólo la lee.** Es la única
+   * asimetría entre el armado y la lectura, y es deliberada.
+   *
+   * El beneficio de cumpleaños no se autoaplica al comprar: se reclama
+   * desde la sección Promociones, con la foto del documento, y queda
+   * pendiente hasta que el staff lo apruebe (v16). El botón que había en
+   * el modal de compra salteaba esa aprobación — al vendedor le llegaba un
+   * mensaje afirmando un descuento que nadie había validado.
+   *
+   * El parser la conserva porque puede quedar algún mensaje viejo sin
+   * mandar en el teléfono de alguien: si el staff lo pega, el dato se ve
+   * en vez de perderse en silencio.
+   */
   birthdayPromo: "PROMO CUMPLEAÑOS APLICADA",
   dataHeader: "Mis datos:",
   fullName: "Nombre completo:",
@@ -54,7 +68,6 @@ export interface PurchaseMessageInput {
   eventDate: string;
   items: PurchaseMessageItem[];
   total: number;
-  birthdayPromo?: boolean;
   /** Cuenta de cobro del evento (v13). Sin cuenta, el mensaje la pide. */
   account?: PaymentAccount | null;
 }
@@ -69,10 +82,8 @@ export function buildPurchaseMessage(input: PurchaseMessageInput): string {
     msg += `- ${item.qty} entrada${item.qty > 1 ? "s" : ""} ${item.name} ($${subtotal})\n`;
   }
   msg += `\n${MSG.total} $${input.total}\n`;
-  // La promo tiene que viajar en el texto: es lo único que le avisa al staff que
-  // a esta persona hay que aplicarle el beneficio. Antes se le mostraba al
-  // comprador "aviso en el mensaje de WhatsApp" y el mensaje no decía nada.
-  if (input.birthdayPromo) msg += `${MSG.birthdayPromo}\n`;
+  // La promo de cumpleaños NO se escribe acá: no se reclama desde la compra.
+  // Ver el comentario de MSG.birthdayPromo.
   msg += `\n${MSG.dataHeader}\n`;
   msg += `${MSG.fullName} ${input.fullName}\n`;
   msg += `${MSG.email} ${input.email}\n`;

@@ -340,12 +340,25 @@ Decisiones del importador (`PasteMessageModal` en `Admin.tsx`):
 - Cruza el evento por nombre sin tildes ni mayúsculas (si no lo encuentra, se elige a mano) y
   el email contra los perfiles, para enganchar el `user_id` y el badge "Registrado" (v10).
 
-**Bug arreglado de paso:** el modal de compra mostraba *"Promo cumpleaños aplicada · Aviso en
-el mensaje de WhatsApp"* pero `buildMessage` **no escribía ninguna línea de la promo**
-(`birthdayApplied` sólo pintaba el banner). La persona reclamaba el beneficio, quedaba
-registrado en `birthday_promo_claims`, y al staff le llegaba un mensaje idéntico a cualquier
-otro: se le cobraba el precio lleno. Ahora va la línea `PROMO CUMPLEAÑOS APLICADA`, que el
-parser detecta y deja marcada en el resumen y en las notas de la entrega.
+**La promo de cumpleaños NO viaja en este mensaje, y es la única asimetría entre
+`buildPurchaseMessage` y `parsePurchaseMessage`.** El modal de compra tenía un botón
+"Aplicar promo cumpleaños" que insertaba en `birthday_promo_claims` y escribía la línea
+`PROMO CUMPLEAÑOS APLICADA` en el texto. **Se sacó entero** —botón, banner, chequeo de
+elegibilidad y las funciones `checkBirthdayPromo`/`claimBirthdayPromo` de `AuthContext`,
+que no las usaba nadie más—. El motivo es de negocio y no de código: el beneficio se
+reclama **sólo** desde la sección Promociones, con la foto del documento, y queda
+`pendiente` hasta que el staff lo apruebe (6.1 y v16). El botón del modal salteaba esa
+aprobación: cualquiera con la fecha de nacimiento a mano le mandaba al vendedor un
+mensaje afirmando un descuento que nadie había validado.
+
+> **Sacar sólo la línea del texto habría sido peor que dejarla.** Ese es exactamente el
+> bug que había antes de esto (el banner decía "aplicada" y el mensaje no decía nada, así
+> que se cobraba el precio lleno). O va el camino entero o no va ninguno.
+
+> El **parser sigue detectando** la etiqueta aunque el sitio ya no la escriba. Puede quedar
+> algún mensaje viejo sin mandar en el teléfono de alguien; si el staff lo pega, el dato se
+> ve en el resumen en vez de perderse en silencio. La tabla `birthday_promo_claims` queda
+> en la base con lo ya reclamado: no se borra nada, sólo dejó de escribirse.
 
 > El plegado de tildes (`foldText`) se subió de `UserSearchSelect` a `src/lib/utils.ts`, que
 > ahora lo comparten el buscador y el parser. Usa `\p{M}` y no un rango `[U+0300-U+036F]`
