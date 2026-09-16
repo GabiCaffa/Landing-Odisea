@@ -558,7 +558,7 @@ const StatusBadge = ({ status }: { status: AdminEvent["status"] }) => {
 // Events admin
 // ────────────────────────────────────────────────────────────────────────────
 const EventsAdmin = () => {
-  const { events, createEvent, updateEvent, deleteEvent } = useAuth();
+  const { events, createEvent, updateEvent, deleteEvent, refreshEvents } = useAuth();
   const confirm = useConfirm();
   const [editing, setEditing] = useState<AdminEvent | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -628,6 +628,19 @@ const EventsAdmin = () => {
         );
         return;
       }
+
+      /**
+       * Recarga explícita al final, y no es opcional.
+       *
+       * El realtime sólo escucha la tabla `events`, así que el `updateEvent`
+       * de arriba ya disparó una recarga — que corrió ANTES de guardar las
+       * entradas y las promos y por lo tanto leyó el estado viejo. Como
+       * `event_ticket_types` y `event_ticket_promos` no tienen suscripción
+       * propia, nada la vuelve a disparar: sin esto, el panel y el sitio
+       * mostraban lo anterior aunque en la base estuviera bien guardado.
+       * (Así se veía el bug: "clickeo la promo, guardo, y no se guarda".)
+       */
+      await refreshEvents();
     }
 
     toast.success(editing ? "Evento actualizado" : "Evento creado");

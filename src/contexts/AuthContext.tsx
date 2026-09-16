@@ -128,6 +128,18 @@ interface AuthContextValue {
   currentUser: User | null;
   users: User[];
   events: AdminEvent[];
+  /**
+   * Vuelve a leer los eventos con sus entradas y promos embebidas.
+   *
+   * Hace falta porque el realtime **sólo escucha la tabla `events`**, y las
+   * entradas y las promos viven en tablas aparte. Al guardar un evento se
+   * actualiza `events` primero —lo que dispara una recarga— y recién después
+   * se guardan las entradas y las promos: esa recarga llega con el estado
+   * ANTERIOR, y como nada más la vuelve a disparar, la pantalla quedaba
+   * mostrando lo viejo aunque en la base estuviera bien guardado. Quien guarda
+   * llama a esto al final.
+   */
+  refreshEvents: () => Promise<void>;
   loading: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (data: {
@@ -621,6 +633,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         currentUser,
         users,
         events,
+        refreshEvents: loadEvents,
         loading,
         login,
         register,
