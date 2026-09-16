@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 import ScrollToTop from "@/components/ScrollToTop";
+import OcultarArranque from "@/components/OcultarArranque";
 import LoadingScreen from "@/components/LoadingScreen";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
@@ -29,6 +30,9 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    {/* Levanta el telón de index.html en cuanto React pintó. Va arriba de todo
+        y fuera de los providers: no depende de sesión, tema ni ruta. */}
+    <OcultarArranque />
     <TooltipProvider>
       <Toaster />
       <Sonner />

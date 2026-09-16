@@ -748,6 +748,80 @@ partía en dos líneas contra el contador. De `sm:` para arriba vuelven a ir en
 línea. Mismo criterio en el selector de evento.
 
 
+## 6.6 Arranque en celular: pantalla vacía y hilo trabado
+
+La queja fue concreta: *"abre primero la web en blanco y está 10 segundos para
+cambiar al estilo halloween, todo trabado al principio"*. Lo primero que se
+descartó es lo que parecía: **el tema NO llega tarde**. Medido en producción, el
+HTML sale en 252 ms ya con `data-theme="halloween"` escrito por `bakeTheme`, y el
+`<style>` crítico pinta el fondo oscuro en el primer cuadro. También se verificó
+que `odiseaoficial.com` y `www.` sirven el mismo build (hay **dos proyectos de
+Vercel** apuntando al mismo repo, así que valía la pena mirarlo).
+
+La causa real es estructural: **el HTML no tiene nada que pintar**. Es
+`<div id="root"></div>` vacío, así que hasta que no se bajan, parsean y
+**ejecutan** ~574 KB de JavaScript (react 139 + vendor 157 + supabase 156 +
+radix 45 + router 12 + app ~64) no existe el sitio. Más 90 KB de CSS que bloquea
+el render. En una conexión de escritorio eso son 1,3 s; en un celular con datos
+móviles y CPU lenta, los 10 s que reportó el autor.
+
+**Pantalla de arranque (`#arranque` en `index.html` + `OcultarArranque`).** No
+acelera la carga: hace que lo primero que se vea sea la marca sobre el fondo del
+tema en vez del vacío. Se pinta apenas el navegador lee el `<body>` porque no
+depende ni del CSS de la app ni de una línea de JavaScript — el logo va como
+`background-image` desde el `<style>` crítico, y así además se baja **sólo la
+variante del tema activo** (los `email-logo-*.png` de `/public` son byte a byte
+los mismos que `src/assets/odisea-logo-*.png`).
+
+> **Va FUERA de `#root`, y eso no es un detalle.** Adentro, React lo borra de
+> golpe al montar; y como el hero arranca en `opacity 0` con un fundido de 700 ms,
+> entre una cosa y la otra queda un parpadeo de pantalla vacía. Superpuesto y con
+> su propio fundido de 600 ms, los dos se cruzan.
+
+> **Nada de `requestAnimationFrame` para destaparlo.** Fue el primer intento,
+> buscando la garantía de que el navegador hubiera pintado. Se rompía: los `rAF`
+> **no corren en una pestaña en segundo plano**, así que quien abriera el sitio en
+> una pestaña de fondo se encontraba el telón tapando todo al volver. Se detectó
+> probando el build real: el telón quedaba sin la clase, en `opacity 0.55`, encima
+> del contenido. Un `useEffect` solo alcanza —corre después del commit, o sea con
+> el DOM real ya escrito— y no tiene ese modo de falla.
+
+> **Tiene un seguro de 15 s en CSS puro.** Si el JavaScript nunca llega a correr
+> (bundle caído, red cortada a la mitad), el telón se destapa solo en vez de dejar
+> la pantalla tapada para siempre. En una carga normal no se ve nunca.
+
+**Los ocho Lottie parseaban 1660 KB de JSON.** Cada instancia hacía su propio
+`fetch` + `json()`: cuatro murciélagos (16 KB) y cuatro arañas, y el `.json` de la
+araña pesa **399 KB**. El `fetch` lo deduplicaba el caché HTTP, pero el **parseo**
+—que es lo caro y corre en el hilo principal— se pagaba entero las ocho veces. Eso
+era buena parte del "todo trabado". Ahora se baja y se parsea **una vez por
+archivo** (`cacheAnimaciones` en `SpookyLottie`): medido, **1660 KB → 415 KB** y 8
+pedidos → 2.
+
+> **Cada instancia recibe una COPIA (`structuredClone`).** Lottie escribe estado
+> interno dentro del objeto que se le pasa, así que compartir el mismo entre cuatro
+> reproductores es justo la clase de bug que aparece en el segundo y el tercero.
+> Clonar sigue siendo mucho más barato que volver a parsear. Verificado en el build:
+> las ocho animaciones renderizan.
+
+> **Un fallo de red no queda cacheado.** Si se cayó la red un segundo, la próxima
+> instancia tiene que poder reintentar; por eso el `catch` borra la entrada.
+
+**La decoración espera al evento `load`, no sólo al idle.** El `timeout: 4000` del
+`requestIdleCallback` es un piso, no un techo: en un celular lento la página
+todavía se está montando a los 4 s, así que la decoración arrancaba **encima** del
+trabajo crítico. Medido en producción: los ocho `.json` empezaban a los 856 ms, no
+"con la página ya usable" como pretendía 6.4.
+
+> **Lo que NO se tocó, y por qué.** Sacar `supabase` (156 KB) del arranque es lo
+> siguiente en la lista, pero `AuthContext` lo necesita al montar y diferirlo
+> significa renderizar la app sin estado de sesión: es un cambio de arquitectura, no
+> un ajuste. Y en `vendor` (160 KB) no hay una ganancia fácil: se revisó si
+> `react-hook-form` y `zod` se estaban colando —el molde de la trampa de `lottie`—
+> y no, porque el único que los importa es `src/components/ui/form.tsx`, que **no lo
+> usa nadie** y por lo tanto nunca entra al bundle.
+
+
 ## 7. Branding / UI
 
 - **Paleta "Minimal Monochrome"** (en `src/index.css`): naranja `#F25C26`
