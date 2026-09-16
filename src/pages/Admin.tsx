@@ -4000,6 +4000,19 @@ const BirthdaysAdmin = () => {
    * que su beneficio está confirmado cuando en la base no lo está.
    */
   const handleApprove = async (b: BirthdaySignup) => {
+    // El teléfono ahora es obligatorio en los dos formularios, pero hay fichas
+    // viejas cargadas sin él. Avisar ANTES y no después: enterarse de que no se
+    // le puede escribir cuando el botón ya salió gris es enterarse tarde. Mismo
+    // criterio que el documento repetido y el menor de edad (v14): avisa, no
+    // bloquea.
+    if (!b.phone) {
+      const ok = await confirm({
+        title: "Sin teléfono",
+        description: `${b.firstName} ${b.lastName} no tiene teléfono cargado, así que no vas a poder avisarle por WhatsApp. Podés aprobar igual y agregarle el número editando la ficha.`,
+        confirmText: "Aprobar igual",
+      });
+      if (!ok) return;
+    }
     const result = await setBirthdayStatus(b.id, "aprobado");
     if (!result.ok) return toast.error(result.error ?? "No se pudo aprobar");
     await reload();
@@ -4692,16 +4705,30 @@ const BirthdayFormModal = ({
       return toast.error(`${documentLabelByCountry(form.country)} inválido`);
     }
 
-    // Email y teléfono son opcionales, pero si vienen tienen que ser válidos.
+    // El email es opcional, pero si viene tiene que ser válido.
     const email = form.email.trim().toLowerCase();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return toast.error("Email inválido");
     }
-    let phoneE164: string | null = null;
-    if (form.phone.trim()) {
-      phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
-      if (!phoneE164) return toast.error("Teléfono inválido");
-    }
+
+    /**
+     * El teléfono es OBLIGATORIO.
+     *
+     * Era opcional cuando la ficha sólo servía para tener la lista de a quién
+     * darle el regalo. Desde que al aprobar se le escribe por WhatsApp (v20),
+     * una ficha sin teléfono es una ficha a la que no se le puede avisar — y el
+     * encargado se entera recién cuando ya la aprobó y el botón está gris.
+     *
+     * El formulario del cliente (`BirthdayPromoModal`) ya lo exigía, así que
+     * esto cierra la única puerta que quedaba abierta: la carga a mano.
+     *
+     * No va como `not null` en la base a propósito: hay fichas viejas cargadas
+     * sin teléfono y un `not null` obligaría a inventarles uno o a borrarlas.
+     * Se exige de acá en adelante; las viejas se editan cuando aparezcan.
+     */
+    if (!form.phone.trim()) return toast.error("Indicá el teléfono");
+    const phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
+    if (!phoneE164) return toast.error("Teléfono inválido");
 
     // Menor de edad: avisa pero no bloquea. Es habitual que cumpla los 18 entre
     // la carga y la fecha del evento, y eso el sistema no lo puede decidir solo.
@@ -4930,7 +4957,7 @@ const BirthdayFormModal = ({
             </FormField>
             <div>
               <span className="block text-xs tracking-[0.2em] uppercase text-muted-foreground mb-2">
-                Teléfono (opcional)
+                Teléfono *
               </span>
               <PhoneInput
                 country={form.country}
