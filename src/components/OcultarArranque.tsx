@@ -31,12 +31,47 @@ const OcultarArranque = () => {
     const telon = document.getElementById("arranque");
     if (!telon) return;
 
-    telon.classList.add("arranque--listo");
-    // Se saca del DOM recién cuando terminó el fundido (0.6s en el CSS). Si
-    // quedara, es un elemento a pantalla completa por encima de todo: aunque
-    // sea invisible y sin eventos, no tiene por qué seguir ahí.
-    const quitar = window.setTimeout(() => telon.remove(), 700);
+    let quitar = 0;
+    const levantar = () => {
+      telon.classList.add("arranque--listo");
+      // Se saca del DOM recién cuando terminó el fundido (0.6s en el CSS). Si
+      // quedara, es un elemento a pantalla completa por encima de todo: aunque
+      // sea invisible y sin eventos, no tiene por qué seguir ahí.
+      quitar = window.setTimeout(() => telon.remove(), 700);
+    };
 
+    /**
+     * No se destapa sobre contenido sin estilos.
+     *
+     * La hoja de la app se carga sin bloquear el render (`cssNoBloqueante` en
+     * `vite.config.ts`): así el telón puede pintarse enseguida en vez de esperar
+     * 91 KB de CSS. El precio teórico es que React podría montar antes de que la
+     * hoja esté aplicada. En la práctica no pasa —la hoja son 91 KB contra ~574
+     * KB de JavaScript— pero "en la práctica no pasa" no es una garantía, y acá
+     * la garantía cuesta tres líneas.
+     *
+     * Mientras no cargó, el `<link>` queda en `media="print"`; su `onload` lo
+     * pasa a `all`. El respaldo por tiempo es para que un error de red en el CSS
+     * no deje el telón puesto para siempre.
+     */
+    const hoja = document.getElementById("css-app") as HTMLLinkElement | null;
+    if (hoja && hoja.media === "print") {
+      const respaldo = window.setTimeout(levantar, 3000);
+      hoja.addEventListener(
+        "load",
+        () => {
+          clearTimeout(respaldo);
+          levantar();
+        },
+        { once: true }
+      );
+      return () => {
+        clearTimeout(respaldo);
+        clearTimeout(quitar);
+      };
+    }
+
+    levantar();
     return () => clearTimeout(quitar);
   }, []);
 

@@ -790,6 +790,40 @@ los mismos que `src/assets/odisea-logo-*.png`).
 > (bundle caído, red cortada a la mitad), el telón se destapa solo en vez de dejar
 > la pantalla tapada para siempre. En una carga normal no se ve nunca.
 
+**El blanco que seguía apareciendo: la hoja de estilos bloqueaba al propio telón.**
+Un `<link rel="stylesheet">` en el `<head>` **bloquea el render**: el navegador no
+pinta NADA hasta tenerlo. Eso incluía al `<style>` crítico y a `#arranque`, que
+existen justamente para que se vea algo enseguida — o sea que la pantalla quedaba
+en blanco durante toda la descarga de 91 KB de CSS. Rápido en escritorio, lento en
+un celular con datos móviles: exactamente la diferencia que se reportó.
+
+> **La pista que lo confirmó.** El logo del telón es un `background-image` del CSS
+> crítico, y se pedía recién a los **240 ms**, después de que la hoja externa
+> terminara a los 211. Si el CSS inline hubiera podido pintar por su cuenta, ese
+> pedido habría salido con el parseo del HTML.
+
+`cssNoBloqueante` (en `vite.config.ts`) reescribe esa etiqueta a `media="print"`
+con `onload="this.media='all'"`: el navegador la baja sin bloquear y la aplica al
+terminar. Medido después del cambio: el logo pasa a pedirse a los **19 ms**, en
+paralelo con el CSS en vez de después.
+
+> **Tres cosas lo hacen seguro, y ninguna sobra.** (1) El telón tapa la pantalla
+> hasta que React monta. (2) `OcultarArranque` **espera explícitamente** a que la
+> hoja esté aplicada antes de levantarlo —mientras no cargó queda en
+> `media="print"`—, con un respaldo por tiempo para que un error de red en el CSS
+> no deje el telón puesto. (3) El `<noscript>` deja la etiqueta bloqueante de
+> siempre para quien tenga JavaScript apagado, que es para quien el `onload` nunca
+> corre. Hay margen de sobra igual: la hoja son 91 KB contra ~574 KB de JavaScript.
+> Verificado también que el sitio **no tiene CSP**, que es lo que rompería un
+> `onload` en línea.
+
+**`bakeTheme` aprovecha que conoce el tema para dos cosas más.** Escribe
+`<meta name="theme-color">` —en Android, Chrome pinta su propia barra con ese
+valor, y sin él queda clara aunque el sitio sea oscuro, que también se lee como
+"aparece blanco"— y un `<link rel="preload" as="image">` del logo del telón, que si
+no el navegador recién descubre al calcular estilos.
+
+
 **Los ocho Lottie parseaban 1660 KB de JSON.** Cada instancia hacía su propio
 `fetch` + `json()`: cuatro murciélagos (16 KB) y cuatro arañas, y el `.json` de la
 araña pesa **399 KB**. El `fetch` lo deduplicaba el caché HTTP, pero el **parseo**
