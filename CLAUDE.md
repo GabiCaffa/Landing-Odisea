@@ -95,7 +95,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v12_birthday_signups.sql` → `v13_payment_accounts.sql` →
 `v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
-`v18_delivery_ticket_types.sql` → `v19_site_settings.sql`.
+`v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
+`v20_birthday_role.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -259,6 +260,85 @@ fechas distintas el mismo día).
 > enviadas llevan en `sent_at` la **fecha del evento**, no la de la importación: no se sabe el
 > día exacto del envío, pero es una aproximación razonable y no dice que se enviaron hoy. El
 > bloque de cada hoja aborta con un mensaje claro si el `id` de evento pegado no existe.
+
+**v20 — Rol `cumples` (encargado de la promo de cumpleaños).** Tercer rol de staff,
+al lado de `operador` (v11). Entra al panel y ve **únicamente** la pestaña
+Cumpleaños: no ve Entregas —o sea, no ve las ventas, los montos ni los datos de los
+compradores—, ni eventos, ni usuarios, ni cuentas de cobro.
+
+> **Por qué NO alcanzaba con sumarlo a `is_staff()`.** Esa función es la que protege
+> `ticket_deliveries`: agregarle el rol le abría la recaudación entera de una, que es
+> exactamente lo contrario de lo que este rol existe para hacer. Va una función
+> aparte y `is_staff()` queda intacta:
+>
+> - `is_staff()` → admin, operador → **Entregas**
+> - `is_birthday_staff()` → admin, operador, cumples → **Cumpleaños + fotos de documento**
+>
+> El operador queda incluido en la nueva porque **hoy ya ve Cumpleaños**
+> (`TABS_POR_ROL` en `Admin.tsx`): la migración no le saca acceso a nadie.
+
+La política del bucket privado `id-photos` también pasa a `is_birthday_staff()`. Sin
+eso el rol ve la lista pero no puede abrir la cédula, que es una de las cosas para
+las que existe. La lectura de `profiles` se suma con una política **aparte**
+(`profiles_select_birthday_staff`) en vez de modificar la de v11: varias políticas
+permisivas se combinan con OR, así que agregar una no le saca acceso a nadie ni
+depende del orden en que se corran las migraciones.
+
+El candado del admin único (v6) no se toca: `enforce_unique_admin()` sólo reescribe
+el rol cuando el email es el del admin oficial o cuando alguien intenta ponerse
+`admin`, así que `cumples` pasa sin que lo toque.
+
+**Front.** `TABS_POR_ROL` reemplaza al viejo `OPERATOR_TABS` + `if (!isOperator)`:
+con dos roles limitados esa condición ya no alcanzaba y con tres era ilegible. El
+sidebar y el ruteo leen la misma tabla, así que no puede aparecer un botón que la
+pestaña después rechaza. **Es comodidad, no seguridad** — lo que separa los módulos
+de verdad son las políticas RLS.
+
+## 6.7 El aviso de WhatsApp al cumpleañero
+
+Al **aprobar** una solicitud se abre un modal con el mensaje ya armado; el encargado
+lo lee, lo edita si quiere y lo manda. **No manda nada solo**, y es a propósito: un
+envío automático de verdad necesita la API de WhatsApp Business. Esto abre el chat
+con el texto puesto, que es lo que el staff ya hacía a mano.
+
+El modal se abre **después** de que la aprobación quedó guardada. Si el update falla
+no tiene que aparecer un mensaje que le diga a la persona que su beneficio está
+confirmado cuando en la base no lo está.
+
+**El texto vive en `src/lib/birthdayMessage.ts`** y está calcado del que el staff ya
+escribía: no es un texto inventado, el autor pasó la captura de un mensaje real. Por
+eso no es un cupón ni un aviso formal sino una **presentación personal** — el
+beneficio son regalitos que el encargado entrega en mano durante la noche, así que
+lo que importa es que la persona sepa QUIÉN se los va a dar y tenga su número.
+
+> Tres reglas del texto, pedidas explícitamente: **sin emojis** (van signos de
+> exclamación en su lugar), **firma con el nombre real del encargado** —sale de su
+> perfil; un "somos el equipo de ODÍSEA" impersonal rompe justo lo que el mensaje
+> hace— y **que no suene a IA**: nada de viñetas, frases simétricas ni
+> "¡Esperamos verte pronto!".
+
+> **El evento es opcional en la ficha** (`event_id` es nullable desde v12), así que el
+> mensaje se arma igual sin él: no nombra el evento ni cierra con "nos vemos el N",
+> que sería hablar de algo que no existe. El día se saca cortando el string ISO y no
+> con `new Date()`, por el mismo motivo que `formatEventDate`: interpretarlo como
+> fecha lo pasa a UTC y puede devolver el día anterior.
+
+> **El teléfono también es opcional.** Sin teléfono se aprueba igual, pero el botón
+> queda deshabilitado explicando por qué, y queda el de copiar el mensaje. Nunca se
+> abre un chat vacío.
+
+> **El mensaje sale del WhatsApp del encargado, o sea de su número personal**, no del
+> de ODÍSEA. Es consecuencia de abrir `wa.me` desde su teléfono, y acá es lo buscado:
+> el texto justamente dice "te dejo mi número". Si alguna vez tiene que salir del
+> número de ODÍSEA, no se arregla con otro link — hay que ir a la API de WhatsApp
+> Business.
+
+En las fichas ya aprobadas queda un botón de WhatsApp para reenviar: el mensaje sale
+solo al aprobar, pero puede no haberse mandado ahí (sin teléfono en ese momento, o el
+encargado cerró el modal). Y el filtro **"A revisar"** es el que abre por defecto para
+el rol `cumples`, que es donde empieza su trabajo; admin y operador entran donde
+entraban siempre.
+
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 

@@ -4,11 +4,24 @@ import { EventTicket, eventTicketFromDb, sortEventTickets } from "@/lib/ticketTy
 
 export type { EventTicket };
 
-export type UserRole = "admin" | "operador" | "user";
+export type UserRole = "admin" | "operador" | "cumples" | "user";
 
-/** Staff = puede entrar al panel (admin ve todo; operador sólo Entregas). */
+/**
+ * Staff = puede entrar al panel. Qué ve adentro lo decide `TABS_POR_ROL`
+ * (`Admin.tsx`), no esta función:
+ *
+ *   admin     → todo
+ *   operador  → Entregas y Cumpleaños        (v11)
+ *   cumples   → SÓLO Cumpleaños              (v20)
+ *
+ * Esto es sólo el guard de la ruta. La separación de verdad está en la base,
+ * con dos funciones distintas: `is_staff()` protege Entregas y NO incluye a
+ * `cumples`, mientras que `is_birthday_staff()` protege los cumpleaños y las
+ * fotos de documento y sí lo incluye. Si esto estuviera sólo en el front,
+ * alcanzaría con una consulta a Supabase para saltearlo.
+ */
 export const isStaffRole = (role?: UserRole | null) =>
-  role === "admin" || role === "operador";
+  role === "admin" || role === "operador" || role === "cumples";
 
 /** Única cuenta autorizada como admin. Inmutable: enforzado también en la DB. */
 export const OFFICIAL_ADMIN_EMAIL = "lisoftuy@gmail.com";
