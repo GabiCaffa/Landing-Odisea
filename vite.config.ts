@@ -47,7 +47,29 @@ function bakeTheme(url?: string, key?: string): Plugin {
           return html;
         }
         console.log(`[tema] '${theme}' escrito en el <html> del build`);
-        return html.replace("<html lang=\"es\">", `<html lang="es" data-theme="${theme}">`);
+
+        /**
+         * Ya que el build sabe qué tema va, aprovecha para dos cosas más que
+         * atacan el "blanco al principio":
+         *
+         * 1. `theme-color`. En Android, Chrome pinta su propia barra con este
+         *    valor. Sin él queda clara aunque el sitio sea oscuro, y eso es
+         *    parte de lo que se lee como "aparece blanco primero".
+         * 2. `preload` del logo del telón. Es un `background-image` del CSS
+         *    crítico, así que el navegador recién lo descubre cuando calcula
+         *    estilos — medido: el pedido salía a los 240 ms, después del CSS.
+         *    Con el preload arranca junto con todo lo demás.
+         *
+         * Los dos dependen del tema, y el tema sólo se conoce acá.
+         */
+        const oscuro = theme === "halloween";
+        const extras =
+          `<meta name="theme-color" content="${oscuro ? "#0B1D22" : "#FFFFFF"}">\n    ` +
+          `<link rel="preload" as="image" href="/email-logo-${oscuro ? "white" : "black"}.png">\n    `;
+
+        return html
+          .replace("<html lang=\"es\">", `<html lang="es" data-theme="${theme}">`)
+          .replace("<meta charset=\"UTF-8\" />", `<meta charset="UTF-8" />\n    ${extras}`);
       } catch (err) {
         console.warn(
           `[tema] no se pudo leer el tema para el build (${(err as Error).message}). ` +
@@ -55,6 +77,64 @@ function bakeTheme(url?: string, key?: string): Plugin {
         );
         return html;
       }
+    },
+  };
+}
+
+/**
+ * La hoja de estilos de la app deja de bloquear el primer pintado.
+ *
+ * **El problema que resuelve, medido.** Un `<link rel="stylesheet">` en el
+ * `<head>` bloquea el render: el navegador no pinta NADA hasta tenerlo. Eso
+ * incluía al `<style>` crítico y al telón de `#arranque`, que justamente están
+ * para que se vea algo enseguida. O sea que la pantalla quedaba en blanco
+ * durante toda la descarga de 91 KB de CSS — rápido en escritorio, lento en un
+ * celular con datos móviles, que es exactamente la diferencia que se reportó.
+ *
+ * La pista que lo confirmó: el logo del telón, que es un `background-image` del
+ * CSS crítico, recién se pedía a los **240 ms**, después de que la hoja externa
+ * terminara a los 211. Si el CSS inline hubiera podido pintar por su cuenta, ese
+ * pedido habría salido con el parseo del HTML.
+ *
+ * **El truco.** `media="print"` hace que el navegador lo baje sin bloquear (no
+ * aplica a pantalla); al terminar, `onload` lo pasa a `all` y se aplica. Es el
+ * patrón estándar para CSS no crítico.
+ *
+ * **Por qué no rompe.** Entre que llega el CSS y que la app se ve hay muchísimo
+ * margen: la hoja son 91 KB y el JavaScript que monta React son ~574 KB, así que
+ * el CSS gana siempre por varios cuerpos. Y además hay dos redes de contención:
+ * el telón tapa la pantalla hasta que React monta, y `OcultarArranque` **espera
+ * explícitamente** a que la hoja esté aplicada antes de levantarlo. El
+ * `<noscript>` cubre a quien tenga JavaScript apagado, para el que el `onload`
+ * nunca corre.
+ */
+function cssNoBloqueante(): Plugin {
+  return {
+    name: "odisea-css-no-bloqueante",
+    apply: "build",
+    transformIndexHtml: {
+      // 'post': tiene que correr DESPUÉS de que Vite inyecte sus propias
+      // etiquetas, que es lo que se está reescribiendo.
+      order: "post",
+      handler(html) {
+        const re = /<link rel="stylesheet"([^>]*?)href="([^"]+)"([^>]*)>/g;
+        let encontradas = 0;
+        const salida = html.replace(re, (_m, antes, href, despues) => {
+          encontradas++;
+          const attrs = `${antes}href="${href}"${despues}`.trim();
+          return (
+            `<link rel="stylesheet" ${attrs.replace(/^rel="stylesheet"\s*/, "")} ` +
+            `id="css-app" media="print" onload="this.media='all'">` +
+            `<noscript><link rel="stylesheet" ${attrs}></noscript>`
+          );
+        });
+        if (!encontradas) {
+          console.warn("[css] no encontré la hoja de estilos: queda bloqueando el render, como antes");
+          return html;
+        }
+        console.log(`[css] ${encontradas} hoja(s) pasan a no bloquear el primer pintado`);
+        return salida;
+      },
     },
   };
 }
@@ -71,6 +151,7 @@ export default defineConfig(({ mode }) => {
       react(),
       mode === "development" && componentTagger(),
       bakeTheme(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY),
+      cssNoBloqueante(),
     ].filter(Boolean),
     build: {
       rollupOptions: {
