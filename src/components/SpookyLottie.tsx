@@ -38,6 +38,51 @@ interface Props {
   onReady?: (anim: any) => void;
 }
 
+/**
+ * El `.json` de cada animación se baja y se parsea UNA vez, aunque haya varias
+ * instancias del mismo dibujo.
+ *
+ * Medido en producción antes de esto: **1660 KB de JSON decodificado** en la
+ * carga. Son cuatro murciélagos y cuatro arañas, y cada instancia hacía su
+ * propio `fetch` + `json()`; el de la araña pesa **399 KB**, así que se parseaba
+ * cuatro veces. El `fetch` lo deduplicaba el caché HTTP, pero el parseo —que es
+ * lo caro y corre en el hilo principal— se pagaba entero cada vez.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const cacheAnimaciones = new Map<string, Promise<any>>();
+
+/**
+ * Cada instancia recibe su propia COPIA.
+ *
+ * Lottie escribe estado interno dentro del objeto que se le pasa, así que
+ * compartir el mismo entre cuatro reproductores es justo la clase de bug que
+ * aparece en el segundo y el tercero. Clonar sigue siendo mucho más barato que
+ * volver a parsear: `structuredClone` es nativo. El respaldo por JSON es para
+ * navegadores viejos que no lo tienen.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const clonar = (datos: any) =>
+  typeof structuredClone === "function" ? structuredClone(datos) : JSON.parse(JSON.stringify(datos));
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const bajarAnimacion = (src: string): Promise<any> => {
+  let pedido = cacheAnimaciones.get(src);
+  if (!pedido) {
+    // Sin `cache: "force-cache"`: parece un ahorro y es un footgun — el
+    // navegador se queda con la copia vieja sin revalidar, así que cambiar de
+    // animación no se vería. El caché HTTP normal ya hace ese trabajo.
+    pedido = fetch(src).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    });
+    // Un fallo NO queda cacheado: si se cayó la red un segundo, la próxima
+    // instancia (o el próximo montaje) tiene que poder volver a intentar.
+    pedido.catch(() => cacheAnimaciones.delete(src));
+    cacheAnimaciones.set(src, pedido);
+  }
+  return pedido.then(clonar);
+};
+
 const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
   const { theme } = useTheme();
   const contenedor = useRef<HTMLDivElement>(null);
@@ -61,12 +106,9 @@ const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
     const cargar = async () => {
       try {
         // El archivo primero: si no está, ni siquiera se descarga el runtime.
-        // Sin `cache: "force-cache"`: parece un ahorro y es un footgun — el
-        // navegador se queda con la copia vieja sin revalidar, así que cambiar
-        // de animación no se vería. El caché HTTP normal ya hace este trabajo.
-        const res = await fetch(src);
-        if (!res.ok) return;
-        const animationData = await res.json();
+        // Se baja y se parsea una sola vez para todas las instancias del mismo
+        // dibujo; acá llega una copia propia (ver `bajarAnimacion`).
+        const animationData = await bajarAnimacion(src);
         if (cancelado || !contenedor.current) return;
 
         const lottie = (await import("lottie-web")).default;
@@ -140,14 +182,36 @@ const SpookyLottie = ({ src, className = "", speed = 0.5, onReady }: Props) => {
 
     let idleId = 0;
     let timerId = 0;
-    if (rIC.requestIdleCallback) {
-      idleId = rIC.requestIdleCallback(() => void cargar(), { timeout: 4000 });
+    let onLoad: (() => void) | null = null;
+
+    const alEstarOcioso = () => {
+      if (rIC.requestIdleCallback) {
+        idleId = rIC.requestIdleCallback(() => void cargar(), { timeout: 4000 });
+      } else {
+        timerId = window.setTimeout(() => void cargar(), 1500);
+      }
+    };
+
+    /**
+     * Primero que termine de cargar la página, DESPUÉS que el navegador esté
+     * ocioso.
+     *
+     * Sólo con el idle no alcanza: su `timeout` de 4s es un piso, no un techo,
+     * y en un celular lento la página todavía está montándose a los 4s — o sea
+     * que la decoración arrancaba justo encima del trabajo crítico. Medido en
+     * producción: los ocho `.json` empezaban a los 856 ms, no "con la página ya
+     * usable" como se pretendía.
+     */
+    if (document.readyState === "complete") {
+      alEstarOcioso();
     } else {
-      timerId = window.setTimeout(() => void cargar(), 1500);
+      onLoad = () => alEstarOcioso();
+      window.addEventListener("load", onLoad, { once: true });
     }
 
     return () => {
       cancelado = true;
+      if (onLoad) window.removeEventListener("load", onLoad);
       if (idleId && rIC.cancelIdleCallback) rIC.cancelIdleCallback(idleId);
       if (timerId) clearTimeout(timerId);
       if (io) io.disconnect();

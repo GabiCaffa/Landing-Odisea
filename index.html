@@ -38,6 +38,68 @@
       html { background: #FFFFFF; }
       html[data-theme="halloween"],
       html[data-theme="halloween"] body { background: #0B1D22; color: #E8EFEE; }
+
+      /* ─── Pantalla de arranque ──────────────────────────────────────────
+         Este sitio es una SPA: el HTML que llega trae `<div id="root">` VACÍO,
+         así que hasta que no se bajan, parsean y EJECUTAN ~574 KB de
+         JavaScript no hay absolutamente nada para pintar. Medido en un celular
+         real eso son varios segundos de pantalla en blanco, y la queja era
+         justamente ésa.
+
+         Esto no acelera la carga: hace que lo primero que se ve sea la marca
+         sobre el fondo del tema en vez de el vacío. Se pinta apenas el
+         navegador lee el <body>, porque no depende ni del CSS de la app ni de
+         una sola línea de JavaScript.
+
+         Va FUERA de #root a propósito. Adentro, React lo borraría de golpe al
+         montar y el hero —que arranca en opacity 0 y hace un fundido de 700ms—
+         dejaría un parpadeo de contenido vacío. Superpuesto y con su propio
+         fundido, los dos se cruzan.
+
+         El logo va como background-image y no como <img> para que el navegador
+         baje SÓLO la variante del tema activo. Los archivos de /public son
+         byte a byte los mismos que src/assets/odisea-logo-*.png. */
+      #arranque {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background-color: #FFFFFF;
+        background-image: url("/email-logo-black.png");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: min(160px, 42vw) auto;
+        opacity: 1;
+        transition: opacity 0.6s ease;
+      }
+      html[data-theme="halloween"] #arranque {
+        background-color: #0B1D22;
+        background-image: url("/email-logo-white.png");
+      }
+      #arranque.arranque--listo { opacity: 0; pointer-events: none; }
+
+      @keyframes arranque-latido { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+      @keyframes arranque-rendirse { to { opacity: 0; visibility: hidden; } }
+
+      /* Dos animaciones, cada una con SU tiempo:
+         1) el latido, para que se lea como "cargando" y no como una imagen
+            colgada;
+         2) un SEGURO a los 15s. Si el JavaScript nunca llega a correr (bundle
+            caído, red que se corta a la mitad), esto se destapa solo en vez de
+            dejar la pantalla tapada para siempre. En una carga normal nunca se
+            ve: React lo quita muchísimo antes.
+         El orden importa: las dos tocan `opacity` y, cuando la segunda arranca,
+         gana la última de la lista. Antes de su retraso no pinta nada porque el
+         relleno es `forwards`, no `backwards`. */
+      #arranque {
+        animation:
+          arranque-latido 1.8s ease-in-out infinite,
+          arranque-rendirse 0.6s ease 15s forwards;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #arranque { animation: arranque-rendirse 0.6s ease 15s forwards; }
+      }
+      /* Al montar React manda el fundido de la clase, no las animaciones. */
+      #arranque.arranque--listo { animation: none; }
     </style>
 
     <!-- Tema estacional: se aplica ANTES de que React monte.
@@ -118,6 +180,10 @@
     </script>
   </head>
   <body>
+    <!-- Lo primero que se ve, antes de que exista una línea de JavaScript.
+         Lo quita OcultarArranque cuando React ya pintó (ver el <style> de
+         arriba). `aria-hidden` porque no es contenido: es el telón. -->
+    <div id="arranque" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
