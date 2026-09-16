@@ -3,20 +3,63 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ODÍSEA</title>
-    <meta name="description" content="ODÍSEA es una productora de eventos de música en Uruguay." />
-    <meta name="keywords" content="ODÍSEA, techno, música electrónica, eventos, fiestas, Uruguay, Montevideo, underground" />
+
+    <!-- Título y descripción ─────────────────────────────────────────────
+         Esto es literalmente lo que Google muestra debajo del link, así que
+         se escribe para que alguien decida entrar, no para describir el sitio.
+
+         Antes decía `<title>ODÍSEA</title>` y "ODÍSEA es una productora de
+         eventos de música en Uruguay": el nombre repetido y ni una razón para
+         hacer clic. Verificado en Google real, el sitio ya sale **primero** en
+         "odisea fiesta" y "odisea oficial" — o sea que el problema nunca fue
+         posicionar, sino qué decía el resultado.
+
+         El título nombra la categoría ("fiestas", "música electrónica") porque
+         nadie busca la marca sin conocerla; la descripción nombra las ciudades
+         donde hay fechas, que es como busca alguien de la zona. Se cortan
+         alrededor de los 60 y 160 caracteres: más largo, Google lo trunca. -->
+    <title>ODÍSEA · Fiestas y eventos de música electrónica en Uruguay</title>
+    <meta
+      name="description"
+      content="Productora de fiestas en Colonia del Sacramento, Paysandú y Nueva Helvecia. Mirá las próximas fechas, conseguí tu entrada y enterate de las promos."
+    />
     <meta name="author" content="ODÍSEA" />
-    
-    <!-- Open Graph -->
-    <meta property="og:title" content="ODÍSEA" />
-    <meta property="og:description" content="Productora de música y eventos en Uruguay" />
+    <!-- Sin `keywords`: Google la ignora desde 2009 y la de acá nombraba
+         Montevideo, que no es donde ODÍSEA hace fechas. -->
+
+    <!-- Canonical: el dominio sin www redirige al www, pero decirlo explícito
+         evita que un link con parámetros (?tema=, utm_…) se indexe aparte. -->
+    <link rel="canonical" href="https://www.odiseaoficial.com/" />
+
+    <!-- Open Graph — esto es lo que se ve al pegar el link en WhatsApp,
+         Instagram o Facebook. Esas tres NO ejecutan JavaScript, así que estas
+         etiquetas son TODO lo que reciben: si falta la imagen, el link sale
+         pelado. Antes faltaba, y el sitio se comparte por WhatsApp. -->
+    <meta property="og:site_name" content="ODÍSEA" />
+    <meta property="og:title" content="ODÍSEA · Fiestas y eventos de música electrónica en Uruguay" />
+    <meta
+      property="og:description"
+      content="Productora de fiestas en Colonia del Sacramento, Paysandú y Nueva Helvecia. Mirá las próximas fechas, conseguí tu entrada y enterate de las promos."
+    />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="es_UY" />
-    
+    <meta property="og:url" content="https://www.odiseaoficial.com/" />
+    <!-- Cuadrada (360×360). Lo ideal para un preview grande es 1200×630: con
+         un archivo así, se cambia sólo esta URL y las dos medidas de abajo. -->
+    <meta property="og:image" content="https://www.odiseaoficial.com/email-logo-white.png" />
+    <meta property="og:image:width" content="360" />
+    <meta property="og:image:height" content="360" />
+    <meta property="og:image:alt" content="ODÍSEA" />
+
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@odisea.uy" />
-    
+    <meta name="twitter:title" content="ODÍSEA · Fiestas y eventos de música electrónica en Uruguay" />
+    <meta
+      name="twitter:description"
+      content="Productora de fiestas en Colonia del Sacramento, Paysandú y Nueva Helvecia. Mirá las próximas fechas, conseguí tu entrada y enterate de las promos."
+    />
+    <meta name="twitter:image" content="https://www.odiseaoficial.com/email-logo-white.png" />
+
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     

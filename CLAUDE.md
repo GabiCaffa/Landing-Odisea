@@ -936,6 +936,85 @@ trabajo crítico. Medido en producción: los ocho `.json` empezaban a los 856 ms
 > usa nadie** y por lo tanto nunca entra al bundle.
 
 
+## 6.8 SEO
+
+**El punto de partida, medido en Google real, no supuesto.** El sitio ya salía
+**primero** en "odisea fiesta" y "odisea oficial". Posicionar nunca fue el
+problema; el problema era qué decía el resultado y qué NO aportaba el sitio:
+
+> **ODÍSEA**
+> ODÍSEA es una productora de eventos de música en Uruguay.
+
+Y algo peor, visible en la misma búsqueda: el resumen de IA de Google armaba las
+"Próximas Fechas" de ODÍSEA citando **Instagram y MiEntrada**, y MiEntrada salía
+segunda mostrando fecha, hora y lugar. **Google ya sabía las fechas, pero las
+aprendía de terceros**, porque el `<body>` que recibe un bot es
+`<div id="root">` vacío.
+
+**Título y descripción.** El título nombra la categoría ("fiestas", "música
+electrónica") porque nadie busca la marca sin conocerla, y la descripción nombra
+las ciudades donde hay fechas, que es como busca alguien de la zona. Se cortan
+cerca de los 60 y 160 caracteres: más largo, Google trunca. Se **borró**
+`<meta name="keywords">`: Google la ignora desde 2009 y encima nombraba
+Montevideo, que no es donde ODÍSEA hace fechas.
+
+> **`document.title` en `Index.tsx` pisaba todo.** Había un
+> `document.title = "ODÍSEA WEB"` en un efecto: el título escrito para Google
+> duraba hasta el primer render de React. Google ejecuta JavaScript, así que
+> podía quedarse con el pisado. **El título de la home vive en `index.html` y en
+> ningún otro lado.**
+
+**Open Graph.** Faltaba `og:image` entera, y el sitio se comparte por WhatsApp:
+cada link salía pelado. WhatsApp, Instagram y Facebook **no ejecutan
+JavaScript**, así que las meta tags son todo lo que reciben. Hoy apunta al logo
+cuadrado (360×360); con un archivo de 1200×630 se cambia esa URL y las dos
+medidas de al lado.
+
+**Datos estructurados horneados en el build (`bakeEventos` en `vite.config.ts`).**
+Mismo molde que `bakeTheme` —consultar Supabase en tiempo de build— porque ya
+estaba resuelto. Inyecta un `Organization` y un `Event` por evento vigente, más
+un `<noscript>` con la lista de fechas en texto plano. Se hornea y **no** se
+inyecta desde React justamente porque React no lo ven ni WhatsApp ni Instagram.
+Falla en silencio como `bakeTheme`: un deploy no se cae porque no se pudo listar
+una fiesta.
+
+> **El precio: los datos son del último deploy.** Los eventos se editan desde el
+> panel sin redeployar, así que uno nuevo no aparece hasta el próximo push. Es
+> aceptable —las fechas se cargan con semanas de anticipación— y la alternativa
+> no la verían los que comparten el link.
+
+> **Sólo se listan los eventos que no pasaron y no están finalizados.** Un evento
+> viejo en los datos estructurados es peor que no tener nada: Google muestra una
+> fecha pasada como si fuera la próxima.
+
+> **`eventStatus` NO es donde va "agotado".** Ese campo es para cancelado,
+> pospuesto o movido. Un evento agotado sigue programado; que no queden entradas
+> se dice en `offers.availability` con `SoldOut`.
+
+> **Hay que escapar `</` dentro del JSON-LD.** Esa secuencia cierra la etiqueta
+> `<script>` aunque esté dentro de un string JSON.
+
+**El sitemap no existía.** `/sitemap.xml` devolvía `text/html`: el rewrite de la
+SPA (`vercel.json`) le sirve el index a cualquier ruta que no sea un archivo
+real. Ahora `seoEstatico` lo emite en el build —un archivo de verdad le gana al
+rewrite, igual que `robots.txt`, que funcionaba porque está en `public/`— y
+`robots.txt` lo declara y bloquea `/admin`, `/perfil` y `/auth/`.
+
+**Los comentarios del HTML se publicaban.** Vite no los borra, así que los
+bloques que explican el telón de arranque y el script del tema viajaban en cada
+carga — y como el `<body>` es una SPA vacía, esos comentarios eran literalmente
+**el único texto** que un extractor encontraba en la home. Se borran del build
+(HTML de 16,4 a 10,8 KB); en el fuente quedan, que es donde sirven.
+
+> **Trampa al inyectar en el HTML: `String.replace` reemplaza la PRIMERA
+> ocurrencia.** El primer intento usaba `.replace("<body>", …)` y la primera
+> `<body>` del fuente está **dentro de un comentario** (el que explica el telón).
+> El `<noscript>` terminaba adentro del comentario y después el limpiador lo
+> borraba junto con él: no fallaba, simplemente no aparecía. Se ancla a
+> `<div id="root"></div>`, que no puede estar duplicado, y se avisa por consola
+> si un ancla no está.
+
+
 ## 7. Branding / UI
 
 - **Paleta "Minimal Monochrome"** (en `src/index.css`): naranja `#F25C26`
