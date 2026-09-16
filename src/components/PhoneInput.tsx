@@ -88,7 +88,7 @@ const PhoneInput = ({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar país..."
-              className="w-full pl-8 pr-2 py-1.5 text-sm border border-border bg-background focus:outline-none focus:border-foreground"
+              className="w-full pl-8 pr-2 py-1.5 text-base sm:text-sm border border-border bg-background focus:outline-none focus:border-foreground"
             />
           </div>
           <ul className="overflow-y-auto flex-1">

@@ -3,6 +3,7 @@ import { X, Cake, Check, AlertTriangle, Upload, Clock, Send } from "lucide-react
 import { Link } from "react-router-dom";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
+import ModalShell from "./ModalShell";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import {
   BirthdaySignup,
@@ -192,30 +193,32 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-velo/70 backdrop-blur-sm">
+    <ModalShell onClose={onClose} etiqueta="Reclamar la promo de cumpleaños">
+      {/* Encabezado fijo: el que scrollea es el cuerpo, no el panel entero. */}
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-border p-4 md:p-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <Cake className="w-6 h-6 flex-shrink-0" />
+          <div className="min-w-0">
+            <h2 className="text-xl md:text-2xl font-semibold">Promo cumpleaños</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Si tu cumple cae cerca del evento, tenés beneficio
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          // 44x44: el mínimo táctil. Venía de 40x40.
+          className="-mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center transition-colors hover:bg-muted"
+          aria-label="Cerrar"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
       <div
-        className="relative w-full max-w-2xl h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto bg-background border border-border"
+        className="flex-1 overflow-y-auto"
         style={{ fontFamily: "Inter, sans-serif", letterSpacing: "normal" }}
       >
-        {/* Header */}
-        <div className="sticky top-0 bg-background border-b border-border p-4 md:p-6 flex items-center justify-between z-10">
-          <div className="flex items-center gap-3 min-w-0">
-            <Cake className="w-6 h-6 flex-shrink-0" />
-            <div className="min-w-0">
-              <h2 className="text-xl md:text-2xl font-semibold">Promo cumpleaños</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Si tu cumple cae cerca del evento, tenés beneficio
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-muted transition-colors flex-shrink-0"
-            aria-label="Cerrar"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
 
         {!currentUser ? (
           <AuthPromptStep
@@ -462,7 +465,7 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
           </div>
         )}
       </div>
-    </div>
+    </ModalShell>
   );
 };
 
