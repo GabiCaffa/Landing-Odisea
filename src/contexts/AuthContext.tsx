@@ -41,18 +41,6 @@ export interface ProfileUpdate {
   state?: string | null;
 }
 
-export interface BirthdayCheck {
-  canClaim: boolean;
-  reason:
-    | "no_auth"
-    | "no_birth_date"
-    | "no_event"
-    | "birthday_too_far"
-    | "cooldown"
-    | "already_claimed"
-    | "ok";
-  nextAvailable?: string; // ISO yyyy-mm-dd
-}
 
 export const AVATARS_BUCKET = "avatars";
 
@@ -123,8 +111,6 @@ interface AuthContextValue {
     state?: string;
   }) => Promise<AuthResult>;
   resendConfirmation: (email: string) => Promise<{ ok: boolean; error?: string }>;
-  checkBirthdayPromo: (eventId: string) => Promise<BirthdayCheck>;
-  claimBirthdayPromo: (eventId: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   deleteUser: (id: string) => Promise<{ ok: boolean; error?: string }>;
   promoteUser: (id: string, role: UserRole) => Promise<{ ok: boolean; error?: string }>;
@@ -595,44 +581,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { ok: true };
   };
 
-  // ── Promo cumpleaños ──────────────────────────────────────────────────────
-  const checkBirthdayPromo: AuthContextValue["checkBirthdayPromo"] = async (eventId) => {
-    if (!currentUser) return { canClaim: false, reason: "no_auth" };
-    const { data, error } = await supabase.rpc("can_claim_birthday_promo", {
-      target_event: eventId,
-    });
-    if (error || !data || !data[0]) return { canClaim: false, reason: "no_auth" };
-    const row = data[0];
-    return {
-      canClaim: row.can_claim,
-      reason: row.reason,
-      nextAvailable: row.next_available ?? undefined,
-    };
-  };
-
-  const claimBirthdayPromo: AuthContextValue["claimBirthdayPromo"] = async (eventId) => {
-    if (!currentUser) return { ok: false, error: "No autenticado" };
-    const check = await checkBirthdayPromo(eventId);
-    if (!check.canClaim) {
-      const msg: Record<string, string> = {
-        no_auth: "Iniciá sesión para reclamar el beneficio",
-        no_birth_date: "Falta tu fecha de nacimiento en el perfil",
-        no_event: "Evento inválido",
-        birthday_too_far: "Tu cumple no cae cerca de la fecha del evento",
-        cooldown: check.nextAvailable
-          ? `Ya reclamaste una promo recientemente. Próximo disponible: ${check.nextAvailable}`
-          : "Ya reclamaste una promo recientemente",
-        already_claimed: "Ya reclamaste la promo para este evento",
-      };
-      return { ok: false, error: msg[check.reason] ?? "No podés reclamar la promo" };
-    }
-    const { error } = await supabase
-      .from("birthday_promo_claims")
-      .insert({ user_id: currentUser.id, event_id: eventId });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -659,8 +607,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         requestPasswordReset,
         updatePasswordWithSession,
         refreshProfile,
-        checkBirthdayPromo,
-        claimBirthdayPromo,
       }}
     >
       {children}

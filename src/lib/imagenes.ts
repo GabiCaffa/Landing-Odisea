@@ -36,10 +36,26 @@ const ANCHOS = [320, 480, 640, 960] as const;
 const esStorageDeSupabase = (url: string) =>
   url.includes(RUTA_ORIGINAL) && url.includes(".supabase.co");
 
-/** Una sola variante, al ancho pedido. */
+/**
+ * Una sola variante, al ancho pedido.
+ *
+ * **`resize=contain` no es opcional, y su ausencia rompió los flyers.** El modo
+ * por defecto de Supabase es `cover`, que recorta para llenar la caja pedida.
+ * Con `?width=480` a secas sobre un flyer vertical de 800×1000 el servidor NO
+ * escala: devuelve **480×1000**, o sea le corta los dos costados al dibujo.
+ * Después el CSS lo recorta otra vez contra el 4:3 de la tarjeta, así que se
+ * veía un pedazo del medio del flyer — "entrecortado". Sólo se salvaban los
+ * cuadrados, porque ahí el ancho pedido ya era mayor que el original y no había
+ * nada que recortar.
+ *
+ * Con `contain` la proporción se respeta (480×600) y de paso pesa **menos**:
+ * 70 KB contra 134, porque el recorte conservaba el alto completo de 1000 px.
+ * El encuadre vuelve a decidirlo el `object-fit`/`object-position` de la
+ * tarjeta, que es donde el admin lo ajusta.
+ */
 export const imagenRedimensionada = (url: string, ancho: number): string => {
   if (!url || !esStorageDeSupabase(url)) return url;
-  return `${url.replace(RUTA_ORIGINAL, RUTA_TRANSFORMADA)}?width=${ancho}&quality=${CALIDAD}`;
+  return `${url.replace(RUTA_ORIGINAL, RUTA_TRANSFORMADA)}?width=${ancho}&resize=contain&quality=${CALIDAD}`;
 };
 
 /**
@@ -53,11 +69,11 @@ export const srcSetRedimensionado = (url: string): string => {
 };
 
 /**
- * Dimensiones intrínsecas para los atributos `width`/`height` del `<img>`.
+ * Dimensiones para los atributos `width`/`height` del `<img>`.
  *
- * No son el tamaño al que se ve —de eso se encarga el CSS— sino la **proporción**,
- * que es lo que el navegador necesita para reservar el espacio antes de que la
- * imagen llegue. Sin esto, la tarjeta salta cuando carga la foto: es el
- * "salto de layout" que marcaba PageSpeed.
+ * Son la proporción de la **caja** de la tarjeta (4:3, igual que el
+ * `aspect-[4/3]` del contenedor), no la del flyer: el `<img>` se estira a
+ * `w-full h-full` y el recorte lo hace `object-fit`. Sirven para que el
+ * navegador reserve el espacio antes de que llegue la foto.
  */
 export const PROPORCION_EVENTO = { width: 640, height: 480 } as const;

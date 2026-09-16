@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { X, Gift, Sparkles, Check } from "lucide-react";
+import { X, Check } from "lucide-react";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
+import ModalShell from "./ModalShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { normalizePhone, formatPhoneDisplay, usableDocumentId } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
@@ -33,7 +34,7 @@ const TicketPurchaseModal = ({
   eventLocation,
   tickets,
 }: TicketPurchaseModalProps) => {
-  const { currentUser, checkBirthdayPromo, claimBirthdayPromo } = useAuth();
+  const { currentUser } = useAuth();
 
   const [step, setStep] = useState<Step>("auth-prompt");
 
@@ -47,9 +48,6 @@ const TicketPurchaseModal = ({
     email: "",
     phone: "",
   });
-
-  const [birthdayEligible, setBirthdayEligible] = useState(false);
-  const [birthdayApplied, setBirthdayApplied] = useState(false);
 
   // Cuenta de cobro del evento (la carga el admin desde el panel).
   const [account, setAccount] = useState<PaymentAccount | null>(null);
@@ -71,18 +69,6 @@ const TicketPurchaseModal = ({
       setStep("auth-prompt");
     }
   }, [isOpen, currentUser]);
-
-  // Detectar elegibilidad cumple cuando se abre y el user está logueado
-  useEffect(() => {
-    if (!isOpen || !currentUser || !eventId) return;
-    let active = true;
-    checkBirthdayPromo(eventId).then((res) => {
-      if (active) setBirthdayEligible(res.canClaim);
-    });
-    return () => {
-      active = false;
-    };
-  }, [isOpen, currentUser, eventId, checkBirthdayPromo]);
 
   // Datos de transferencia del evento. Si el evento no tiene cuenta (o falla la
   // consulta) no inventamos nada: se oculta el bloque y se pide por WhatsApp.
@@ -114,18 +100,6 @@ const TicketPurchaseModal = ({
 
   const getSelectedTickets = () => tickets.filter((t) => quantities[t.name] > 0);
 
-  const handleClaimBirthday = async () => {
-    if (!eventId) return;
-    const result = await claimBirthdayPromo(eventId);
-    if (!result.ok) {
-      toast.error(result.error ?? "No se pudo aplicar la promo");
-      return;
-    }
-    setBirthdayApplied(true);
-    setBirthdayEligible(false);
-    toast.success("Promo cumpleaños aplicada");
-  };
-
   const buildMessage = () => {
     const selected = getSelectedTickets();
     if (selected.length === 0) return null;
@@ -144,7 +118,6 @@ const TicketPurchaseModal = ({
       eventDate,
       items: selected.map((t) => ({ name: t.name, qty: quantities[t.name], price: t.price })),
       total: calculateTotal(),
-      birthdayPromo: birthdayApplied,
       account,
     });
   };
@@ -175,41 +148,52 @@ const TicketPurchaseModal = ({
     hasSelectedTickets;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-velo/70 backdrop-blur-sm">
-      <div
-        className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-background border border-border"
-        style={{ fontFamily: "Inter, sans-serif", letterSpacing: "normal" }}
-      >
-        {/* Header */}
-        <div className="sticky top-0 bg-background border-b border-border p-6 flex items-center justify-between z-10">
-          <div>
-            <h2 className="text-2xl font-semibold">{eventName}</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {eventDate} • {eventLocation}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-muted transition-colors"
-            aria-label="Cerrar"
-          >
-            <X className="w-6 h-6" />
-          </button>
+    <ModalShell onClose={onClose} etiqueta={`Comprar entradas para ${eventName}`}>
+      {/*
+        Encabezado FIJO. Antes era `sticky` dentro del panel que scrolleaba, con
+        `p-6` y el título en `text-2xl`: medido en un celular de 360 px se comía
+        157 px, el 23% del modal, y un nombre largo de evento lo hacía crecer
+        todavía más. Ahora es un hijo flex que no se encoge, y las medidas suben
+        recién en `sm:`.
+      */}
+      <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-border p-4 sm:p-6">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold leading-tight sm:text-2xl">{eventName}</h2>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+            {eventDate} • {eventLocation}
+          </p>
         </div>
+        <button
+          onClick={onClose}
+          // 44x44 es el mínimo táctil de las guías de accesibilidad; venía de
+          // 40x40, que en un pulgar se falla.
+          className="-mr-2 -mt-1 flex h-11 w-11 flex-shrink-0 items-center justify-center transition-colors hover:bg-muted"
+          aria-label="Cerrar"
+        >
+          <X className="h-6 w-6" />
+        </button>
+      </div>
 
-        {step === "auth-prompt" ? (
+      {step === "auth-prompt" ? (
+        <div className="flex-1 overflow-y-auto">
           <AuthPromptStep
             subtitle="Si ya tenés cuenta, tus datos se completan solos. Si no, podés continuar como invitado."
-            loginHint="Acelera la compra y desbloquea beneficios (promo cumpleaños, etc.)"
+            loginHint="Acelera la compra: tus datos se completan solos"
             registerHint="Te lleva un minuto y queda guardado para próximas compras"
             onContinue={() => setStep("purchase")}
           />
-        ) : (
-          <div className="p-6 space-y-8">
+        </div>
+      ) : (
+        <>
+          {/* El cuerpo es lo ÚNICO que scrollea. */}
+          <div
+            className="flex-1 space-y-6 overflow-y-auto p-4 sm:space-y-8 sm:p-6"
+            style={{ fontFamily: "Inter, sans-serif", letterSpacing: "normal" }}
+          >
             {/* Banner usuario logueado */}
             {currentUser && (
-              <div className="flex items-center gap-3 p-3 bg-secondary/40 border border-border">
-                <Check className="w-4 h-4 text-foreground" />
+              <div className="flex items-center gap-3 border border-border bg-secondary/40 p-3">
+                <Check className="h-4 w-4 flex-shrink-0 text-foreground" />
                 <p className="text-xs text-muted-foreground">
                   Conectado como{" "}
                   <span className="font-semibold text-foreground">{currentUser.firstName}</span>.
@@ -218,70 +202,50 @@ const TicketPurchaseModal = ({
               </div>
             )}
 
-            {/* Promo cumpleaños */}
-            {birthdayEligible && !birthdayApplied && (
-              <div className="p-4 rounded-xl border border-border bg-secondary/50 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Gift className="w-5 h-5" />
-                  <h4 className="font-semibold tracking-wide">¡TENÉS BENEFICIO CUMPLEAÑOS!</h4>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Tu fecha de nacimiento cae cerca de este evento. Aplicá el beneficio y avisanos
-                  por WhatsApp para coordinar.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleClaimBirthday}
-                  className="inline-flex items-center gap-2 bg-foreground text-background px-4 py-2 text-xs tracking-wider uppercase hover:bg-foreground/90"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Aplicar promo cumpleaños
-                </button>
-              </div>
-            )}
-            {birthdayApplied && (
-              <div className="flex items-center gap-2 p-3 border border-foreground bg-foreground text-background">
-                <Sparkles className="w-4 h-4" />
-                <p className="text-xs tracking-wide uppercase font-semibold">
-                  Promo cumpleaños aplicada · Aviso en el mensaje de WhatsApp
-                </p>
-              </div>
-            )}
-
             {/* Ticket Selection */}
             <div>
-              <h3 className="text-lg font-medium mb-4">Seleccionar entradas</h3>
+              <h3 className="mb-3 text-base font-medium sm:mb-4 sm:text-lg">
+                Seleccionar entradas
+              </h3>
               <div className="space-y-3">
                 {tickets.map((ticket) => (
                   <div
                     key={ticket.name}
-                    className="flex items-center justify-between p-4 border border-border hover:bg-muted/50 transition-colors"
+                    // En celular el nombre va arriba y el contador abajo: con
+                    // los dos en la misma fila, un nombre como "Backstage +23"
+                    // se partía en dos líneas contra el contador.
+                    className="flex flex-col gap-3 border border-border p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:p-4"
                   >
-                    <div className="flex-1 min-w-0 pr-3">
-                      <p className="font-medium">{ticket.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium leading-tight">{ticket.name}</p>
                       <p className="text-sm text-muted-foreground">${ticket.price}</p>
                       {ticket.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           {ticket.description}
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-shrink-0 items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => updateQuantity(ticket.name, -1)}
-                        className="w-8 h-8 border border-border hover:bg-foreground hover:text-background transition-colors flex items-center justify-center disabled:opacity-40"
+                        className="flex h-11 w-11 items-center justify-center border border-border text-lg transition-colors hover:bg-foreground hover:text-background disabled:opacity-40"
                         disabled={quantities[ticket.name] === 0}
+                        aria-label={`Quitar una entrada ${ticket.name}`}
                       >
                         −
                       </button>
-                      <span className="w-8 text-center font-medium">
+                      <span
+                        className="w-8 text-center text-lg font-medium tabular-nums"
+                        aria-live="polite"
+                      >
                         {quantities[ticket.name]}
                       </span>
                       <button
                         type="button"
                         onClick={() => updateQuantity(ticket.name, 1)}
-                        className="w-8 h-8 border border-border hover:bg-foreground hover:text-background transition-colors flex items-center justify-center"
+                        className="flex h-11 w-11 items-center justify-center border border-border text-lg transition-colors hover:bg-foreground hover:text-background"
+                        aria-label={`Agregar una entrada ${ticket.name}`}
                       >
                         +
                       </button>
@@ -291,43 +255,44 @@ const TicketPurchaseModal = ({
               </div>
             </div>
 
-            {/* Total */}
-            {hasSelectedTickets && (
-              <div className="p-4 bg-muted border border-border">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-medium">Total</span>
-                  <span className="text-2xl font-semibold">${total}</span>
-                </div>
-              </div>
-            )}
-
             {/* Form */}
             {hasSelectedTickets && (
               <div>
-                <h3 className="text-lg font-medium mb-4">Tus datos</h3>
+                <h3 className="mb-3 text-base font-medium sm:mb-4 sm:text-lg">Tus datos</h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Nombre completo *</label>
+                    <label className="mb-2 block text-sm font-medium" htmlFor="compra-nombre">
+                      Nombre completo *
+                    </label>
                     <input
+                      id="compra-nombre"
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full p-3 border border-border bg-background focus:outline-none focus:border-foreground transition-colors"
+                      // text-base = 16px. Por debajo de eso Safari de iOS hace
+                      // zoom al enfocar el campo y descoloca todo el modal.
+                      className="w-full border border-border bg-background p-3 text-base transition-colors focus:border-foreground focus:outline-none"
                       placeholder="Tu nombre completo"
+                      autoComplete="name"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Email *</label>
+                    <label className="mb-2 block text-sm font-medium" htmlFor="compra-email">
+                      Email *
+                    </label>
                     <input
+                      id="compra-email"
                       type="email"
+                      inputMode="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full p-3 border border-border bg-background focus:outline-none focus:border-foreground transition-colors"
+                      className="w-full border border-border bg-background p-3 text-base transition-colors focus:border-foreground focus:outline-none"
                       placeholder="tu@email.com"
+                      autoComplete="email"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Teléfono *</label>
+                    <label className="mb-2 block text-sm font-medium">Teléfono *</label>
                     <PhoneInput
                       country={country}
                       value={formData.phone}
@@ -342,12 +307,14 @@ const TicketPurchaseModal = ({
 
             {/* Bank Info */}
             {hasSelectedTickets && isFormValid && (
-              <div className="p-4 bg-secondary/30 border border-border space-y-3">
-                <h4 className="font-medium text-base">Datos para transferencia</h4>
+              <div className="space-y-3 border border-border bg-secondary/30 p-4">
+                <h4 className="text-base font-medium">Datos para transferencia</h4>
                 {account ? (
-                  <div className="text-sm space-y-1">
+                  <div className="space-y-1 text-sm">
                     <p className="font-medium">{account.holderName}</p>
-                    <p className="text-muted-foreground">
+                    {/* break-words: un número de cuenta largo desbordaba el
+                        modal a lo ancho en celular. */}
+                    <p className="break-words text-muted-foreground">
                       Nro de cuenta {account.accountNumber}
                     </p>
                     <p className="text-muted-foreground">BANCO {account.bank}</p>
@@ -355,12 +322,12 @@ const TicketPurchaseModal = ({
                       <p className="text-muted-foreground">{account.accountType}</p>
                     )}
                     {account.documentId && (
-                      <p className="text-muted-foreground">
+                      <p className="break-words text-muted-foreground">
                         Documento del titular {account.documentId}
                       </p>
                     )}
                     {account.notes && (
-                      <p className="text-muted-foreground pt-1">{account.notes}</p>
+                      <p className="pt-1 text-muted-foreground">{account.notes}</p>
                     )}
                   </div>
                 ) : (
@@ -368,15 +335,15 @@ const TicketPurchaseModal = ({
                     Te pasamos los datos de la cuenta por WhatsApp al enviar el mensaje.
                   </p>
                 )}
-                <div className="mt-4 pt-3 border-t border-border/50">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
+                <div className="mt-4 border-t border-border/50 pt-3">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
                     <strong>Importante:</strong> Transfiere el monto total de{" "}
                     <strong>${total}</strong> a la cuenta indicada. Si te equivocas con el monto,
                     nos pondremos en contacto contigo: si es menor no enviaremos las entradas, y
                     si es mayor devolveremos el dinero en un plazo de 90 días.
                   </p>
                 </div>
-                <div className="mt-3 pt-3 border-t border-border/50">
+                <div className="mt-3 border-t border-border/50 pt-3">
                   <p className="text-xs text-muted-foreground">
                     📎 <strong>No olvides adjuntar el comprobante de transferencia</strong> (foto
                     o PDF) cuando envíes el mensaje de WhatsApp.
@@ -384,26 +351,45 @@ const TicketPurchaseModal = ({
                 </div>
               </div>
             )}
+          </div>
 
-            {/* Submit */}
+          {/*
+            Pie FIJO con el total y el botón.
+
+            Antes los dos vivían al final del contenido que scrollea, así que en
+            un celular quedaban debajo del pliegue: había que bajar hasta el
+            fondo para ver cuánto se estaba por pagar y para poder enviar. En un
+            flujo que cobra plata, el total y el CTA tienen que estar siempre a
+            la vista. El `env(safe-area-inset-bottom)` lo despega de la barra de
+            gestos del iPhone.
+          */}
+          <div
+            className="flex-shrink-0 space-y-3 border-t border-border bg-background p-4 sm:p-6"
+            style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+          >
+            {hasSelectedTickets && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">Total</span>
+                <span className="text-2xl font-semibold tabular-nums">${total}</span>
+              </div>
+            )}
             <button
               onClick={handleSubmit}
               disabled={!isFormValid}
-              className="btn-techno w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-techno w-full disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <WhatsAppIcon className="w-5 h-5" />
+              <WhatsAppIcon className="h-5 w-5" />
               <span>Enviar por WhatsApp</span>
             </button>
-
             {isFormValid && (
-              <p className="text-xs text-center text-muted-foreground -mt-2">
+              <p className="text-center text-xs text-muted-foreground">
                 Recordá adjuntar el comprobante de pago en WhatsApp
               </p>
             )}
           </div>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </ModalShell>
   );
 };
 

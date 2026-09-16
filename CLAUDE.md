@@ -340,12 +340,25 @@ Decisiones del importador (`PasteMessageModal` en `Admin.tsx`):
 - Cruza el evento por nombre sin tildes ni mayúsculas (si no lo encuentra, se elige a mano) y
   el email contra los perfiles, para enganchar el `user_id` y el badge "Registrado" (v10).
 
-**Bug arreglado de paso:** el modal de compra mostraba *"Promo cumpleaños aplicada · Aviso en
-el mensaje de WhatsApp"* pero `buildMessage` **no escribía ninguna línea de la promo**
-(`birthdayApplied` sólo pintaba el banner). La persona reclamaba el beneficio, quedaba
-registrado en `birthday_promo_claims`, y al staff le llegaba un mensaje idéntico a cualquier
-otro: se le cobraba el precio lleno. Ahora va la línea `PROMO CUMPLEAÑOS APLICADA`, que el
-parser detecta y deja marcada en el resumen y en las notas de la entrega.
+**La promo de cumpleaños NO viaja en este mensaje, y es la única asimetría entre
+`buildPurchaseMessage` y `parsePurchaseMessage`.** El modal de compra tenía un botón
+"Aplicar promo cumpleaños" que insertaba en `birthday_promo_claims` y escribía la línea
+`PROMO CUMPLEAÑOS APLICADA` en el texto. **Se sacó entero** —botón, banner, chequeo de
+elegibilidad y las funciones `checkBirthdayPromo`/`claimBirthdayPromo` de `AuthContext`,
+que no las usaba nadie más—. El motivo es de negocio y no de código: el beneficio se
+reclama **sólo** desde la sección Promociones, con la foto del documento, y queda
+`pendiente` hasta que el staff lo apruebe (6.1 y v16). El botón del modal salteaba esa
+aprobación: cualquiera con la fecha de nacimiento a mano le mandaba al vendedor un
+mensaje afirmando un descuento que nadie había validado.
+
+> **Sacar sólo la línea del texto habría sido peor que dejarla.** Ese es exactamente el
+> bug que había antes de esto (el banner decía "aplicada" y el mensaje no decía nada, así
+> que se cobraba el precio lleno). O va el camino entero o no va ninguno.
+
+> El **parser sigue detectando** la etiqueta aunque el sitio ya no la escriba. Puede quedar
+> algún mensaje viejo sin mandar en el teléfono de alguien; si el staff lo pega, el dato se
+> ve en el resumen en vez de perderse en silencio. La tabla `birthday_promo_claims` queda
+> en la base con lo ya reclamado: no se borra nada, sólo dejó de escribirse.
 
 > El plegado de tildes (`foldText`) se subió de `UserSearchSelect` a `src/lib/utils.ts`, que
 > ahora lo comparten el buscador y el parser. Usa `\p{M}` y no un rango `[U+0300-U+036F]`
@@ -593,9 +606,22 @@ transformación (`/storage/v1/render/image/public/…?width=&quality=`), que red
 **negocia WebP por el `Accept` del navegador**. `src/lib/imagenes.ts` arma esa URL más un `srcset`
 de 320/480/640/960 con `sizes`, así el celular baja la variante chica. No hay que resubir nada.
 
+> **`resize=contain` no es opcional: sin eso el servidor RECORTA.** El modo por defecto de
+> Supabase es `cover`, que rellena la caja pedida cortando lo que sobra. Con `?width=480` a
+> secas sobre un flyer vertical de 800×1000 **no escala**: devuelve `480×1000`, o sea le corta
+> los dos costados al dibujo, y después el CSS lo recorta otra vez contra el 4:3 de la tarjeta.
+> Se veía un pedazo del medio del flyer. Sólo se salvaban los **cuadrados**, porque ahí el
+> ancho pedido ya era mayor que el original y no había nada que recortar — por eso mirando una
+> sola imagen el problema puede no aparecer. Medido con `contain`: proporción intacta y **menos
+> peso** (70 KB contra 134), porque el recorte conservaba el alto completo de 1000 px. Los
+> cuatro flyers a 480w pasan de 277 a **151 KB**. Verificado por píxeles: el encuadre recortado
+> se desviaba 29/255 del original y con el arreglo se desvía 2 (ruido de recompresión).
+
 > El `<img>` lleva `width`/`height` explícitos. **No fijan el tamaño** —de eso se encarga el CSS—
 > sino la proporción, para que el navegador reserve el espacio antes de que llegue la foto. Sin
-> eso la tarjeta salta al cargar, que era el "salto de layout" que marcaba PageSpeed.
+> eso la tarjeta salta al cargar, que era el "salto de layout" que marcaba PageSpeed. Son la
+> proporción de la **caja** (4:3, la del `aspect-[4/3]` del contenedor), no la del flyer: el
+> encuadre lo decide `object-fit`/`object-position`, que es donde el admin lo ajusta.
 
 **Iconos: −82 KB.** El logo de WhatsApp eran dos PNG de 360×360 mostrados a **16×16**. Ahora es
 `WhatsAppIcon`, un SVG en línea con `currentColor`. De paso resolvió solo un parche: el PNG blanco
@@ -651,6 +677,75 @@ división a la vista aparecieron dos cosas que no tenían por qué estar en la c
 > las fotos de carrusel…) son ~59 MB de peso muerto **del repo**, no del sitio: molestan al clonar,
 > no al visitante. Se pueden borrar, pero no cambian el rendimiento.
 
+
+
+## 6.5 Los modales del sitio público (`ModalShell`)
+
+Los tres modales de la cara pública —compra de entradas, promo de cumpleaños y el
+selector de evento de "Compra Directa"— repetían a mano su propio `fixed inset-0
+z-50`. Ahora comparten `src/components/ModalShell.tsx`, y el motivo no es el
+ahorro de líneas.
+
+**El bug: el modal de compra se abría DENTRO del carrusel.** El velo oscurecía
+sólo la franja de las tarjetas y el panel quedaba, medido, a **935 px del borde
+de arriba** en un celular de 360×740 — o sea fuera de la pantalla. La causa no
+está en el modal sino arriba: las secciones aparecen al hacer scroll con
+`opacity-0 translate-y-12`, y **un ancestro con `transform` deja de ser el
+viewport para el `position: fixed` de sus hijos**; `inset-0` se resolvía contra la
+tarjeta del evento. Es una regla del CSS y no un detalle de Tailwind: vale igual
+para `filter`, `perspective`, `backdrop-filter`, `contain` y `will-change`, así
+que **cualquier animación que se agregue mañana lo vuelve a romper**. La única
+solución estable es sacar el modal del árbol: va por `createPortal` a
+`document.body`, donde no hay ancestros transformados.
+
+> **Regla:** un modal nuevo va por `ModalShell`. Nunca un `fixed inset-0` suelto
+> dentro del árbol de la página.
+
+Lo que la cáscara resuelve de una vez para los tres:
+
+- **Hoja completa en celular, diálogo centrado de `sm:` para arriba.** El 99% del
+  tráfico entra desde el teléfono; ahí un diálogo flotante con márgenes
+  desperdicia pantalla y deja el contenido apretado.
+- **`h-[100dvh]` y no `100vh`.** En Safari de iOS `100vh` cuenta la barra de
+  direcciones que está tapando la pantalla, así que el borde de abajo —donde vive
+  el botón de enviar— queda debajo de ella. En un navegador sin `dvh` la
+  declaración se descarta y el `items-stretch` del padre lo estira igual: se
+  degrada solo, sin `@supports`.
+- **Se traba el scroll del fondo** mientras está abierto, y se restaura lo que
+  había (no "auto"): si alguna vez hay dos modales encadenados, el de adentro no
+  tiene por qué devolverle el scroll a la página al cerrarse.
+- **Cierra con Escape y tocando el velo.** El cierre por velo escucha `mousedown`
+  y compara `e.target === e.currentTarget`: con `click`, seleccionar texto adentro
+  y soltar afuera cerraba el modal.
+
+**Encabezado fijo, cuerpo que scrollea.** El panel es `flex-col` + `overflow-hidden`
+y **el que scrollea es el cuerpo**, no el panel. El encabezado era `sticky` con
+`p-6` y el título en `text-2xl`: medido en 360 px se comía **157 px, el 23% del
+modal**, y un nombre de evento largo lo hacía crecer todavía más. Ahora son 76 px.
+
+**El total y el botón de comprar van en un pie fijo.** Vivían al final del
+contenido que scrollea, así que en un celular quedaban debajo del pliegue: había
+que bajar hasta el fondo para ver cuánto se estaba por pagar y para poder enviar.
+En un flujo que cobra plata eso tiene que estar siempre a la vista. Lleva
+`env(safe-area-inset-bottom)` para despegarse de la barra de gestos del iPhone.
+
+> **Ningún campo de formulario baja de 16px en celular.** Safari de iOS hace
+> **zoom** sobre cualquier `input`/`textarea`/`select` con fuente menor, y ese zoom
+> descoloca la pantalla entera. `.input-techno` pasó a `text-base sm:text-sm`, así
+> que el arreglo alcanza a **todos** los formularios del sitio (registro, login,
+> perfil), no sólo al modal; en escritorio el tamaño no cambia. `ui/input.tsx` ya
+> lo hacía —viene así de shadcn, por este mismo motivo— y `ui/textarea.tsx` se
+> alineó.
+
+**Objetivos táctiles de 44×44.** Los botones de cerrar (40×40) y los de cantidad
+(32×32) quedaban por debajo del mínimo de las guías de accesibilidad; con el pulgar
+se fallan. Verificado por DOM: cero controles por debajo de 44 px en los tres
+modales.
+
+**En celular la fila de cada entrada se apila.** Nombre y precio arriba, el
+contador abajo: con los dos en la misma fila, un nombre como "Backstage +23" se
+partía en dos líneas contra el contador. De `sm:` para arriba vuelven a ir en
+línea. Mismo criterio en el selector de evento.
 
 
 ## 7. Branding / UI

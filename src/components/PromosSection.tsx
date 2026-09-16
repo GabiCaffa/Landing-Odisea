@@ -10,6 +10,7 @@ const TicketPurchaseModal = lazy(() => import("./TicketPurchaseModal"));
 const BirthdayPromoModal = lazy(() => import("./BirthdayPromoModal"));
 import { EventTicket } from "@/lib/ticketTypes";
 import { playThud } from "@/lib/spookySound";
+import ModalShell from "./ModalShell";
 
 // Evento que consume el selector / modal de compra (derivado de los eventos reales).
 type PickerEvent = {
@@ -175,63 +176,66 @@ const EventPickerOverlay = ({
   onSelect: (e: PickerEvent) => void;
   onClose: () => void;
 }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-velo/70 backdrop-blur-sm">
-    <div className="relative w-full max-w-md bg-background border border-border">
-      {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-border">
-        <div>
-          <p className="text-xs tracking-[0.25em] uppercase text-muted-foreground mb-1">
-            Exclusivo WhatsApp
-          </p>
-          <h2 className="text-xl font-semibold">¿Para qué evento?</h2>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-muted transition-colors"
-          aria-label="Cerrar"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+  <ModalShell onClose={onClose} ancho="md" etiqueta="Elegir el evento">
+    {/* Encabezado fijo */}
+    <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-border p-4 sm:p-6">
+      <div className="min-w-0">
+        <p className="mb-1 text-xs uppercase tracking-[0.25em] text-muted-foreground">
+          Exclusivo WhatsApp
+        </p>
+        <h2 className="text-xl font-semibold">¿Para qué evento?</h2>
       </div>
-
-      {/* Event list */}
-      <div className="p-4 space-y-2">
-        {events.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-8">
-            No hay eventos disponibles en este momento.
-          </p>
-        )}
-        {events.map((event) => (
-          <button
-            key={event.name}
-            onClick={() => onSelect(event)}
-            className="w-full text-left p-4 border border-border hover:bg-foreground hover:text-background transition-all duration-200 group"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold tracking-wide">{event.name}</p>
-                <p className="text-sm text-muted-foreground group-hover:text-background/60 mt-0.5">
-                  {event.date} · {event.location}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold">${event.tickets[0].price}</p>
-                <p className="text-xs text-muted-foreground group-hover:text-background/60">
-                  por entrada
-                </p>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <p className="px-6 pb-5 text-xs text-muted-foreground text-center">
-        Precio sin comisión de ticketera · Pago por transferencia
-      </p>
+      <button
+        onClick={onClose}
+        className="-mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center transition-colors hover:bg-muted"
+        aria-label="Cerrar"
+      >
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
     </div>
-  </div>
+
+    {/* Lista de eventos — lo único que scrollea */}
+    <div className="flex-1 space-y-2 overflow-y-auto p-4">
+      {events.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          No hay eventos disponibles en este momento.
+        </p>
+      )}
+      {events.map((event) => (
+        <button
+          key={event.name}
+          onClick={() => onSelect(event)}
+          className="group w-full border border-border p-4 text-left transition-all duration-200 hover:bg-foreground hover:text-background"
+        >
+          {/* En celular el precio baja debajo del nombre: en una sola fila,
+              un nombre largo se estrujaba contra la columna del precio. */}
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-semibold tracking-wide">{event.name}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground group-hover:text-background/60">
+                {event.date} · {event.location}
+              </p>
+            </div>
+            <div className="flex items-baseline gap-1.5 sm:block sm:flex-shrink-0 sm:text-right">
+              <p className="font-semibold">${event.tickets[0].price}</p>
+              <p className="text-xs text-muted-foreground group-hover:text-background/60">
+                por entrada
+              </p>
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+
+    <p
+      className="flex-shrink-0 px-6 pb-5 pt-1 text-center text-xs text-muted-foreground"
+      style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+    >
+      Precio sin comisión de ticketera · Pago por transferencia
+    </p>
+  </ModalShell>
 );
 
 // ── Card individual ───────────────────────────────────────────────────────────
