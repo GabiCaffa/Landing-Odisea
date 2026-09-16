@@ -97,6 +97,7 @@ import {
   removeIdPhoto,
   getIdPhotoUrl,
 } from "@/lib/birthdays";
+import { birthdayMessageFor, buildBirthdayWhatsAppUrl } from "@/lib/birthdayMessage";
 import {
   PaymentAccount,
   PaymentAccountInput,
@@ -135,8 +136,23 @@ type Tab =
   | "deliveries"
   | "birthdays";
 
-/** Pestañas que puede usar el operador (el resto es sólo del admin). */
-const OPERATOR_TABS: Tab[] = ["deliveries", "birthdays"];
+/**
+ * Qué pestañas ve cada rol de staff. El admin no está acá porque las ve todas.
+ *
+ * Es una tabla y no un `if (!isOperator)` porque con dos roles limitados esa
+ * condición ya no alcanza, y con tres sería ilegible. El sidebar y el ruteo
+ * leen los dos de acá, así que no puede pasar que aparezca un botón que la
+ * pestaña después rechaza.
+ *
+ * **Esto es comodidad, no seguridad.** Lo que de verdad separa los módulos son
+ * las políticas RLS: `is_staff()` (v11) protege Entregas y NO incluye a
+ * `cumples`, `is_birthday_staff()` (v20) protege cumpleaños y fotos de
+ * documento y sí lo incluye. Sin eso, esconder un botón no impide nada.
+ */
+const TABS_POR_ROL: Record<"operador" | "cumples", Tab[]> = {
+  operador: ["deliveries", "birthdays"],
+  cumples: ["birthdays"],
+};
 
 const Admin = () => {
   const { currentUser, logout, users, events, loading } = useAuth();
@@ -148,9 +164,14 @@ const Admin = () => {
   if (!currentUser) return <Navigate to="/login" replace />;
   if (!isStaffRole(currentUser.role)) return <Navigate to="/" replace />;
 
-  // El operador sólo ve Entregas y Cumpleaños: cualquier otra pestaña cae en Entregas.
-  const isOperator = currentUser.role === "operador";
-  const activeTab: Tab = isOperator && !OPERATOR_TABS.includes(tab) ? "deliveries" : tab;
+  // `null` = sin restricción (admin). Si el rol tiene lista, la pestaña pedida
+  // que no esté en ella cae en la primera permitida.
+  const permitidas: Tab[] | null =
+    currentUser.role === "admin"
+      ? null
+      : TABS_POR_ROL[currentUser.role as keyof typeof TABS_POR_ROL] ?? [];
+  const puedeVer = (t: Tab) => !permitidas || permitidas.includes(t);
+  const activeTab: Tab = puedeVer(tab) ? tab : permitidas?.[0] ?? "dashboard";
 
   const handleLogout = async () => {
     const ok = await confirm({
@@ -174,13 +195,19 @@ const Admin = () => {
             alt="Odísea"
             className="h-8 md:h-10 w-auto object-contain invert"
           />
+          {/* El rótulo sigue al rol: a quien sólo gestiona cumpleaños decirle
+              "Panel Admin" es confuso, porque no es admin de nada. */}
           <p className="hidden md:block text-xs tracking-[0.3em] uppercase text-background/60 mt-3">
-            Panel Admin
+            {currentUser.role === "cumples"
+              ? "Panel Cumpleaños"
+              : currentUser.role === "operador"
+                ? "Panel Entregas"
+                : "Panel Admin"}
           </p>
         </div>
 
         <nav className="flex md:flex-col md:flex-1 p-3 md:p-4 gap-1 overflow-x-auto md:overflow-visible">
-          {!isOperator && (
+          {puedeVer("dashboard") && (
             <>
               <SidebarLink
                 icon={<LayoutDashboard className="w-4 h-4" />}
@@ -220,18 +247,22 @@ const Admin = () => {
               />
             </>
           )}
-          <SidebarLink
-            icon={<Send className="w-4 h-4" />}
-            label="Entregas"
-            active={activeTab === "deliveries"}
-            onClick={() => setTab("deliveries")}
-          />
-          <SidebarLink
-            icon={<Cake className="w-4 h-4" />}
-            label="Cumpleaños"
-            active={activeTab === "birthdays"}
-            onClick={() => setTab("birthdays")}
-          />
+          {puedeVer("deliveries") && (
+            <SidebarLink
+              icon={<Send className="w-4 h-4" />}
+              label="Entregas"
+              active={activeTab === "deliveries"}
+              onClick={() => setTab("deliveries")}
+            />
+          )}
+          {puedeVer("birthdays") && (
+            <SidebarLink
+              icon={<Cake className="w-4 h-4" />}
+              label="Cumpleaños"
+              active={activeTab === "birthdays"}
+              onClick={() => setTab("birthdays")}
+            />
+          )}
 
           <Link
             to="/"
@@ -2300,6 +2331,7 @@ const UsersAdmin = () => {
                     >
                       <option value="user">user</option>
                       <option value="operador">operador</option>
+                      <option value="cumples">cumples</option>
                     </select>
                   )}
                 </Td>
@@ -3689,6 +3721,7 @@ const BirthdayActions = ({
   onDelete,
   onApprove,
   onReject,
+  onMessage,
 }: {
   b: BirthdaySignup;
   onGift: (b: BirthdaySignup) => void;
@@ -3698,8 +3731,23 @@ const BirthdayActions = ({
   onDelete: (b: BirthdaySignup) => void;
   onApprove: (b: BirthdaySignup) => void;
   onReject: (b: BirthdaySignup) => void;
+  onMessage: (b: BirthdaySignup) => void;
 }) => (
   <div className="flex items-center gap-1">
+    {/* Ya aprobado: se le puede volver a escribir. El mensaje sale solo al
+        aprobar, pero puede no haberse mandado ahí (sin teléfono en ese momento,
+        o el encargado cerró el modal), y también sirve para reenviarlo. */}
+    {b.status === "aprobado" && (
+      <button
+        onClick={() => onMessage(b)}
+        disabled={!b.phone}
+        className="p-2 transition-colors hover:bg-green-600 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-current"
+        title={b.phone ? "Escribirle por WhatsApp" : "Sin teléfono cargado"}
+        aria-label={b.phone ? "Escribirle por WhatsApp" : "Sin teléfono cargado"}
+      >
+        <WhatsAppIcon className="w-4 h-4" />
+      </button>
+    )}
     {/* Solicitud del cliente: primero se aprueba o se rechaza. Hasta entonces no
         tiene sentido ofrecer el regalo, porque no está verificada. */}
     {b.status === "pendiente" ? (
@@ -3779,16 +3827,23 @@ const BirthdayActions = ({
 );
 
 const BirthdaysAdmin = () => {
-  const { events, users } = useAuth();
+  const { events, users, currentUser } = useAuth();
   const confirm = useConfirm();
   const [rows, setRows] = useState<BirthdaySignup[]>([]);
   const [loading, setLoading] = useState(true);
   // "requests" = solicitudes que cargó el propio cliente y falta revisar.
-  const [giftFilter, setGiftFilter] = useState<"requests" | "pending" | "given">("pending");
+  // El encargado de cumpleaños arranca ahí, que es donde empieza su trabajo; el
+  // admin y el operador entran donde entraban siempre (la lista de regalos por
+  // entregar), para no cambiarles el flujo.
+  const [giftFilter, setGiftFilter] = useState<"requests" | "pending" | "given">(
+    currentUser?.role === "cumples" ? "requests" : "pending"
+  );
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<BirthdaySignup | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<BirthdaySignup | null>(null);
+  // Ficha a la que se le está por mandar el mensaje de WhatsApp.
+  const [messaging, setMessaging] = useState<BirthdaySignup | null>(null);
 
   const reload = async () => {
     const data = await fetchBirthdays();
@@ -3936,12 +3991,20 @@ const BirthdaysAdmin = () => {
     await reload();
     toast.success("Regalo devuelto a pendientes");
   };
-  /** Acepta una solicitud del cliente: pasa a la lista verificada. */
+  /**
+   * Acepta una solicitud del cliente: pasa a la lista verificada y se abre el
+   * mensaje de WhatsApp.
+   *
+   * El modal se abre **después** de que la aprobación quedó guardada, no antes:
+   * si el update falla no tiene que aparecer un mensaje que le diga a la persona
+   * que su beneficio está confirmado cuando en la base no lo está.
+   */
   const handleApprove = async (b: BirthdaySignup) => {
     const result = await setBirthdayStatus(b.id, "aprobado");
     if (!result.ok) return toast.error(result.error ?? "No se pudo aprobar");
     await reload();
     toast.success(`${b.firstName} aprobado: ya está en la lista`);
+    setMessaging(b);
   };
 
   /**
@@ -4120,6 +4183,7 @@ const BirthdaysAdmin = () => {
                       onUngift={handleUngift}
                       onApprove={handleApprove}
                       onReject={handleReject}
+                      onMessage={setMessaging}
                       onPhoto={setViewingPhoto}
                       onEdit={openEdit}
                       onDelete={handleDelete}
@@ -4193,6 +4257,7 @@ const BirthdaysAdmin = () => {
                           onUngift={handleUngift}
                           onApprove={handleApprove}
                           onReject={handleReject}
+                          onMessage={setMessaging}
                           onPhoto={setViewingPhoto}
                           onEdit={openEdit}
                           onDelete={handleDelete}
@@ -4225,6 +4290,15 @@ const BirthdaysAdmin = () => {
 
       {viewingPhoto && (
         <IdPhotoModal row={viewingPhoto} onClose={() => setViewingPhoto(null)} />
+      )}
+
+      {messaging && (
+        <BirthdayWhatsAppModal
+          row={messaging}
+          event={events.find((e) => e.id === messaging.eventId) ?? null}
+          encargado={currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : ""}
+          onClose={() => setMessaging(null)}
+        />
       )}
     </div>
   );
@@ -4300,6 +4374,122 @@ const IdPhotoModal = ({ row, onClose }: { row: BirthdaySignup; onClose: () => vo
               </p>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * El mensaje de WhatsApp para el cumpleañero recién aprobado.
+ *
+ * **No manda nada solo, y es a propósito.** Se abre apenas se aprueba una
+ * solicitud, muestra el texto ya armado y el encargado decide: puede editarlo
+ * antes de enviar, o cerrar y no mandar nada. Un envío automático de verdad
+ * necesitaría la API de WhatsApp Business; esto abre el chat con el texto
+ * puesto, que es lo que el staff ya hacía a mano.
+ *
+ * El texto vive en `@/lib/birthdayMessage`, no acá: para cambiarlo se toca ese
+ * archivo y nada más.
+ */
+const BirthdayWhatsAppModal = ({
+  row,
+  event,
+  encargado,
+  onClose,
+}: {
+  row: BirthdaySignup;
+  event: AdminEvent | null;
+  /** Nombre de quien está logueado: el mensaje se firma con él. */
+  encargado: string;
+  onClose: () => void;
+}) => {
+  // Editable: el texto armado es un punto de partida, no una camisa de fuerza.
+  const [texto, setTexto] = useState(() => birthdayMessageFor(row, encargado, event));
+  const url = buildBirthdayWhatsAppUrl(row.phone, texto);
+
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success("Mensaje copiado");
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
+      <div className="relative w-full max-w-xl bg-background border border-border h-full sm:h-auto sm:max-h-[92vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-4 md:p-6 border-b border-border">
+          <div className="min-w-0">
+            <h2 className="title-sport text-lg md:text-xl font-black tracking-wide">
+              Avisarle a {row.firstName}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {row.phone ? (
+                <>Se abre WhatsApp con {formatPhoneDisplay(row.phone)}</>
+              ) : (
+                <>Esta ficha no tiene teléfono cargado</>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="-mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center hover:bg-muted"
+            aria-label="Cerrar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
+          <label className="block text-sm font-medium" htmlFor="msg-cumple">
+            Mensaje
+          </label>
+          <textarea
+            id="msg-cumple"
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            rows={12}
+            className="w-full border border-border bg-background p-3 text-base sm:text-sm leading-relaxed focus:outline-none focus:border-foreground"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Sale desde <b>tu</b> WhatsApp, no desde el número de ODÍSEA — por eso el
+            mensaje dice que le dejás tu número.
+          </p>
+        </div>
+
+        <div className="flex-shrink-0 border-t border-border p-4 md:p-6 space-y-3">
+          {!url && (
+            <p className="text-xs text-charrua">
+              Sin teléfono no se puede abrir el chat. Editá la ficha y agregale el
+              número, o copiá el mensaje y mandáselo por otro lado.
+            </p>
+          )}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button onClick={copiar} className="btn-techno-outline flex-1">
+              Copiar mensaje
+            </button>
+            {url ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onClose}
+                className="btn-celeste flex-1 inline-flex items-center justify-center gap-2"
+              >
+                <WhatsAppIcon className="w-4 h-4" /> Abrir WhatsApp
+              </a>
+            ) : (
+              <button
+                disabled
+                title="La ficha no tiene teléfono cargado"
+                className="btn-celeste flex-1 inline-flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
+              >
+                <WhatsAppIcon className="w-4 h-4" /> Abrir WhatsApp
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

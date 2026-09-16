@@ -66,6 +66,11 @@ const Profile = () => {
                   <ShieldCheck className="w-3 h-3" /> Operador
                 </span>
               )}
+              {currentUser.role === "cumples" && (
+                <span className="badge-celeste mt-3">
+                  <ShieldCheck className="w-3 h-3" /> Cumpleaños
+                </span>
+              )}
             </div>
           </div>
 
