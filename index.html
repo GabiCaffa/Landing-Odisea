@@ -44,11 +44,15 @@
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="es_UY" />
     <meta property="og:url" content="https://www.odiseaoficial.com/" />
-    <!-- Cuadrada (360×360). Lo ideal para un preview grande es 1200×630: con
-         un archivo así, se cambia sólo esta URL y las dos medidas de abajo. -->
-    <meta property="og:image" content="https://www.odiseaoficial.com/email-logo-white.png" />
-    <meta property="og:image:width" content="360" />
-    <meta property="og:image:height" content="360" />
+    <!-- 1200×630 es la medida que WhatsApp, Instagram y Facebook usan para el
+         preview GRANDE; con una imagen cuadrada lo degradan a una miniatura al
+         costado. El nombre del archivo va sin espacios ni paréntesis a
+         propósito: en una URL se vuelven `%20` y `%28`, y hay scrapers que los
+         manejan mal. -->
+    <meta property="og:image" content="https://www.odiseaoficial.com/og-odisea.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:alt" content="ODÍSEA" />
 
     <meta name="twitter:card" content="summary_large_image" />
@@ -58,7 +62,7 @@
       name="twitter:description"
       content="Productora de fiestas en Colonia del Sacramento, Paysandú y Nueva Helvecia. Mirá las próximas fechas, conseguí tu entrada y enterate de las promos."
     />
-    <meta name="twitter:image" content="https://www.odiseaoficial.com/email-logo-white.png" />
+    <meta name="twitter:image" content="https://www.odiseaoficial.com/og-odisea.jpg" />
 
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
