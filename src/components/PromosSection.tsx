@@ -9,6 +9,7 @@ const TicketPurchaseModal = lazy(() => import("./TicketPurchaseModal"));
 // hace falta si alguien abre la promo de cumpleaños.
 const BirthdayPromoModal = lazy(() => import("./BirthdayPromoModal"));
 import { EventTicket } from "@/lib/ticketTypes";
+import { EventPromo } from "@/lib/ticketPromos";
 import { playThud } from "@/lib/spookySound";
 import ModalShell from "./ModalShell";
 
@@ -19,6 +20,8 @@ type PickerEvent = {
   date: string;
   location: string;
   tickets: EventTicket[];
+  /** Promos de entrada del evento (v21). */
+  promos: EventPromo[];
 };
 
 // ── Datos de las 3 promos ─────────────────────────────────────────────────────
@@ -74,6 +77,7 @@ const PromosSection = () => {
           date: formatEventDate(e.date),
           location: e.location,
           tickets: e.tickets.filter((t) => t.active),
+          promos: e.promos,
         })),
     [events]
   );
@@ -159,6 +163,7 @@ const PromosSection = () => {
           eventDate={selectedEvent.date}
           eventLocation={selectedEvent.location}
           tickets={selectedEvent.tickets}
+          promos={selectedEvent.promos}
         />
         </Suspense>
       )}

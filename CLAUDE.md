@@ -96,7 +96,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
-`v20_birthday_role.sql`.
+`v20_birthday_role.sql` → `v21_ticket_promos.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -338,6 +338,73 @@ solo al aprobar, pero puede no haberse mandado ahí (sin teléfono en ese moment
 encargado cerró el modal). Y el filtro **"A revisar"** es el que abre por defecto para
 el rol `cumples`, que es donde empieza su trabajo; admin y operador entran donde
 entraban siempre.
+
+
+**v21 — Promos de entrada (2x1, 2da al 50%, 3x2).** Catálogo `ticket_promos` +
+unión `event_ticket_promos`, mismo molde que `ticket_types` ↔
+`event_ticket_types` (v15) y por el mismo motivo: **la misma promo se aplica a
+varios eventos**.
+
+**Un solo mecanismo, dos números.** `cada N entradas, 1 con X% de descuento`
+cubre todo lo que se pidió, porque los dos ejemplos del autor son el mismo
+mecanismo: "2x1" es cada 2 con 100%, "la segunda al 50%" es cada 2 con 50%. De
+yapa sale 3x2. La cuenta vive en `src/lib/ticketPromos.ts`:
+
+    descuento = floor(cantidad / everyN) * precio * percentOff / 100
+
+> **Con el doble de entradas la promo entra DOS veces**, a propósito. Si entrara
+> una sola vez, premiaría comprar de a dos y castigaría comprar de a cuatro.
+> Verificado: 4 entradas de $700 con "2da al 50%" pagan $2100.
+
+> **Los dos números son INTERNOS.** El comprador ve el `name` que escribió el
+> admin ("2x1") y el precio ya descontado, nunca la fórmula. Por eso el form del
+> panel muestra en vivo un ejemplo con plata: "cada 2, 1 al 50%" no le dice nada
+> a nadie, "2 entradas de $1000 → $1000" sí.
+
+> **Apunta al CATÁLOGO `ticket_types`, no a `event_ticket_types`.** Misma lección
+> que v18: `saveEventTickets` **borra** filas de esa tabla cuando un evento deja
+> de vender un tipo, y una FK ahí haría fallar la edición de las entradas de un
+> evento que tenga una promo cargada.
+
+> **Si dos promos vigentes se pisan sobre el mismo tipo, gana la que más
+> descuenta.** La tabla permite varias a propósito —es lo que deja programar una
+> de preventa y otra después, cada una con su ventana— y elegir la mejor para el
+> comprador es la única regla que no necesita explicación. **No se acumulan.**
+
+**Las fechas son inclusivas de los dos lados** y se comparan contra el día local,
+armado con los getters de `Date` y **no** con `toISOString()`: ése pasa a UTC y
+en Uruguay (UTC−3) devuelve el día siguiente desde las 21:00, así que una promo
+que vence hoy se apagaría tres horas antes. Mismo motivo que `formatEventDate`.
+
+**El total se calcula en el sitio** (decisión del autor sobre la alternativa de
+mostrarlo informativo): el cliente ve lo que va a pagar y el staff no hace
+cuentas. Eso toca el camino de la plata, y por eso:
+
+> **El subtotal de cada línea del mensaje ya viene descontado**, así que **los
+> ítems siguen sumando el TOTAL** y el importador del panel no necesita saber
+> nada de promos para que la cuenta cierre — en particular, no salta el aviso de
+> "no coinciden" de v18. La línea `PROMO:` va aparte y sólo explica por qué el
+> total es más bajo que el precio de lista; sin ella, al vendedor le llega un
+> número que no le cierra y parece un error de tipeo del cliente. Se toca
+> `buildPurchaseMessage` **y** `parsePurchaseMessage` de una vez, que es la regla
+> de 6.2.
+
+> **El descuento se calcula UNA vez, en `lineas`.** De ahí salen la pantalla, el
+> TOTAL y el mensaje. Antes el total se recalculaba en dos lugares; con
+> descuentos de por medio eso es pedir que algún día muestren números distintos.
+
+**UI.** Pestaña **Promos** (sólo admin) para el catálogo, en
+`src/components/admin/PromosAdmin.tsx` — **fuera de `Admin.tsx`**, que ya pasa
+las 5000 líneas; lo nuevo empieza afuera. Dentro del form de evento,
+`EventPromosEditor` va **debajo** de `TicketsEditor` porque una promo se aplica
+sobre un tipo de entrada: sólo se ofrecen los tipos que el evento ya vende, y si
+se saca un tipo sus promos se caen solas. En la card del evento se muestra un
+cartel con la promo —deduplicado por nombre y oculto si está agotado—, porque una
+promo escondida detrás de un click no vende nada.
+
+> **Trampa encontrada por TypeScript:** `promos.filter(promoVigente)` le pasa el
+> **índice** como segundo argumento, que en esa función es `hoy`. Comparaba las
+> fechas contra un número. Va `.filter((p) => promoVigente(p))`.
 
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)

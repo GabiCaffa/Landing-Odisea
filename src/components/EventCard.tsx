@@ -5,6 +5,7 @@ import { playHover, playThud } from "@/lib/spookySound";
 import { imagenRedimensionada, srcSetRedimensionado, PROPORCION_EVENTO } from "@/lib/imagenes";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
 import { EventTicket } from "@/lib/ticketTypes";
+import { EventPromo, promoVigente } from "@/lib/ticketPromos";
 
 // Carga diferida: el modal arrastra libphonenumber-js (~145KB) + PhoneInput.
 // Así no entran al bundle inicial de la home; se cargan recién al tocar "Comprar".
@@ -20,6 +21,8 @@ interface EventCardProps {
   description: string;
   instagramUrl?: string;
   tickets: EventTicket[];
+  /** Promos de entrada del evento (v21). Vacío = sin promos. */
+  promos?: EventPromo[];
   soldOut?: boolean;
   /** ISO datetime; pasado este momento la venta se cierra sola */
   saleEndsAt?: string;
@@ -35,6 +38,7 @@ const EventCard = ({
   description,
   instagramUrl,
   tickets,
+  promos = [],
   soldOut,
   saleEndsAt,
 }: EventCardProps) => {
@@ -83,6 +87,30 @@ const EventCard = ({
           <div className="evento-fecha absolute top-3 left-3 z-[2] bg-celeste text-accent-foreground px-3 py-1.5 rounded-full shadow-sm">
             <span className="text-xs font-semibold tracking-[0.12em] uppercase">{date}</span>
           </div>
+
+          {/*
+            Promos vigentes del evento, arriba a la derecha (la fecha ocupa la
+            izquierda). Se muestran acá y no sólo dentro del modal porque es lo
+            que hace que alguien lo abra: una promo escondida detrás de un click
+            no vende nada.
+
+            Se deduplican por nombre: si el mismo "2x1" está cargado sobre
+            General y sobre VIP, en la card es un cartel solo — el detalle de
+            sobre qué entrada aplica se ve al comprar. Y no se muestran si está
+            agotado, que ahí el velo tapa todo igual.
+          */}
+          {!isSoldOut &&
+            [...new Set(promos.filter((p) => promoVigente(p)).map((p) => p.name))]
+              .slice(0, 2)
+              .map((nombre, i) => (
+                <div
+                  key={nombre}
+                  className="evento-promo absolute right-3 z-[2] rounded-full bg-celeste px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent-foreground shadow-sm"
+                  style={{ top: `${0.75 + i * 2}rem` }}
+                >
+                  {nombre}
+                </div>
+              ))}
 
           {isSoldOut && (
             <div // --velo y no --tinta: el velo tiene que oscurecer la foto SIEMPRE, y
@@ -154,6 +182,7 @@ const EventCard = ({
             eventDate={date}
             eventLocation={location}
             tickets={tickets}
+            promos={promos}
           />
         </Suspense>
       )}

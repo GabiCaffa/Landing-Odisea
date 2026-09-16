@@ -11,7 +11,7 @@ import SoundToggle from "@/components/SoundToggle";
  *
  * Había un `document.title = "ODÍSEA WEB"` que pisaba, apenas montaba React, el
  * `<title>` del `index.html`. O sea que el título escrito para que Google lo
- * muestre —"ODÍSEA · Fiestas y eventos de música electrónica en Uruguay"—
+ * muestre —"ODÍSEA · Fiestas y eventos en Uruguay"—
  * duraba hasta el primer render y quedaba "ODÍSEA WEB", que no dice nada y no
  * lo busca nadie. Google ejecuta JavaScript, así que puede quedarse con el
  * pisado.

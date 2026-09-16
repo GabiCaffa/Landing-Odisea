@@ -293,7 +293,7 @@ function bakeEventos(url?: string, key?: string): Plugin {
             })
             .join("");
           const noscript =
-            `    <noscript><h1>ODÍSEA · Fiestas y eventos de música electrónica en Uruguay</h1>` +
+            `    <noscript><h1>ODÍSEA · Fiestas y eventos en Uruguay</h1>` +
             `<p>Productora de eventos en Colonia del Sacramento, Paysandú y Nueva Helvecia.</p>` +
             `<h2>Próximas fechas</h2><ul>${texto}</ul></noscript>`;
 
