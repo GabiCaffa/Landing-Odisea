@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { supabase, EVENT_IMAGES_BUCKET } from "@/lib/supabase";
 import { EventTicket, eventTicketFromDb, sortEventTickets } from "@/lib/ticketTypes";
+import { EventPromo, eventPromoFromDb } from "@/lib/ticketPromos";
 
 export type { EventTicket };
 
@@ -91,13 +92,30 @@ export interface AdminEvent {
    * precio propio: `price` es el más barato de estos (lo calcula la DB).
    */
   tickets: EventTicket[];
+  /**
+   * Promos de entrada del evento (v21). Vacío = sin promos.
+   *
+   * No entran en `NewEventInput` aunque sean parte del evento: se guardan en su
+   * propia tabla después de crearlo, igual que las entradas (v15). Por eso
+   * `createEvent` devuelve el `id`.
+   */
+  promos: EventPromo[];
   image: string;
   imagePosition: ImageTransform;
   instagramUrl?: string;
   createdAt: string;
 }
 
-export type NewEventInput = Omit<AdminEvent, "id" | "createdAt">;
+/**
+ * `promos` queda AFUERA: no es parte de crear un evento.
+ *
+ * Igual que las entradas (v15) y que el desglose de una entrega (v18), las
+ * promos viven en su propia tabla y se guardan **después**, con el `id` del
+ * evento ya en la mano (`saveEventPromos`). `tickets` sigue adentro por
+ * compatibilidad con el form —`eventToDb` lo ignora—, pero para algo nuevo no
+ * tiene sentido repetir eso.
+ */
+export type NewEventInput = Omit<AdminEvent, "id" | "createdAt" | "promos">;
 
 interface AuthResult {
   ok: boolean;
@@ -168,6 +186,7 @@ function eventFromDb(row: any): AdminEvent {
     saleEndsAt: row.sale_ends_at ?? undefined,
     paymentAccountId: row.payment_account_id ?? "",
     tickets: sortEventTickets((row.event_ticket_types ?? []).map(eventTicketFromDb)),
+    promos: (row.event_ticket_promos ?? []).map(eventPromoFromDb),
     image: row.image_url ?? "",
     imagePosition: normalizeImageTransform(row.image_position),
     instagramUrl: row.instagram_url ?? undefined,
@@ -230,9 +249,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loadEvents = useCallback(async () => {
     const { data, error } = await supabase
       .from("events")
-      // Los tipos de entrada vienen embebidos: el sitio los necesita para el
-      // modal de compra y así evitamos una consulta por evento.
-      .select("*, event_ticket_types(*, ticket_types(*))")
+      // Los tipos de entrada y las promos vienen embebidos: el sitio los
+      // necesita para el modal de compra y así evitamos una consulta por
+      // evento. Las promos traen adentro la fila del catálogo, que es donde
+      // viven el mecanismo y la ventana de fechas.
+      .select("*, event_ticket_types(*, ticket_types(*)), event_ticket_promos(*, ticket_promos(*))")
       .order("date", { ascending: true });
     if (!error && data) setEvents(data.map(eventFromDb));
   }, []);

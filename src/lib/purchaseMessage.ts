@@ -35,6 +35,20 @@ export const MSG = {
    * en vez de perderse en silencio.
    */
   birthdayPromo: "PROMO CUMPLEAÑOS APLICADA",
+  /**
+   * Promo de entrada aplicada (2x1, 2da al 50%…, v21).
+   *
+   * **El subtotal de cada línea de entradas ya viene con el descuento**, así
+   * que los ítems siguen sumando el TOTAL y el importador del panel no
+   * necesita saber nada de promos para que la cuenta cierre. Esta línea existe
+   * para que el vendedor sepa **por qué** ese total es más bajo que el precio
+   * de lista — sin ella, un total distinto parece un error de tipeo del
+   * cliente.
+   *
+   * Va una línea por promo aplicada: un carrito puede llevar General con 2x1 y
+   * VIP sin promo, o dos tipos con promos distintas.
+   */
+  promo: "PROMO:",
   dataHeader: "Mis datos:",
   fullName: "Nombre completo:",
   email: "Email:",
@@ -54,8 +68,28 @@ export const MSG = {
 export interface PurchaseMessageItem {
   name: string;
   qty: number;
-  /** Precio unitario: en el mensaje se muestra el subtotal (precio × cantidad). */
+  /** Precio unitario de lista. */
   price: number;
+  /**
+   * Lo que se cobra por esta línea, **ya con la promo descontada** (v21).
+   *
+   * Sin valor se usa `price × qty`, que es lo que pasaba antes de que
+   * existieran las promos. Se pasa el subtotal en vez de dejar que el mensaje
+   * lo calcule porque el descuento no es una regla del texto: lo resuelve
+   * `ticketPromos.ts`, y el mensaje sólo lo transcribe. Así **los ítems
+   * siempre suman el TOTAL**, que es de lo que depende el importador.
+   */
+  subtotal?: number;
+}
+
+/** Una promo aplicada, para nombrarla en el mensaje. */
+export interface PurchaseMessagePromo {
+  /** Lo que ve el cliente: "2x1", "2da al 50%". */
+  label: string;
+  /** Sobre qué tipo de entrada se aplicó. */
+  ticketName: string;
+  /** Cuánto descontó, en pesos. Positivo. */
+  monto: number;
 }
 
 export interface PurchaseMessageInput {
@@ -68,6 +102,8 @@ export interface PurchaseMessageInput {
   eventDate: string;
   items: PurchaseMessageItem[];
   total: number;
+  /** Promos de entrada aplicadas (v21). Vacío o ausente = ninguna. */
+  promos?: PurchaseMessagePromo[];
   /** Cuenta de cobro del evento (v13). Sin cuenta, el mensaje la pide. */
   account?: PaymentAccount | null;
 }
@@ -78,8 +114,15 @@ export function buildPurchaseMessage(input: PurchaseMessageInput): string {
   let msg = `${MSG.greeting} ${firstName}\n`;
   msg += `${MSG.event} ${input.eventName} (${input.eventDate}):\n`;
   for (const item of input.items) {
-    const subtotal = item.price * item.qty;
+    // Ya viene con la promo descontada cuando hay; si no, es precio × cantidad.
+    const subtotal = item.subtotal ?? item.price * item.qty;
     msg += `- ${item.qty} entrada${item.qty > 1 ? "s" : ""} ${item.name} ($${subtotal})\n`;
+  }
+  // Las promos van DESPUÉS de los ítems y ANTES del total: explican por qué el
+  // total es más bajo que el precio de lista. Sin esta línea, al vendedor le
+  // llega un número que no le cierra y parece un error del cliente.
+  for (const p of input.promos ?? []) {
+    msg += `${MSG.promo} ${p.label} en ${p.ticketName} (-$${p.monto})\n`;
   }
   msg += `\n${MSG.total} $${input.total}\n`;
   // La promo de cumpleaños NO se escribe acá: no se reclama desde la compra.
@@ -132,6 +175,16 @@ export interface ParsedPurchase {
   /** La suma de los subtotales de las líneas, para contrastar con el TOTAL. */
   itemsTotal: number | null;
   birthdayPromo: boolean;
+  /**
+   * Promos de entrada que venían nombradas en el mensaje (v21), tal cual el
+   * texto: `["2x1 en General (-$700)"]`.
+   *
+   * **No hace falta para que la cuenta cierre**: el subtotal de cada línea ya
+   * viene descontado, así que los ítems suman el TOTAL igual. Se lee para que
+   * el staff vea en el resumen por qué se cobró menos, y queda en las notas de
+   * la entrega.
+   */
+  promos: string[];
   /** Desglose legible ("2 General · 1 VIP"), para el campo Notas. */
   itemsSummary: string;
 }
@@ -271,6 +324,15 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
   const itemsTotal = items.length > 0 ? items.reduce((acc, item) => acc + item.amount, 0) : null;
   const birthdayPromo = foldText(text).includes(foldText(MSG.birthdayPromo));
 
+  // Promos de entrada (v21). Se busca sobre `lines` —ya cortadas antes del
+  // bloque de la transferencia y sin el sello del chat— y no sobre el texto
+  // crudo, para no levantar la palabra "promo" de una nota suelta del cliente.
+  const wantPromo = foldText(MSG.promo);
+  const promos = lines
+    .filter((l) => foldText(l).startsWith(wantPromo))
+    .map((l) => l.slice(MSG.promo.length).trim())
+    .filter(Boolean);
+
   const warnings: string[] = [];
   if (!fullName) warnings.push("No encontré el nombre completo.");
   if (!email) warnings.push("No encontré el email.");
@@ -305,6 +367,7 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
       total,
       itemsTotal,
       birthdayPromo,
+      promos,
       itemsSummary,
     },
     warnings,

@@ -10,6 +10,7 @@ import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { PaymentAccount, fetchAccountForEvent } from "@/lib/paymentAccounts";
 import { EventTicket } from "@/lib/ticketTypes";
+import { EventPromo, mejorDescuento, promoVigente } from "@/lib/ticketPromos";
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
 import { toast } from "sonner";
 
@@ -21,6 +22,8 @@ interface TicketPurchaseModalProps {
   eventDate: string;
   eventLocation: string;
   tickets: EventTicket[];
+  /** Promos de entrada del evento (v21). Vacío = sin promos. */
+  promos?: EventPromo[];
 }
 
 type Step = "auth-prompt" | "purchase";
@@ -33,6 +36,7 @@ const TicketPurchaseModal = ({
   eventDate,
   eventLocation,
   tickets,
+  promos = [],
 }: TicketPurchaseModalProps) => {
   const { currentUser } = useAuth();
 
@@ -95,10 +99,29 @@ const TicketPurchaseModal = ({
     }));
   };
 
-  const calculateTotal = () =>
-    tickets.reduce((total, t) => total + t.price * quantities[t.name], 0);
-
   const getSelectedTickets = () => tickets.filter((t) => quantities[t.name] > 0);
+
+  /**
+   * Cada tipo de entrada con su promo ya resuelta.
+   *
+   * Se calcula una sola vez y de acá salen las tres cosas que tienen que dar lo
+   * mismo: lo que se ve en pantalla, el TOTAL y el mensaje de WhatsApp. Antes
+   * el total se recalculaba en dos lugares; con descuentos de por medio eso es
+   * pedir que algún día muestren números distintos.
+   */
+  const lineas = tickets.map((t) => {
+    const qty = quantities[t.name] ?? 0;
+    const bruto = t.price * qty;
+    const d = qty > 0 ? mejorDescuento(promos, t.ticketTypeId, t.price, qty) : null;
+    return { ticket: t, qty, bruto, descuento: d, subtotal: bruto - (d?.monto ?? 0) };
+  });
+
+  const total = lineas.reduce((acc, l) => acc + l.subtotal, 0);
+  const ahorro = lineas.reduce((acc, l) => acc + (l.descuento?.monto ?? 0), 0);
+
+  /** Promos vigentes de un tipo, para mostrarlas aunque todavía no se apliquen. */
+  const promosDe = (ticketTypeId: string) =>
+    promos.filter((p) => p.ticketTypeId === ticketTypeId && promoVigente(p));
 
   const buildMessage = () => {
     const selected = getSelectedTickets();
@@ -116,8 +139,21 @@ const TicketPurchaseModal = ({
       documentId: usableDocumentId(currentUser?.documentId),
       eventName,
       eventDate,
-      items: selected.map((t) => ({ name: t.name, qty: quantities[t.name], price: t.price })),
-      total: calculateTotal(),
+      // Los subtotales salen de `lineas`, ya con la promo descontada, así que
+      // los ítems del mensaje suman el TOTAL y el importador del panel no
+      // necesita saber nada de promos para que la cuenta cierre.
+      items: selected.map((t) => {
+        const l = lineas.find((x) => x.ticket.name === t.name)!;
+        return { name: t.name, qty: l.qty, price: t.price, subtotal: l.subtotal };
+      }),
+      promos: lineas
+        .filter((l) => l.descuento)
+        .map((l) => ({
+          label: l.descuento!.promo.name,
+          ticketName: l.ticket.name,
+          monto: l.descuento!.monto,
+        })),
+      total,
       account,
     });
   };
@@ -139,7 +175,6 @@ const TicketPurchaseModal = ({
     onClose();
   };
 
-  const total = calculateTotal();
   const hasSelectedTickets = getSelectedTickets().length > 0;
   const isFormValid =
     !!formData.name.trim() &&
@@ -224,6 +259,30 @@ const TicketPurchaseModal = ({
                           {ticket.description}
                         </p>
                       )}
+                      {/*
+                        La promo se muestra ANTES de que se aplique: si sólo
+                        apareciera al llegar a la cantidad, nadie se enteraría de
+                        que existe y nunca la usaría. Se nombra la etiqueta que
+                        escribió el admin ("2x1") — nunca el mecanismo interno
+                        ("cada 2, 1 al 100%"), que no le dice nada al cliente.
+                      */}
+                      {promosDe(ticket.ticketTypeId).map((p) => {
+                        const l = lineas.find((x) => x.ticket.name === ticket.name);
+                        const aplicada = l?.descuento?.promo.promoId === p.promoId;
+                        return (
+                          <p
+                            key={p.id}
+                            className={`mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                              aplicada
+                                ? "bg-celeste text-accent-foreground"
+                                : "border border-celeste/40 text-celeste-deep"
+                            }`}
+                          >
+                            {p.name}
+                            {aplicada && l?.descuento ? ` · −$${l.descuento.monto}` : ""}
+                          </p>
+                        );
+                      })}
                     </div>
                     <div className="flex flex-shrink-0 items-center justify-end gap-2">
                       <button
@@ -369,8 +428,24 @@ const TicketPurchaseModal = ({
           >
             {hasSelectedTickets && (
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">Total</span>
-                <span className="text-2xl font-semibold tabular-nums">${total}</span>
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Total</span>
+                  {/* El ahorro va junto al total y no arriba: es el número que
+                      convence, y arriba se lo come el scroll del cuerpo. */}
+                  {ahorro > 0 && (
+                    <p className="text-xs font-semibold text-celeste-deep">
+                      Ahorrás ${ahorro}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  {ahorro > 0 && (
+                    <span className="mr-2 text-sm text-muted-foreground line-through tabular-nums">
+                      ${total + ahorro}
+                    </span>
+                  )}
+                  <span className="text-2xl font-semibold tabular-nums">${total}</span>
+                </div>
               </div>
             )}
             <button

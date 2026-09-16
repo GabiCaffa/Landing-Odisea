@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Ticket,
+  Tag,
   UserPlus,
   X,
   Upload,
@@ -48,6 +49,7 @@ import LoadingScreen from "@/components/LoadingScreen";
 import {
   useAuth,
   AdminEvent,
+  NewEventInput,
   User,
   ImageTransform,
   DEFAULT_IMAGE_TRANSFORM,
@@ -98,6 +100,9 @@ import {
   getIdPhotoUrl,
 } from "@/lib/birthdays";
 import { birthdayMessageFor, buildBirthdayWhatsAppUrl } from "@/lib/birthdayMessage";
+import PromosAdmin from "@/components/admin/PromosAdmin";
+import EventPromosEditor, { EventPromoSelection } from "@/components/admin/EventPromosEditor";
+import { saveEventPromos } from "@/lib/ticketPromos";
 import {
   PaymentAccount,
   PaymentAccountInput,
@@ -133,6 +138,7 @@ type Tab =
   | "accounts"
   | "users"
   | "appearance"
+  | "promos"
   | "deliveries"
   | "birthdays";
 
@@ -228,6 +234,12 @@ const Admin = () => {
                 onClick={() => setTab("tickets")}
               />
               <SidebarLink
+                icon={<Tag className="w-4 h-4" />}
+                label="Promos"
+                active={activeTab === "promos"}
+                onClick={() => setTab("promos")}
+              />
+              <SidebarLink
                 icon={<CreditCard className="w-4 h-4" />}
                 label="Cuentas"
                 active={activeTab === "accounts"}
@@ -294,6 +306,7 @@ const Admin = () => {
               {activeTab === "dashboard" && "Resumen general"}
               {activeTab === "events" && "Gestión"}
               {activeTab === "tickets" && "Tipos de entrada"}
+              {activeTab === "promos" && "Promos de entrada"}
               {activeTab === "accounts" && "Cobros"}
               {activeTab === "users" && "Comunidad"}
               {activeTab === "appearance" && "Cara del sitio"}
@@ -304,6 +317,7 @@ const Admin = () => {
               {activeTab === "dashboard" && "DASHBOARD"}
               {activeTab === "events" && "EVENTOS"}
               {activeTab === "tickets" && "ENTRADAS"}
+              {activeTab === "promos" && "PROMOS"}
               {activeTab === "accounts" && "CUENTAS"}
               {activeTab === "users" && "USUARIOS"}
               {activeTab === "appearance" && "APARIENCIA"}
@@ -331,6 +345,7 @@ const Admin = () => {
         {activeTab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
         {activeTab === "events" && <EventsAdmin />}
         {activeTab === "tickets" && <TicketTypesAdmin />}
+        {activeTab === "promos" && <PromosAdmin />}
         {activeTab === "accounts" && <AccountsAdmin />}
         {activeTab === "users" && <UsersAdmin />}
         {activeTab === "appearance" && <AppearanceAdmin />}
@@ -573,7 +588,7 @@ const EventsAdmin = () => {
     [events, search]
   );
 
-  const handleSave = async (data: Omit<AdminEvent, "id" | "createdAt">) => {
+  const handleSave = async (data: NewEventInput, promos: EventPromoSelection[]) => {
     let eventId: string | undefined;
     if (editing) {
       const result = await updateEvent(editing.id, data);
@@ -599,6 +614,17 @@ const EventsAdmin = () => {
       if (!ticketsResult.ok) {
         toast.error(
           `Evento guardado, pero las entradas no: ${ticketsResult.error ?? "error desconocido"}`
+        );
+        return;
+      }
+      // Las promos van en su propia tabla y DESPUÉS de las entradas: apuntan a
+      // un tipo de entrada, así que no tiene sentido guardarlas si las
+      // entradas fallaron. Mismo criterio que arriba si algo sale mal: el
+      // evento ya quedó, se avisa para reintentar editándolo.
+      const promosResult = await saveEventPromos(eventId, promos);
+      if (!promosResult.ok) {
+        toast.error(
+          `Evento guardado, pero las promos no: ${promosResult.error ?? "error desconocido"}`
         );
         return;
       }
@@ -1442,12 +1468,20 @@ const EventFormModal = ({
   /** Catálogo de tipos de entrada, para elegir cuáles vende este evento. */
   ticketTypes: TicketType[];
   onClose: () => void;
-  onSave: (data: Omit<AdminEvent, "id" | "createdAt">) => void | Promise<void>;
+  onSave: (data: NewEventInput, promos: EventPromoSelection[]) => void | Promise<void>;
 }) => {
   const { uploadEventImage } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  /**
+   * Promos del evento. Estado APARTE de `form` porque no son parte de
+   * `NewEventInput`: viven en su propia tabla y se guardan después, con el id
+   * del evento ya en la mano (ver `saveEventPromos`).
+   */
+  const [promosSel, setPromosSel] = useState<EventPromoSelection[]>(
+    () => (initial?.promos ?? []).map((p) => ({ promoId: p.promoId, ticketTypeId: p.ticketTypeId }))
+  );
   // ISO (UTC) → valor para <input type="datetime-local"> en hora local
   const isoToLocalInput = (iso?: string) => {
     if (!iso) return "";
@@ -1457,7 +1491,10 @@ const EventFormModal = ({
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
-  const [form, setForm] = useState<Omit<AdminEvent, "id" | "createdAt">>({
+  // `NewEventInput` y no un `Omit` escrito a mano: así el form no puede quedar
+  // desalineado con lo que acepta `createEvent`/`updateEvent` (las promos, por
+  // ejemplo, no van acá: se guardan aparte con `saveEventPromos`).
+  const [form, setForm] = useState<NewEventInput>({
     name: initial?.name ?? "",
     date: initial?.date ?? "",
     location: initial?.location ?? "",
@@ -1550,7 +1587,7 @@ const EventFormModal = ({
         ...form,
         // datetime-local (hora local) → ISO UTC; vacío → "" (se guarda null)
         saleEndsAt: form.saleEndsAt ? new Date(form.saleEndsAt).toISOString() : "",
-      });
+      }, promosSel);
     } finally {
       setSaving(false);
     }
@@ -1656,6 +1693,17 @@ const EventFormModal = ({
                 catalog={ticketTypes}
                 value={form.tickets}
                 onChange={(tickets) => setForm((p) => ({ ...p, tickets }))}
+              />
+            </FormField>
+
+            {/* Debajo de las entradas a propósito: una promo se aplica SOBRE un
+                tipo de entrada, así que primero hay que haber elegido cuáles
+                vende el evento. */}
+            <FormField label="Promos de entrada">
+              <EventPromosEditor
+                tickets={form.tickets}
+                value={promosSel}
+                onChange={setPromosSel}
               />
             </FormField>
 
@@ -3012,6 +3060,10 @@ const PasteMessageModal = ({
     // columna existe pero el form nunca la expuso) y lo que no se pudo cruzar.
     const notes = [
       data.birthdayPromo ? "PROMO CUMPLEAÑOS" : "",
+      // Las promos de entrada (v21) ya vienen descontadas en el total, así que
+      // acá van sólo como constancia de por qué se cobró menos que el precio
+      // de lista. Sin esto, dentro de un mes nadie se acuerda.
+      ...data.promos,
       data.documentId ? `Doc: ${data.documentId}` : "",
       matched.unmatched.length ? `Sin cruzar: ${matched.unmatched.join(", ")}` : "",
     ]
@@ -3119,6 +3171,14 @@ const PasteMessageModal = ({
                   </span>
                 </ParsedRow>
               )}
+              {/* Promos de entrada (v21). Se muestran para que el total más
+                  bajo no parezca un error del cliente; el descuento ya está
+                  dentro del subtotal de cada línea. */}
+              {data?.promos.map((p) => (
+                <ParsedRow key={p} label="Promo">
+                  <span className="font-semibold text-celeste-deep">{p}</span>
+                </ParsedRow>
+              ))}
             </div>
           )}
 

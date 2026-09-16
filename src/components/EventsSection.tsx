@@ -131,6 +131,7 @@ const EventsSection = () => {
                     soldOut={event.status === "agotado"}
                     saleEndsAt={event.saleEndsAt}
                     tickets={event.tickets.filter((t) => t.active)}
+                    promos={event.promos}
                   />
                 </div>
               ))}
