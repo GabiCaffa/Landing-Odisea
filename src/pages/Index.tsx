@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import EventsSection from "@/components/EventsSection";
@@ -7,12 +6,19 @@ import Footer from "@/components/Footer";
 import SpookyLayer from "@/components/SpookyLayer";
 import SoundToggle from "@/components/SoundToggle";
 
+/**
+ * El título NO se toca acá.
+ *
+ * Había un `document.title = "ODÍSEA WEB"` que pisaba, apenas montaba React, el
+ * `<title>` del `index.html`. O sea que el título escrito para que Google lo
+ * muestre —"ODÍSEA · Fiestas y eventos de música electrónica en Uruguay"—
+ * duraba hasta el primer render y quedaba "ODÍSEA WEB", que no dice nada y no
+ * lo busca nadie. Google ejecuta JavaScript, así que puede quedarse con el
+ * pisado.
+ *
+ * El título de la home vive en `index.html` y en ningún otro lado.
+ */
 const Index = () => {
-  useEffect(() => {
-    // Update document title
-    document.title = "ODÍSEA WEB";
-  }, []);
-
   return (
     <div className="min-h-screen bg-background">
       <Header />

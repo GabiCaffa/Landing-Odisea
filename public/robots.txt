@@ -12,3 +12,10 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# El panel y las pantallas de cuenta no aportan nada en un buscador.
+Disallow: /admin
+Disallow: /perfil
+Disallow: /auth/
+
+Sitemap: https://www.odiseaoficial.com/sitemap.xml
