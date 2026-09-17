@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 import ScrollToTop from "@/components/ScrollToTop";
 import OcultarArranque from "@/components/OcultarArranque";
+import AvisoCiudad from "@/components/AvisoCiudad";
 import LoadingScreen from "@/components/LoadingScreen";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
@@ -59,6 +60,7 @@ const App = () => (
             </Routes>
           </Suspense>
           </ErrorBoundary>
+          <AvisoCiudad />
           </ConfirmProvider>
         </AuthProvider>
         </ThemeProvider>

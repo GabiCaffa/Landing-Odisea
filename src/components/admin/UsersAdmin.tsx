@@ -122,6 +122,7 @@ interface Filtros {
   rol: "todos" | UserRole;
   pais: string;
   depto: string;
+  ciudad: string;
   telefono: "todos" | "con" | "sin";
   edad: "todas" | "menores" | "18-24" | "25-34" | "35+";
   mesCumple: string;
@@ -136,6 +137,7 @@ const VACIOS: Filtros = {
   rol: "todos",
   pais: "",
   depto: "",
+  ciudad: "",
   telefono: "todos",
   edad: "todas",
   mesCumple: "",
@@ -321,6 +323,7 @@ const UsersAdmin = () => {
       if (f.rol !== "todos" && u.role !== f.rol) return false;
       if (f.pais && (u.country || SIN_DATO) !== f.pais) return false;
       if (f.depto && (u.state || SIN_DATO) !== f.depto) return false;
+      if (f.ciudad && (u.city || SIN_DATO) !== f.ciudad) return false;
       if (f.telefono === "con" && !u.phone) return false;
       if (f.telefono === "sin" && u.phone) return false;
       if (f.foto === "con" && !u.avatarUrl) return false;
@@ -423,6 +426,19 @@ const UsersAdmin = () => {
     [users, f.pais]
   );
 
+  // La ciudad se acota a país + departamento, pero sin ninguno de los dos
+  // muestra todas: mismo criterio que el departamento, por el mismo motivo.
+  const ciudades = useMemo(
+    () =>
+      contarPorValor(
+        users
+          .filter((u) => !f.pais || (u.country || SIN_DATO) === f.pais)
+          .filter((u) => !f.depto || (u.state || SIN_DATO) === f.depto)
+          .map((u) => u.city)
+      ),
+    [users, f.pais, f.depto]
+  );
+
   const resumen = useMemo(
     () => ({
       staff: filtradas.filter((x) => x.u.role !== "user").length,
@@ -478,7 +494,7 @@ const UsersAdmin = () => {
       "odisea-usuarios",
       [
         "Nombre", "Apellido", "Email", "Cédula", "Teléfono", "Nacimiento", "Edad",
-        "País", "Departamento", "Rol", "Alta", "Compras", "Entradas", "Gastado",
+        "País", "Departamento", "Ciudad", "Rol", "Alta", "Compras", "Entradas", "Gastado",
         "Promo cumple", "Regalo entregado",
       ],
       filtradas.map((x) => [
@@ -491,6 +507,7 @@ const UsersAdmin = () => {
         x.edad ?? "",
         getCountry(x.u.country)?.name ?? x.u.country ?? "",
         x.u.state ?? "",
+        x.u.city ?? "",
         x.u.role,
         x.u.createdAt.slice(0, 10),
         x.compras.length,
@@ -563,7 +580,7 @@ const UsersAdmin = () => {
               {/* Al cambiar de país se limpia el departamento: si no, queda un
                   filtro invisible por un departamento que ese país no tiene y
                   la lista sale vacía sin explicación. */}
-              <Sel value={f.pais} onChange={(v) => setF({ ...f, pais: v, depto: "" })}>
+              <Sel value={f.pais} onChange={(v) => setF({ ...f, pais: v, depto: "", ciudad: "" })}>
                 <option value="">Todos</option>
                 {paises.map(([code, n]) => (
                   <option key={code} value={code}>
@@ -576,11 +593,22 @@ const UsersAdmin = () => {
             </Campo>
 
             <Campo label="Departamento">
-              <Sel value={f.depto} onChange={(v) => setF({ ...f, depto: v })}>
+              <Sel value={f.depto} onChange={(v) => setF({ ...f, depto: v, ciudad: "" })}>
                 <option value="">Todos</option>
                 {deptos.map(([d, n]) => (
                   <option key={d} value={d}>
                     {d === SIN_DATO ? `Sin departamento cargado (${n})` : `${d} (${n})`}
+                  </option>
+                ))}
+              </Sel>
+            </Campo>
+
+            <Campo label="Ciudad">
+              <Sel value={f.ciudad} onChange={(v) => setF({ ...f, ciudad: v })}>
+                <option value="">Todas</option>
+                {ciudades.map(([c, n]) => (
+                  <option key={c} value={c}>
+                    {c === SIN_DATO ? `Sin ciudad cargada (${n})` : `${c} (${n})`}
                   </option>
                 ))}
               </Sel>
@@ -729,7 +757,9 @@ const UsersAdmin = () => {
                     <p className="truncate text-xs text-muted-foreground">{x.u.email}</p>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                       {x.edad !== null && <span>{x.edad} años</span>}
-                      {x.u.state && <span>{x.u.state}</span>}
+                      {(x.u.city || x.u.state) && (
+                        <span>{[x.u.city, x.u.state].filter(Boolean).join(", ")}</span>
+                      )}
                       {x.compras.length > 0 && (
                         <span className="text-foreground">
                           {x.entradas} entradas · {plata(x.gastado)}
@@ -796,10 +826,12 @@ const UsersAdmin = () => {
                           </p>
                         </Td>
                         <Td className="text-xs">
-                          {x.u.state ?? "—"}
-                          {x.u.country && (
+                          {x.u.city ?? x.u.state ?? "—"}
+                          {(x.u.state || x.u.country) && (
                             <p className="text-[11px] text-muted-foreground">
-                              {getCountry(x.u.country)?.name ?? x.u.country}
+                              {[x.u.city ? x.u.state : null, getCountry(x.u.country)?.name ?? x.u.country]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </p>
                           )}
                         </Td>
@@ -1000,7 +1032,7 @@ const FichaModal = ({
             )}
           </Dato>
           <Dato icon={<MapPin className="h-3.5 w-3.5" />}>
-            {[u.state, pais ? `${pais.flag} ${pais.name}` : u.country]
+            {[u.city, u.state, pais ? `${pais.flag} ${pais.name}` : u.country]
               .filter(Boolean)
               .join(" · ") || "Sin ubicación"}
           </Dato>

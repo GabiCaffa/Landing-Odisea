@@ -42,6 +42,8 @@ export interface User {
   phone?: string; // E.164
   country?: string; // ISO 3166-1 alpha-2
   state?: string;
+  /** Ciudad o localidad. Nullable: los perfiles anteriores a v23 no la tienen. */
+  city?: string;
   createdAt: string;
 }
 
@@ -53,6 +55,7 @@ export interface ProfileUpdate {
   phone?: string | null;
   country?: string | null;
   state?: string | null;
+  city?: string | null;
 }
 
 
@@ -152,6 +155,7 @@ interface AuthContextValue {
     phone: string;
     country: string;
     state?: string;
+    city?: string;
   }) => Promise<AuthResult>;
   resendConfirmation: (email: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -237,6 +241,7 @@ function profileFromDb(row: any): User {
     phone: row.phone ?? undefined,
     country: row.country ?? undefined,
     state: row.state ?? undefined,
+    city: row.city ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -402,6 +407,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           phone: data.phone,
           country: data.country,
           state: data.state ?? null,
+          city: data.city ?? null,
         },
       },
     });
@@ -531,6 +537,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (data.phone !== undefined) row.phone = data.phone;
     if (data.country !== undefined) row.country = data.country;
     if (data.state !== undefined) row.state = data.state;
+    if (data.city !== undefined) row.city = data.city;
     if (Object.keys(row).length === 0) return { ok: true };
 
     const { error } = await supabase.from("profiles").update(row).eq("id", currentUser.id);

@@ -96,7 +96,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
-`v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql`.
+`v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
+`v23_profile_city.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -476,6 +477,79 @@ su espejo en la base, anotado en el archivo; si se agrega uno que la base no
 tiene, el botón aparece y la acción falla con un error de RLS. El hook
 `usePuede("eventos:borrar")` existe para que esconder un botón sea **una línea**:
 si cuesta tres, termina no haciéndose.
+
+**v23 — Ciudad en el perfil.** `profiles` guardaba país y departamento (v3) y
+eso es demasiado grueso para decidir dónde hacer una fecha: de los eventos
+cargados, **dos son en el departamento de Colonia pero en ciudades distintas**
+—Colonia del Sacramento y Nueva Helvecia—, y para el filtro del panel eran el
+mismo "Colonia".
+
+**La columna es nullable, y no es pereza.** Ponerla `not null` obligaría a
+inventarle un valor a todos los perfiles que ya existen, y un `''` o un
+"Sin especificar" es **peor que un NULL**: se cuela en los filtros como si fuera
+una ciudad de verdad y no hay forma de distinguir "no lo sabemos" de "eligió
+eso". Se exige en el **registro nuevo**, que es donde se puede exigir sin
+mentirle a nadie.
+
+**El catálogo vive en `src/lib/ciudades.ts`, NO en `locations.ts`.** Ese archivo
+lo importa `PhoneInput`, que sí está en la cara pública, así que las 122
+localidades viajarían de arrastre con el prefijo telefónico de cada país. Es la
+trampa de `manualChunks` (§6.4) a nivel de módulo.
+
+> **Lista y no texto libre.** "Nueva Helvecia", "nueva helvecia" y "N. Helvecia"
+> son tres ciudades distintas para un filtro, y los desplegables del panel se
+> arman **con los datos que hay** (§6.9): texto libre los convierte en un puré.
+> Pero la lista tiene las localidades principales, no las ~1.100 del país, así
+> que **siempre hay una opción "Otra"** que deja escribir: sin salida, alguien de
+> un pueblo chico no puede terminar de registrarse, y eso es mucho peor que un
+> dato imperfecto. Lo que llega por "Otra" se guarda tal cual y se ve en el
+> panel; si una se repite, se sube al catálogo.
+
+> **El valor NO se normaliza en la DB.** Un trigger que "arregle" mayúsculas y
+> tildes rompe el nombre propio de un pueblo antes de arreglar nada.
+
+> **Sin el cambio al trigger, el campo se perdía en silencio.** El perfil no lo
+> crea el front: lo crea `handle_email_confirmed()` al confirmarse el email
+> (v7), leyendo la metadata de `auth.users`. Si esa función no copia `city`, el
+> registro pide la ciudad, la manda... y nunca llega a `profiles`. La migración
+> reescribe la función entera porque no hay forma de agregarle una columna a una
+> función; lo único que cambia respecto de v7 son tres líneas.
+
+> **El único backfill posible es Montevideo**, que es el único departamento del
+> país con una sola ciudad. Cualquier otra deducción sería inventar el dato.
+
+**Se le pide a los que ya están, sin trabarlos (`AvisoCiudad`).** Una barra
+abajo con el desplegable ahí mismo y un "Ahora no" de verdad; quien la cierra no
+la vuelve a ver por dos semanas. La alternativa era un modal que no se puede
+saltear: llena la base más rápido, pero **si le aparece a alguien que estaba por
+comprar una entrada, se pierde la venta** — y es justo la gente que más
+interesa. No vuelve "nunca más" a propósito: el dato sigue haciendo falta y la
+persona puede estar apurada hoy y no la semana que viene.
+
+> **Son dos archivos (`AvisoCiudad` + `AvisoCiudadBarra`) por dos motivos.** La
+> barra importa el catálogo de localidades, así que tiene que ir diferida o entra
+> en el bundle de la landing para cualquiera que pase a mirar una fiesta. Y un
+> `lazy` suelto que se suspende durante el render inicial —que es síncrono— hace
+> que React avise por consola en **cada carga**, aunque el `fallback` sea `null`
+> y no se vea nada; un error benigno que aparece siempre es exactamente lo que
+> después tapa uno de verdad. Con el chequeo de sesión afuera, la suspensión pasa
+> a ocurrir cuando llega `currentUser` —un cambio asincrónico— y no hay aviso. De
+> yapa, el chunk **no se descarga** para quien no lo necesita.
+
+> **El campo de ciudad de `LocationSelect` es opt-in por prop.** Ese componente
+> lo usa también el formulario de cumpleaños del panel, y `birthday_signups`
+> **no tiene columna de ciudad**: si apareciera solo, ahí se completaría para
+> nada y encima `required` trabaría un formulario que el staff usa a diario.
+
+> **Si el valor guardado no está en la lista, el campo abre en modo "Otra" con el
+> texto puesto.** Sin eso, alguien que escribió "Puerto Gómez" abre su perfil, ve
+> el desplegable en "Seleccioná..." y **al guardar pierde su ciudad sin haber
+> tocado nada**.
+
+> **Los nombres de los departamentos tienen que coincidir exactamente con los de
+> `locations.ts`.** Si no coinciden, el desplegable de ciudad queda vacío y **no
+> falla nada**: es silencioso. Por eso `departamentosSinCiudades()` existe y hay
+> una prueba que la usa.
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 

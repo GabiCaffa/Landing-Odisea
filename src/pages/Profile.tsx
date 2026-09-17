@@ -158,6 +158,7 @@ const InfoSection = () => {
   const [birthDate, setBirthDate] = useState(currentUser?.birthDate ?? "");
   const [country, setCountry] = useState(currentUser?.country ?? DEFAULT_COUNTRY_CODE);
   const [state, setState] = useState(currentUser?.state ?? "");
+  const [city, setCity] = useState(currentUser?.city ?? "");
   const [phone, setPhone] = useState(
     currentUser?.phone ? formatPhoneDisplay(currentUser.phone).replace(/^\+\d+\s*/, "") : ""
   );
@@ -169,6 +170,7 @@ const InfoSection = () => {
     birthDate !== currentUser?.birthDate ||
     country !== (currentUser?.country ?? DEFAULT_COUNTRY_CODE) ||
     state !== (currentUser?.state ?? "") ||
+    city !== (currentUser?.city ?? "") ||
     !phoneMatchesCurrent(phone, country, currentUser?.phone);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -194,6 +196,9 @@ const InfoSection = () => {
       birthDate,
       country,
       state: state.trim(),
+      // Vacío se guarda como NULL: "" se colaría en los filtros del panel como
+      // si fuera una ciudad de verdad. Mismo criterio que la columna en v23.
+      city: city.trim() || null,
       phone: phoneE164,
     });
     setSaving(false);
@@ -245,8 +250,14 @@ const InfoSection = () => {
         onCountryChange={(c) => {
           setCountry(c);
           setState("");
+          setCity("");
         }}
-        onStateChange={setState}
+        onStateChange={(s) => {
+          setState(s);
+          setCity("");
+        }}
+        city={city}
+        onCityChange={setCity}
         required
       />
 
