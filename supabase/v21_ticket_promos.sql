@@ -5,14 +5,19 @@
 -- sobre qué tipo de entrada. Mismo molde que ticket_types ↔ event_ticket_types
 -- (v15), y por el mismo motivo: la misma promo se aplica a varios eventos.
 --
--- ── El mecanismo, en dos números ────────────────────────────────────────────
--- `every_n` y `percent_off` alcanzan para todo lo que se pidió:
+-- ── El mecanismo, en tres números ───────────────────────────────────────────
+--   "cada EVERY_N entradas, DISCOUNTED_UNITS con PERCENT_OFF% de descuento"
 --
---   2x1            → cada 2, 1 al 100%
---   2da al 50%     → cada 2, 1 al 50%
---   3x2            → cada 3, 1 al 100%
+--   2x1                  → cada 2, 1 al 100%
+--   2da al 50%           → cada 2, 1 al 50%
+--   3x2                  → cada 3, 1 al 100%
+--   3 al precio de 1     → cada 3, 2 al 100%
+--   cada 4, 2 a mitad    → cada 4, 2 al 50%
 --
---   descuento = floor(cantidad / every_n) * precio * percent_off / 100
+--   descuento = floor(cantidad / every_n) * discounted_units * precio * percent_off / 100
+--
+-- El tercer número existe porque con uno fijo en 1 no se podía expresar "3 al
+-- precio de 1" ni "cada 4, dos a mitad de precio".
 --
 -- Con 4 entradas y "2da al 50%" se aplica DOS veces. Es a propósito: si no, la
 -- promo premiaría comprar de a dos y castigaría comprar de a cuatro.
@@ -38,6 +43,9 @@ create table if not exists public.ticket_promos (
   description text,
   -- Los dos números del mecanismo. Internos: no se muestran.
   every_n integer not null check (every_n >= 2),
+  -- Cuántas de esas N se descuentan. Menor que every_n: descontar las N sería
+  -- regalar el grupo entero, que no es una promo sino un precio cero.
+  discounted_units integer not null default 1 check (discounted_units >= 1),
   percent_off integer not null check (percent_off between 1 and 100),
   -- Ventana de vigencia. NULL a cualquiera de los dos lados = sin límite.
   starts_at date,
@@ -47,8 +55,17 @@ create table if not exists public.ticket_promos (
   -- Una ventana al revés no es un caso raro: es un error de carga.
   constraint ticket_promos_ventana check (
     starts_at is null or ends_at is null or starts_at <= ends_at
-  )
+  ),
+  constraint ticket_promos_unidades check (discounted_units < every_n)
 );
+
+-- Para quien ya corrió una versión anterior de este archivo: agrega la columna
+-- y el CHECK sin tocar lo que ya haya cargado.
+alter table public.ticket_promos
+  add column if not exists discounted_units integer not null default 1;
+alter table public.ticket_promos drop constraint if exists ticket_promos_unidades;
+alter table public.ticket_promos
+  add constraint ticket_promos_unidades check (discounted_units < every_n);
 
 -- ─── 2) Qué evento usa qué promo, sobre qué tipo de entrada ─────────────────
 create table if not exists public.event_ticket_promos (
@@ -97,13 +114,15 @@ create policy "event_ticket_promos_write_admin" on public.event_ticket_promos
 -- ════════════════════════════════════════════════════════════════════════════
 -- Crear las dos del ejemplo:
 --
---   insert into public.ticket_promos (name, every_n, percent_off, starts_at, ends_at)
---   values ('2x1', 2, 100, null, null),
---          ('2da al 50%', 2, 50, '2026-10-01', '2026-10-31');
+--   insert into public.ticket_promos (name, every_n, discounted_units, percent_off)
+--   values ('2x1', 2, 1, 100),
+--          ('3x2', 3, 1, 100),
+--          ('3 al precio de 1', 3, 2, 100),
+--          ('2da al 50%', 2, 1, 50);
 --
 -- Ver qué promos hay y sus id:
 --
---   select id, name, every_n, percent_off, starts_at, ends_at, active
+--   select id, name, every_n, discounted_units, percent_off, starts_at, ends_at, active
 --   from public.ticket_promos order by created_at;
 --
 -- Aplicar una promo a un evento, sobre un tipo de entrada:

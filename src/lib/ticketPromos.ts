@@ -3,14 +3,19 @@ import { supabase } from "@/lib/supabase";
 /**
  * Promos de entradas: 2x1, 2da al 50%, 3x2.
  *
- * **Un solo mecanismo cubre todo lo pedido**, con dos números:
- * `cada N entradas, 1 con X% de descuento`.
+ * **Un solo mecanismo cubre todo lo pedido**, con tres números:
+ * `cada N entradas, M con X% de descuento`.
  *
- *   2x1         → cada 2, 1 al 100%
- *   2da al 50%  → cada 2, 1 al 50%
- *   3x2         → cada 3, 1 al 100%
+ *   2x1                → cada 2, 1 al 100%
+ *   2da al 50%         → cada 2, 1 al 50%
+ *   3x2                → cada 3, 1 al 100%
+ *   3 al precio de 1   → cada 3, 2 al 100%
+ *   cada 4, 2 a mitad  → cada 4, 2 al 50%
  *
- * **Los dos números son INTERNOS.** El comprador ve el `name` que escribió el
+ * El tercer número existe porque con M fijo en 1 no se podía expresar "3 al
+ * precio de 1" ni "cada 4, dos a mitad de precio".
+ *
+ * **Los tres números son INTERNOS.** El comprador ve el `name` que escribió el
  * admin ("2x1") y el precio ya descontado; nunca la fórmula. Por eso `name` se
  * escribe pensando en el cliente.
  *
@@ -24,9 +29,11 @@ export interface TicketPromo {
   /** Lo que lee el cliente. */
   name: string;
   description?: string;
-  /** Cada cuántas entradas se descuenta una. Interno. */
+  /** Cada cuántas entradas se aplica la promo. Interno. */
   everyN: number;
-  /** Qué porcentaje se le descuenta a esa una. Interno. */
+  /** Cuántas de esas N se descuentan. Menor que `everyN`. Interno. */
+  discountedUnits: number;
+  /** Qué porcentaje se les descuenta. Interno. */
   percentOff: number;
   /** ISO yyyy-mm-dd. Sin valor = sin límite de ese lado. */
   startsAt?: string;
@@ -44,6 +51,7 @@ export interface EventPromo {
   name: string;
   description?: string;
   everyN: number;
+  discountedUnits: number;
   percentOff: number;
   startsAt?: string;
   endsAt?: string;
@@ -54,6 +62,7 @@ export interface TicketPromoInput {
   name: string;
   description?: string | null;
   everyN: number;
+  discountedUnits: number;
   percentOff: number;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -98,9 +107,10 @@ export interface DescuentoAplicado {
 /**
  * Cuánto descuenta una promo sobre `cantidad` entradas de precio `precio`.
  *
- * `floor(cantidad / everyN)` es cuántas veces entra la promo. Con "2da al 50%"
- * y 4 entradas entra DOS veces: si entrara una sola, la promo premiaría comprar
- * de a dos y castigaría comprar de a cuatro.
+ * `floor(cantidad / everyN)` es cuántas veces entra la promo, y cada vez
+ * descuenta `discountedUnits` entradas. Con "2da al 50%" y 4 entradas entra DOS
+ * veces: si entrara una sola, la promo premiaría comprar de a dos y castigaría
+ * comprar de a cuatro.
  *
  * Se redondea al peso porque los precios son enteros; `Math.round` y no `floor`
  * para no quedarnos con el medio peso a favor nuestro en cada operación.
@@ -111,7 +121,8 @@ export const descuentoDe = (
   cantidad: number
 ): DescuentoAplicado | null => {
   if (!promoVigente(promo) || cantidad < promo.everyN || precio <= 0) return null;
-  const unidades = Math.floor(cantidad / promo.everyN);
+  const veces = Math.floor(cantidad / promo.everyN);
+  const unidades = veces * Math.max(1, promo.discountedUnits);
   const monto = Math.round(unidades * precio * (promo.percentOff / 100));
   if (monto <= 0) return null;
   return { promo, unidades, monto };
@@ -149,6 +160,7 @@ const promoFromDb = (row: any): TicketPromo => ({
   name: row.name,
   description: row.description ?? undefined,
   everyN: row.every_n,
+  discountedUnits: row.discounted_units ?? 1,
   percentOff: row.percent_off,
   startsAt: row.starts_at ?? undefined,
   endsAt: row.ends_at ?? undefined,
@@ -164,6 +176,7 @@ export const eventPromoFromDb = (row: any): EventPromo => ({
   name: row.ticket_promos?.name ?? "",
   description: row.ticket_promos?.description ?? undefined,
   everyN: row.ticket_promos?.every_n ?? 2,
+  discountedUnits: row.ticket_promos?.discounted_units ?? 1,
   percentOff: row.ticket_promos?.percent_off ?? 0,
   startsAt: row.ticket_promos?.starts_at ?? undefined,
   endsAt: row.ticket_promos?.ends_at ?? undefined,
@@ -177,6 +190,7 @@ const promoToDb = (input: Partial<TicketPromoInput>): Record<string, any> => {
   if (input.name !== undefined) out.name = input.name;
   if (input.description !== undefined) out.description = input.description || null;
   if (input.everyN !== undefined) out.every_n = input.everyN;
+  if (input.discountedUnits !== undefined) out.discounted_units = input.discountedUnits;
   if (input.percentOff !== undefined) out.percent_off = input.percentOff;
   if (input.startsAt !== undefined) out.starts_at = input.startsAt || null;
   if (input.endsAt !== undefined) out.ends_at = input.endsAt || null;

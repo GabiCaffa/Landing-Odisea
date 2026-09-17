@@ -32,12 +32,35 @@ const fmtFecha = (iso?: string) => {
 };
 
 /** Qué paga alguien que lleva `cant` entradas de `precio` con esta promo. */
-const ejemplo = (everyN: number, percentOff: number, precio = 1000, cant?: number) => {
+const ejemplo = (
+  everyN: number,
+  discountedUnits: number,
+  percentOff: number,
+  precio = 1000,
+  cant?: number
+) => {
   const c = cant ?? everyN;
   const bruto = precio * c;
-  const desc = Math.round(Math.floor(c / everyN) * precio * (percentOff / 100));
+  const desc = Math.round(
+    Math.floor(c / everyN) * Math.max(1, discountedUnits) * precio * (percentOff / 100)
+  );
   return { c, bruto, desc, total: bruto - desc };
 };
+
+/**
+ * Atajos para las promos que se usan de verdad.
+ *
+ * Existen porque los tres números son correctos pero no son la forma en que
+ * alguien piensa una promo: uno piensa "2x1", no "cada 2, 1 al 100%". Con el
+ * atajo se carga en un click y los números quedan visibles abajo por si hay que
+ * inventar algo que no está en la lista.
+ */
+const ATAJOS: Array<{ label: string; everyN: number; discountedUnits: number; percentOff: number }> = [
+  { label: "2x1", everyN: 2, discountedUnits: 1, percentOff: 100 },
+  { label: "3x2", everyN: 3, discountedUnits: 1, percentOff: 100 },
+  { label: "2da al 50%", everyN: 2, discountedUnits: 1, percentOff: 50 },
+  { label: "3 al precio de 1", everyN: 3, discountedUnits: 2, percentOff: 100 },
+];
 
 const PromosAdmin = () => {
   const confirm = useConfirm();
@@ -121,7 +144,7 @@ const PromosAdmin = () => {
       ) : (
         <div className="space-y-2">
           {promos.map((p) => {
-            const e = ejemplo(p.everyN, p.percentOff);
+            const e = ejemplo(p.everyN, p.discountedUnits, p.percentOff);
             const vigente = promoVigente(p);
             return (
               <div
@@ -224,6 +247,7 @@ const PromoFormModal = ({
     name: editing?.name ?? "",
     description: editing?.description ?? "",
     everyN: editing?.everyN ?? 2,
+    discountedUnits: editing?.discountedUnits ?? 1,
     percentOff: editing?.percentOff ?? 100,
     startsAt: editing?.startsAt ?? "",
     endsAt: editing?.endsAt ?? "",
@@ -238,6 +262,9 @@ const PromoFormModal = ({
     ev.preventDefault();
     if (!form.name.trim()) return toast.error("Poné un nombre (es lo que ve el cliente)");
     if (form.everyN < 2) return toast.error("El mínimo es cada 2 entradas");
+    if (form.discountedUnits < 1) return toast.error("Se tiene que descontar al menos 1");
+    if (form.discountedUnits >= form.everyN)
+      return toast.error("Las que se descuentan tienen que ser menos que el total del grupo");
     if (form.percentOff < 1 || form.percentOff > 100)
       return toast.error("El descuento va entre 1% y 100%");
     if (form.startsAt && form.endsAt && form.startsAt > form.endsAt)
@@ -247,8 +274,8 @@ const PromoFormModal = ({
     setSaving(false);
   };
 
-  const e2 = ejemplo(form.everyN, form.percentOff);
-  const e4 = ejemplo(form.everyN, form.percentOff, 1000, form.everyN * 2);
+  const e2 = ejemplo(form.everyN, form.discountedUnits, form.percentOff);
+  const e4 = ejemplo(form.everyN, form.discountedUnits, form.percentOff, 1000, form.everyN * 2);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-0 backdrop-blur-sm sm:p-4">
@@ -298,43 +325,108 @@ const PromoFormModal = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                Cada N entradas
-              </label>
+          {/*
+            Atajos primero. Casi siempre la promo que se quiere cargar es una de
+            estas cuatro, y elegirla de un click evita tener que traducir "2x1" a
+            tres números. Los números quedan visibles abajo igual, para el caso
+            que no esté en la lista.
+          */}
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              Atajos
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {ATAJOS.map((a) => {
+                const igual =
+                  form.everyN === a.everyN &&
+                  form.discountedUnits === a.discountedUnits &&
+                  form.percentOff === a.percentOff;
+                return (
+                  <button
+                    key={a.label}
+                    type="button"
+                    onClick={() =>
+                      setForm((p) => ({
+                        ...p,
+                        everyN: a.everyN,
+                        discountedUnits: a.discountedUnits,
+                        percentOff: a.percentOff,
+                        // El nombre sólo se completa si está vacío: si el admin
+                        // ya escribió el suyo, un atajo no se lo pisa.
+                        name: p.name.trim() ? p.name : a.label,
+                      }))
+                    }
+                    className={`border px-3 py-2 text-xs transition-colors ${
+                      igual
+                        ? "border-celeste bg-celeste/10 font-semibold"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/*
+            La regla escrita como una frase, con los números adentro.
+            Antes eran dos cajas con las etiquetas "CADA N ENTRADAS" y
+            "DESCUENTO EN 1 (%)": correctas y bastante incomprensibles. Leída
+            de corrido —"cada 3 entradas, 2 con 100% de descuento"— no hace
+            falta explicar nada.
+          */}
+          <div className="border border-border p-3">
+            <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              La regla
+            </label>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span>Cada</span>
               <input
                 type="number"
                 min={2}
                 value={form.everyN}
                 onChange={(ev) => set("everyN", Number(ev.target.value))}
-                className="input-techno"
+                className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
+                aria-label="Cada cuántas entradas"
               />
-            </div>
-            <div>
-              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                Descuento en 1 (%)
-              </label>
+              <span>entradas,</span>
+              <input
+                type="number"
+                min={1}
+                value={form.discountedUnits}
+                onChange={(ev) => set("discountedUnits", Number(ev.target.value))}
+                className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
+                aria-label="Cuántas se descuentan"
+              />
+              <span>{form.discountedUnits === 1 ? "sale con" : "salen con"}</span>
               <input
                 type="number"
                 min={1}
                 max={100}
                 value={form.percentOff}
                 onChange={(ev) => set("percentOff", Number(ev.target.value))}
-                className="input-techno"
+                className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
+                aria-label="Porcentaje de descuento"
               />
+              <span>% de descuento{form.percentOff === 100 ? " (o sea, gratis)" : ""}</span>
             </div>
+            {form.discountedUnits >= form.everyN && (
+              <p className="mt-2 text-xs font-semibold text-charrua">
+                Las que se descuentan tienen que ser menos que el total: si no, el grupo
+                entero sale gratis.
+              </p>
+            )}
           </div>
 
           {/*
-            El ejemplo en vivo es lo que hace entendible la pantalla. "Cada 2, 1
-            al 100%" no le dice nada a nadie; "2 entradas de $1000 → $1000" sí.
-            Se muestra también el doble de cantidad, porque que la promo se
-            aplique DOS veces con el doble de entradas es la parte que sorprende.
+            El ejemplo en vivo es lo que hace entendible la pantalla. Se muestra
+            también el doble de cantidad, porque que la promo se aplique DOS
+            veces con el doble de entradas es la parte que sorprende.
           */}
           <div className="border border-celeste/40 bg-celeste/5 p-3">
             <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-celeste-deep">
-              <Tag className="h-3.5 w-3.5" /> Cómo queda
+              <Tag className="h-3.5 w-3.5" /> Lo que va a pagar el cliente
             </p>
             <p className="text-sm">
               {e2.c} entradas de $1000 → <b>${e2.total}</b>{" "}
