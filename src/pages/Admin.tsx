@@ -102,6 +102,10 @@ import {
 import { birthdayMessageFor, buildBirthdayWhatsAppUrl } from "@/lib/birthdayMessage";
 import PromosAdmin from "@/components/admin/PromosAdmin";
 import EventPromosEditor, { EventPromoSelection } from "@/components/admin/EventPromosEditor";
+import AdminShell from "@/components/admin/AdminShell";
+import UsersAdmin from "@/components/admin/UsersAdmin";
+import { descargarCsv } from "@/lib/csv";
+import { AdminTab, rotuloDePanel, tabsDe, usePuede } from "@/lib/adminPermisos";
 import { saveEventPromos } from "@/lib/ticketPromos";
 import {
   PaymentAccount,
@@ -131,58 +135,26 @@ import { toast } from "sonner";
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
-type Tab =
-  | "dashboard"
-  | "events"
-  | "tickets"
-  | "accounts"
-  | "users"
-  | "appearance"
-  | "promos"
-  | "deliveries"
-  | "birthdays";
-
-/**
- * Qué pestañas ve cada rol de staff. El admin no está acá porque las ve todas.
- *
- * Es una tabla y no un `if (!isOperator)` porque con dos roles limitados esa
- * condición ya no alcanza, y con tres sería ilegible. El sidebar y el ruteo
- * leen los dos de acá, así que no puede pasar que aparezca un botón que la
- * pestaña después rechaza.
- *
- * **Esto es comodidad, no seguridad.** Lo que de verdad separa los módulos son
- * las políticas RLS: `is_staff()` (v11) protege Entregas y NO incluye a
- * `cumples`, `is_birthday_staff()` (v20) protege cumpleaños y fotos de
- * documento y sí lo incluye. Sin eso, esconder un botón no impide nada.
- */
-const TABS_POR_ROL: Record<"operador" | "cumples", Tab[]> = {
-  operador: ["deliveries", "birthdays"],
-  cumples: ["birthdays"],
-};
-
 const Admin = () => {
   const { currentUser, logout, users, events, loading } = useAuth();
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("dashboard");
+  const [tab, setTab] = useState<AdminTab>("dashboard");
 
   if (loading) return <LoadingScreen />;
   if (!currentUser) return <Navigate to="/login" replace />;
   if (!isStaffRole(currentUser.role)) return <Navigate to="/" replace />;
 
-  // `null` = sin restricción (admin). Si el rol tiene lista, la pestaña pedida
-  // que no esté en ella cae en la primera permitida.
-  const permitidas: Tab[] | null =
-    currentUser.role === "admin"
-      ? null
-      : TABS_POR_ROL[currentUser.role as keyof typeof TABS_POR_ROL] ?? [];
-  const puedeVer = (t: Tab) => !permitidas || permitidas.includes(t);
-  const activeTab: Tab = puedeVer(tab) ? tab : permitidas?.[0] ?? "dashboard";
+  // Qué pestañas ve el rol sale de `adminPermisos`, que es la misma tabla que
+  // decide si adentro puede borrar o sólo mirar. Antes eran dos listas sueltas.
+  const tabs = tabsDe(currentUser.role);
+  // La pestaña pedida que el rol no puede ver cae en la primera permitida.
+  const activeTab: AdminTab = tabs.includes(tab) ? tab : tabs[0] ?? "dashboard";
 
   const handleLogout = async () => {
     const ok = await confirm({
       title: "Cerrar sesión",
-      description: "¿Querés cerrar tu sesión de administrador?",
+      description: "¿Querés cerrar tu sesión del panel?",
       confirmText: "Cerrar sesión",
     });
     if (!ok) return;
@@ -192,193 +164,27 @@ const Admin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-secondary/20 flex flex-col md:flex-row">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-foreground text-background md:min-h-screen flex md:flex-col">
-        <div className="p-6 border-b border-background/10 flex items-center gap-3 md:block">
-          <img
-            src={odiseaLogo}
-            alt="Odísea"
-            className="h-8 md:h-10 w-auto object-contain invert"
-          />
-          {/* El rótulo sigue al rol: a quien sólo gestiona cumpleaños decirle
-              "Panel Admin" es confuso, porque no es admin de nada. */}
-          <p className="hidden md:block text-xs tracking-[0.3em] uppercase text-background/60 mt-3">
-            {currentUser.role === "cumples"
-              ? "Panel Cumpleaños"
-              : currentUser.role === "operador"
-                ? "Panel Entregas"
-                : "Panel Admin"}
-          </p>
-        </div>
-
-        <nav className="flex md:flex-col md:flex-1 p-3 md:p-4 gap-1 overflow-x-auto md:overflow-visible">
-          {puedeVer("dashboard") && (
-            <>
-              <SidebarLink
-                icon={<LayoutDashboard className="w-4 h-4" />}
-                label="Dashboard"
-                active={activeTab === "dashboard"}
-                onClick={() => setTab("dashboard")}
-              />
-              <SidebarLink
-                icon={<CalendarDays className="w-4 h-4" />}
-                label="Eventos"
-                active={activeTab === "events"}
-                onClick={() => setTab("events")}
-              />
-              <SidebarLink
-                icon={<Ticket className="w-4 h-4" />}
-                label="Entradas"
-                active={activeTab === "tickets"}
-                onClick={() => setTab("tickets")}
-              />
-              <SidebarLink
-                icon={<Tag className="w-4 h-4" />}
-                label="Promos"
-                active={activeTab === "promos"}
-                onClick={() => setTab("promos")}
-              />
-              <SidebarLink
-                icon={<CreditCard className="w-4 h-4" />}
-                label="Cuentas"
-                active={activeTab === "accounts"}
-                onClick={() => setTab("accounts")}
-              />
-              <SidebarLink
-                icon={<Users className="w-4 h-4" />}
-                label="Usuarios"
-                active={activeTab === "users"}
-                onClick={() => setTab("users")}
-              />
-              <SidebarLink
-                icon={<Palette className="w-4 h-4" />}
-                label="Apariencia"
-                active={activeTab === "appearance"}
-                onClick={() => setTab("appearance")}
-              />
-            </>
-          )}
-          {puedeVer("deliveries") && (
-            <SidebarLink
-              icon={<Send className="w-4 h-4" />}
-              label="Entregas"
-              active={activeTab === "deliveries"}
-              onClick={() => setTab("deliveries")}
-            />
-          )}
-          {puedeVer("birthdays") && (
-            <SidebarLink
-              icon={<Cake className="w-4 h-4" />}
-              label="Cumpleaños"
-              active={activeTab === "birthdays"}
-              onClick={() => setTab("birthdays")}
-            />
-          )}
-
-          <Link
-            to="/"
-            className="flex items-center gap-3 px-4 py-3 text-sm tracking-wide uppercase transition-colors whitespace-nowrap text-background/70 hover:text-background hover:bg-background/10 md:mt-auto"
-          >
-            <ExternalLink className="w-4 h-4" />
-            <span>Ver sitio</span>
-          </Link>
-        </nav>
-
-        <div className="hidden md:block p-4 border-t border-background/10">
-          <p className="text-xs text-background/60 mb-1">Conectado como</p>
-          <p className="text-sm font-semibold truncate">{currentUser.firstName} {currentUser.lastName}</p>
-          <p className="text-xs text-background/60 truncate mb-3">{currentUser.email}</p>
-          <button
-            onClick={handleLogout}
-            className="w-full inline-flex items-center justify-center gap-2 border border-background/30 hover:bg-background hover:text-foreground transition-colors px-3 py-2 text-xs tracking-wide uppercase"
-          >
-            <LogOut className="w-3.5 h-3.5" /> Cerrar sesión
-          </button>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="flex-1 p-4 md:p-8 max-w-full overflow-x-hidden">
-        <div className="flex items-center justify-between mb-6 md:mb-8">
-          <div>
-            <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground">
-              {activeTab === "dashboard" && "Resumen general"}
-              {activeTab === "events" && "Gestión"}
-              {activeTab === "tickets" && "Tipos de entrada"}
-              {activeTab === "promos" && "Promos de entrada"}
-              {activeTab === "accounts" && "Cobros"}
-              {activeTab === "users" && "Comunidad"}
-              {activeTab === "appearance" && "Cara del sitio"}
-              {activeTab === "deliveries" && "Envío de entradas"}
-              {activeTab === "birthdays" && "Promo cumpleaños"}
-            </p>
-            <h1 className="title-sport text-3xl md:text-4xl tracking-wide font-black text-tinta">
-              {activeTab === "dashboard" && "DASHBOARD"}
-              {activeTab === "events" && "EVENTOS"}
-              {activeTab === "tickets" && "ENTRADAS"}
-              {activeTab === "promos" && "PROMOS"}
-              {activeTab === "accounts" && "CUENTAS"}
-              {activeTab === "users" && "USUARIOS"}
-              {activeTab === "appearance" && "APARIENCIA"}
-              {activeTab === "deliveries" && "ENTREGAS"}
-              {activeTab === "birthdays" && "CUMPLEAÑOS"}
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              to="/"
-              className="hidden md:inline-flex items-center gap-2 text-xs tracking-wider uppercase border border-border px-3 py-2 hover:bg-foreground hover:text-background transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> Ver sitio
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="md:hidden p-2 border border-border"
-              aria-label="Cerrar sesión"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {activeTab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
-        {activeTab === "events" && <EventsAdmin />}
-        {activeTab === "tickets" && <TicketTypesAdmin />}
-        {activeTab === "promos" && <PromosAdmin />}
-        {activeTab === "accounts" && <AccountsAdmin />}
-        {activeTab === "users" && <UsersAdmin />}
-        {activeTab === "appearance" && <AppearanceAdmin />}
-        {activeTab === "deliveries" && <DeliveriesAdmin />}
-        {activeTab === "birthdays" && <BirthdaysAdmin />}
-      </main>
-    </div>
+    <AdminShell
+      tabs={tabs}
+      activeTab={activeTab}
+      onSelect={setTab}
+      rotulo={rotuloDePanel(currentUser.role)}
+      nombre={`${currentUser.firstName} ${currentUser.lastName}`}
+      email={currentUser.email}
+      onLogout={handleLogout}
+    >
+      {activeTab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
+      {activeTab === "events" && <EventsAdmin />}
+      {activeTab === "tickets" && <TicketTypesAdmin />}
+      {activeTab === "promos" && <PromosAdmin />}
+      {activeTab === "accounts" && <AccountsAdmin />}
+      {activeTab === "users" && <UsersAdmin />}
+      {activeTab === "appearance" && <AppearanceAdmin />}
+      {activeTab === "deliveries" && <DeliveriesAdmin />}
+      {activeTab === "birthdays" && <BirthdaysAdmin />}
+    </AdminShell>
   );
 };
-
-const SidebarLink = ({
-  icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center gap-3 px-4 py-3 text-sm tracking-wide uppercase transition-colors whitespace-nowrap ${
-      active
-        ? "bg-background text-foreground"
-        : "text-background/70 hover:text-background hover:bg-background/10"
-    }`}
-  >
-    {icon}
-    <span>{label}</span>
-  </button>
-);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Dashboard
@@ -390,7 +196,7 @@ const Dashboard = ({
 }: {
   users: User[];
   events: AdminEvent[];
-  onGo: (t: Tab) => void;
+  onGo: (t: AdminTab) => void;
 }) => {
   const activeEvents = events.filter((e) => e.status === "activo").length;
   const totalCapacity = events.reduce((acc, e) => acc + e.capacity, 0);
@@ -557,8 +363,31 @@ const StatusBadge = ({ status }: { status: AdminEvent["status"] }) => {
 // ────────────────────────────────────────────────────────────────────────────
 // Events admin
 // ────────────────────────────────────────────────────────────────────────────
+/**
+ * Miniatura del flyer, con el encuadre que el admin le dio al evento.
+ *
+ * El bloque de estilos inline estaba escrito dos veces; con la versión
+ * tarjeta para celular serían tres.
+ */
+const FlyerMini = ({ event, className = "" }: { event: AdminEvent; className?: string }) => (
+  <div className={`flex-shrink-0 overflow-hidden border border-border bg-white ${className}`}>
+    <img
+      src={event.image}
+      alt={event.name}
+      className="h-full w-full"
+      style={{
+        objectFit: event.imagePosition.fit,
+        objectPosition: `${event.imagePosition.x}% ${event.imagePosition.y}%`,
+        transform: `scale(${event.imagePosition.scale})`,
+        transformOrigin: `${event.imagePosition.x}% ${event.imagePosition.y}%`,
+      }}
+    />
+  </div>
+);
 const EventsAdmin = () => {
   const { events, createEvent, updateEvent, deleteEvent, refreshEvents } = useAuth();
+  // Borrar un evento es sólo del admin (events_delete_admin, v22).
+  const puedeBorrar = usePuede("eventos:borrar");
   const confirm = useConfirm();
   const [editing, setEditing] = useState<AdminEvent | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -688,111 +517,179 @@ const EventsAdmin = () => {
         </button>
       </div>
 
-      <div className="bg-card border border-border overflow-x-auto">
-        <table className="w-full text-sm min-w-[720px]">
-          <thead>
-            <tr className="bg-secondary/50 border-b border-border text-left">
-              <Th>Imagen</Th>
-              <Th>Evento</Th>
-              <Th>Fecha</Th>
-              <Th>Lugar</Th>
-              <Th>Entradas</Th>
-              <Th>Cuenta</Th>
-              <Th>Capacidad</Th>
-              <Th>Estado</Th>
-              <Th>Acciones</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((e) => (
-              <tr key={e.id} className="border-b border-border/50 hover:bg-secondary/30">
-                <Td>
-                  <div className="w-14 h-14 border border-border overflow-hidden bg-white">
-                    <img
-                      src={e.image}
-                      alt={e.name}
-                      className="w-full h-full"
-                      style={{
-                        objectFit: e.imagePosition.fit,
-                        objectPosition: `${e.imagePosition.x}% ${e.imagePosition.y}%`,
-                        transform: `scale(${e.imagePosition.scale})`,
-                        transformOrigin: `${e.imagePosition.x}% ${e.imagePosition.y}%`,
-                      }}
-                    />
-                  </div>
-                </Td>
-                <Td>
-                  <div>
-                    <p className="font-semibold">{e.name}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{e.description}</p>
-                  </div>
-                </Td>
-                <Td>{formatEventDate(e.date)}</Td>
-                <Td>{e.location}</Td>
-                <Td>
-                  {e.tickets.length === 0 ? (
-                    <span className="text-xs text-charrua">Sin entradas</span>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {e.tickets.map((t) => (
-                        <p
-                          key={t.ticketTypeId}
-                          className={`text-xs ${t.active ? "" : "text-muted-foreground line-through"}`}
-                        >
-                          {t.name} <span className="text-muted-foreground">${t.price}</span>
+      {/* Lista: tarjetas en celular, tabla de md: para arriba.
+          Antes había una sola tabla con `min-w-[720px]`, o sea scroll
+          horizontal en el teléfono — con 9 columnas no se leía nada. Es el
+          mismo patrón que Entregas y Cumpleaños ya venían usando. */}
+      <div className="border border-border bg-card">
+        {filtered.length === 0 ? (
+          <p className="py-12 text-center text-sm text-muted-foreground">
+            Sin eventos para mostrar
+          </p>
+        ) : (
+          <>
+            <div className="divide-y divide-border md:hidden">
+              {filtered.map((e) => {
+                const cuenta = accountById.get(e.paymentAccountId);
+                return (
+                  <article key={e.id} className="space-y-3 p-3">
+                    <div className="flex gap-3">
+                      <FlyerMini event={e} className="h-20 w-16" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold leading-tight">{e.name}</p>
+                          <StatusBadge status={e.status} />
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatEventDate(e.date)} · {e.location}
                         </p>
-                      ))}
+                        <p className="text-xs text-muted-foreground">
+                          Capacidad {e.capacity}
+                          {cuenta ? ` · ${cuenta.label}` : ""}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </Td>
-                <Td>
-                  {accountById.has(e.paymentAccountId) ? (
-                    <div>
-                      <p className="text-xs font-medium">
-                        {accountById.get(e.paymentAccountId)!.label}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {accountSummary(accountById.get(e.paymentAccountId)!)}
-                      </p>
+
+                    {e.tickets.length === 0 ? (
+                      <p className="text-xs text-charrua">Sin entradas cargadas</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {e.tickets.map((t) => (
+                          <span
+                            key={t.ticketTypeId}
+                            className={`border border-border px-2 py-1 text-[11px] ${
+                              t.active ? "" : "text-muted-foreground line-through"
+                            }`}
+                          >
+                            {t.name} ${t.price}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEditing(e);
+                          setShowForm(true);
+                        }}
+                        className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 border border-border px-3 text-xs uppercase tracking-wide transition-colors hover:bg-foreground hover:text-background"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Editar
+                      </button>
+                      {puedeBorrar && (
+                        <button
+                          onClick={() => handleDelete(e)}
+                          aria-label="Eliminar"
+                          className="inline-flex min-h-11 w-11 items-center justify-center border border-border transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </Td>
-                <Td>{e.capacity}</Td>
-                <Td><StatusBadge status={e.status} /></Td>
-                <Td>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => {
-                        setEditing(e);
-                        setShowForm(true);
-                      }}
-                      className="p-2 hover:bg-foreground hover:text-background transition-colors"
-                      aria-label="Editar"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(e)}
-                      className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                      aria-label="Eliminar"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </Td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={9} className="text-center py-12 text-muted-foreground text-sm">
-                  Sin eventos para mostrar
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/50 text-left">
+                    <Th>Imagen</Th>
+                    <Th>Evento</Th>
+                    <Th>Fecha</Th>
+                    <Th>Lugar</Th>
+                    <Th>Entradas</Th>
+                    <Th>Cuenta</Th>
+                    <Th>Capacidad</Th>
+                    <Th>Estado</Th>
+                    <Th>Acciones</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((e) => {
+                    const cuenta = accountById.get(e.paymentAccountId);
+                    return (
+                      <tr key={e.id} className="border-b border-border/50 hover:bg-secondary/30">
+                        <Td>
+                          <FlyerMini event={e} className="h-14 w-14" />
+                        </Td>
+                        <Td>
+                          <div>
+                            <p className="font-semibold">{e.name}</p>
+                            <p className="line-clamp-1 text-xs text-muted-foreground">
+                              {e.description}
+                            </p>
+                          </div>
+                        </Td>
+                        <Td>{formatEventDate(e.date)}</Td>
+                        <Td>{e.location}</Td>
+                        <Td>
+                          {e.tickets.length === 0 ? (
+                            <span className="text-xs text-charrua">Sin entradas</span>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {e.tickets.map((t) => (
+                                <p
+                                  key={t.ticketTypeId}
+                                  className={`text-xs ${
+                                    t.active ? "" : "text-muted-foreground line-through"
+                                  }`}
+                                >
+                                  {t.name} <span className="text-muted-foreground">${t.price}</span>
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </Td>
+                        <Td>
+                          {cuenta ? (
+                            <div>
+                              <p className="text-xs font-medium">{cuenta.label}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {accountSummary(cuenta)}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </Td>
+                        <Td>{e.capacity}</Td>
+                        <Td>
+                          <StatusBadge status={e.status} />
+                        </Td>
+                        <Td>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => {
+                                setEditing(e);
+                                setShowForm(true);
+                              }}
+                              className="p-2 transition-colors hover:bg-foreground hover:text-background"
+                              aria-label="Editar"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            {puedeBorrar && (
+                              <button
+                                onClick={() => handleDelete(e)}
+                                className="p-2 transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                                aria-label="Eliminar"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {showForm && (
@@ -816,6 +713,9 @@ const EventsAdmin = () => {
 // ────────────────────────────────────────────────────────────────────────────
 const TicketTypesAdmin = () => {
   const confirm = useConfirm();
+  // Borrar un tipo del catálogo le pega a todos los eventos que lo venden:
+  // sólo admin (ticket_types_delete_admin, v22).
+  const puedeBorrar = usePuede("entradas:borrar");
   const [types, setTypes] = useState<TicketType[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TicketType | null>(null);
@@ -936,13 +836,15 @@ const TicketTypesAdmin = () => {
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
-                  <button
-                    onClick={() => handleDelete(t)}
-                    className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                    aria-label="Eliminar"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {puedeBorrar && (
+                    <button
+                      onClick={() => handleDelete(t)}
+                      className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                      aria-label="Eliminar"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1007,13 +909,13 @@ const TicketTypeFormModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg bg-background border border-border max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background z-10">
-          <h2 className="title-sport text-2xl font-black tracking-wide">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="relative flex h-[100dvh] w-full flex-col overflow-y-auto bg-background sm:h-auto sm:max-h-[92vh] sm:border sm:border-border max-w-lg">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-4 py-3 sm:p-6">
+          <h2 className="title-sport text-lg font-black tracking-wide sm:text-2xl">
             {initial ? "EDITAR TIPO" : "NUEVO TIPO"}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+          <button onClick={onClose} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1330,13 +1232,13 @@ const AccountFormModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg bg-background border border-border max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background z-10">
-          <h2 className="title-sport text-2xl font-black tracking-wide">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="relative flex h-[100dvh] w-full flex-col overflow-y-auto bg-background sm:h-auto sm:max-h-[92vh] sm:border sm:border-border max-w-lg">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-4 py-3 sm:p-6">
+          <h2 className="title-sport text-lg font-black tracking-wide sm:text-2xl">
             {initial ? "EDITAR CUENTA" : "NUEVA CUENTA"}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+          <button onClick={onClose} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1532,6 +1434,18 @@ const EventFormModal = ({
     [accounts, form.paymentAccountId]
   );
 
+  /**
+   * Reasignar la cuenta de cobro de un evento existente es sólo del admin.
+   *
+   * Al CREAR hay que poder elegirla (payment_account_id es not null, v13), así
+   * que el candado es sólo al editar. Lo mismo está enforzado en la base con el
+   * trigger `events_payment_account_lock` (v22): sin él, "el operador no toca
+   * las cuentas" sería mentira — no puede crear ni editar una, pero podría
+   * apuntarle el evento a otra.
+   */
+  const puedeCambiarCuenta = usePuede("evento:cuenta");
+  const cuentaBloqueada = Boolean(initial) && !puedeCambiarCuenta;
+
   // El "desde $X" del preview: el tipo de entrada más barato a la venta. Es lo
   // mismo que la DB va a dejar en events.price al guardar.
   const minTicketPrice = useMemo(() => {
@@ -1607,13 +1521,13 @@ const EventFormModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-5xl bg-background border border-border max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background z-10">
-          <h2 className="title-sport text-2xl font-black tracking-wide">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="relative flex h-[100dvh] w-full flex-col overflow-y-auto bg-background sm:h-auto sm:max-h-[92vh] sm:border sm:border-border max-w-5xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-4 py-3 sm:p-6">
+          <h2 className="title-sport text-lg font-black tracking-wide sm:text-2xl">
             {initial ? "EDITAR EVENTO" : "NUEVO EVENTO"}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+          <button onClick={onClose} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1746,9 +1660,10 @@ const EventFormModal = ({
             <FormField label="Cuenta de cobro">
               <select
                 required
+                disabled={cuentaBloqueada}
                 value={form.paymentAccountId}
                 onChange={(e) => setForm({ ...form, paymentAccountId: e.target.value })}
-                className="input-techno"
+                className="input-techno disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">Elegí una cuenta...</option>
                 {accountOptions.map((a) => (
@@ -1759,9 +1674,16 @@ const EventFormModal = ({
                 ))}
               </select>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                {accountOptions.length === 0
-                  ? "No hay cuentas cargadas. Creá una en la pestaña Cuentas."
-                  : "Es la cuenta que ve el comprador en el modal de compra y en el mensaje de WhatsApp."}
+                {cuentaBloqueada ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Lock className="h-3 w-3" /> Sólo el administrador puede cambiarle la cuenta
+                    de cobro a un evento que ya existe.
+                  </span>
+                ) : accountOptions.length === 0 ? (
+                  "No hay cuentas cargadas. Creá una en la pestaña Cuentas."
+                ) : (
+                  "Es la cuenta que ve el comprador en el modal de compra y en el mensaje de WhatsApp."
+                )}
               </p>
             </FormField>
 
@@ -2272,166 +2194,6 @@ const FormField = ({ label, children }: { label: string; children: React.ReactNo
 );
 
 // ────────────────────────────────────────────────────────────────────────────
-// Users admin
-// ────────────────────────────────────────────────────────────────────────────
-const UsersAdmin = () => {
-  const { users, deleteUser, promoteUser, currentUser } = useAuth();
-  const confirm = useConfirm();
-  const [search, setSearch] = useState("");
-
-  const filtered = useMemo(
-    () =>
-      users.filter((u) => {
-        const haystack = `${u.firstName} ${u.lastName} ${u.email} ${u.documentId}`.toLowerCase();
-        return haystack.includes(search.toLowerCase());
-      }),
-    [users, search]
-  );
-
-  const handleDelete = async (u: User) => {
-    if (u.id === currentUser?.id) {
-      toast.error("No podés eliminar tu propia cuenta");
-      return;
-    }
-    const ok = await confirm({
-      title: "Eliminar usuario",
-      description: `¿Seguro que querés eliminar a ${u.firstName} ${u.lastName}? Esta acción no se puede deshacer.`,
-      confirmText: "Eliminar",
-      destructive: true,
-    });
-    if (!ok) return;
-    const result = await deleteUser(u.id);
-    if (!result.ok) {
-      toast.error(result.error ?? "No se pudo eliminar");
-      return;
-    }
-    toast.success("Usuario eliminado");
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, email o cédula..."
-            className="input-techno pl-10"
-          />
-        </div>
-        <div className="flex items-center gap-2 text-xs tracking-wider uppercase text-muted-foreground">
-          <UserPlus className="w-4 h-4" />
-          {users.length} usuarios totales
-        </div>
-      </div>
-
-      <div className="bg-card border border-border overflow-x-auto">
-        <table className="w-full text-sm min-w-[720px]">
-          <thead>
-            <tr className="bg-secondary/50 border-b border-border text-left">
-              <Th>Usuario</Th>
-              <Th>Email</Th>
-              <Th>Cédula</Th>
-              <Th>Nacimiento</Th>
-              <Th>Edad</Th>
-              <Th>Rol</Th>
-              <Th>Acciones</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((u) => {
-              const locked = isOfficialAdmin(u.email);
-              return (
-              <tr key={u.id} className="border-b border-border/50 hover:bg-secondary/30">
-                <Td>
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-foreground text-background flex items-center justify-center font-semibold text-xs">
-                      {u.firstName[0]}{u.lastName[0]}
-                    </div>
-                    <div>
-                      <p className="font-semibold">{u.firstName} {u.lastName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Desde {formatEventDate(u.createdAt.slice(0, 10))}
-                      </p>
-                    </div>
-                  </div>
-                </Td>
-                <Td className="font-mono text-xs">{u.email}</Td>
-                <Td className="font-mono text-xs">{u.documentId}</Td>
-                <Td>{formatEventDate(u.birthDate)}</Td>
-                <Td>{calcAge(u.birthDate)}</Td>
-                <Td>
-                  {locked ? (
-                    <span
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground"
-                      title="Admin oficial · no se puede modificar"
-                    >
-                      <Lock className="w-3 h-3" /> admin
-                    </span>
-                  ) : (
-                    <select
-                      value={u.role}
-                      onChange={async (e) => {
-                        const newRole = e.target.value as User["role"];
-                        if (newRole === u.role) return;
-                        const ok = await confirm({
-                          title: "Cambiar rol",
-                          description: `¿Cambiar el rol de ${u.firstName} ${u.lastName} a "${newRole}"?`,
-                          confirmText: "Cambiar rol",
-                        });
-                        if (!ok) return; // el select vuelve solo a su valor al re-render
-                        const result = await promoteUser(u.id, newRole);
-                        if (!result.ok) {
-                          toast.error(result.error ?? "No se pudo actualizar");
-                          return;
-                        }
-                        toast.success("Rol actualizado");
-                      }}
-                      className="border border-border px-2 py-1 text-xs bg-background disabled:opacity-50"
-                    >
-                      <option value="user">user</option>
-                      <option value="operador">operador</option>
-                      <option value="cumples">cumples</option>
-                    </select>
-                  )}
-                </Td>
-                <Td>
-                  {locked ? (
-                    <span
-                      className="inline-flex p-2 text-muted-foreground/50 cursor-not-allowed"
-                      title="La cuenta admin oficial no se puede eliminar"
-                    >
-                      <Lock className="w-3.5 h-3.5" />
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleDelete(u)}
-                      className="p-2 hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                      aria-label="Eliminar"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </Td>
-              </tr>
-              );
-            })}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="text-center py-12 text-muted-foreground text-sm">
-                  Sin usuarios para mostrar
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-// ────────────────────────────────────────────────────────────────────────────
 // Entregas de entradas (carga manual, agrupadas por evento)
 // ────────────────────────────────────────────────────────────────────────────
 const fmtMoney = (n: number) =>
@@ -2632,10 +2394,6 @@ const DeliveriesAdmin = () => {
       "Evento", "Ubicación evento", "Nombre completo", "Email", "Teléfono",
       "Tipo de entrada", "Entradas", "Total", "Estado", "Enviada", "Registrado", "Notas",
     ];
-    const esc = (v: unknown) => {
-      const s = String(v ?? "");
-      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const lines = rows.map(({ d, eventName, eventLocation }) =>
       [
         eventName, eventLocation, `${d.firstName} ${d.lastName}`.trim(), d.email,
@@ -2646,17 +2404,13 @@ const DeliveriesAdmin = () => {
         d.sentAt ? d.sentAt.slice(0, 10) : "",
         d.userId ? "Sí" : "No",
         d.notes ?? "",
-      ].map(esc).join(",")
+      ]
     );
-    // BOM (﻿) para que Excel abra el UTF-8 con acentos correctos.
-    const csv = "﻿" + [headers.join(","), ...lines].join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `odisea-entregas-${statusFilter === "pending" ? "por-enviar" : "enviadas"}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    descargarCsv(
+      `odisea-entregas-${statusFilter === "pending" ? "por-enviar" : "enviadas"}`,
+      headers,
+      lines
+    );
   };
 
   const openNew = () => {
@@ -3107,7 +2861,7 @@ const PasteMessageModal = ({
           <h2 className="title-sport text-xl md:text-2xl font-black tracking-wide">
             PEGAR MENSAJE
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+          <button onClick={onClose} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -3490,7 +3244,7 @@ const DeliveryFormModal = ({
           <h2 className="title-sport text-xl md:text-2xl font-black tracking-wide">
             {editing ? "EDITAR CLIENTE" : "NUEVO CLIENTE"}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+          <button onClick={onClose} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -4016,10 +3770,6 @@ const BirthdaysAdmin = () => {
       "Cumple", "Email", "Teléfono", "País", "Ciudad/Depto", "Regalo",
       "Fecha del regalo", "Foto cargada", "Registrado", "Notas",
     ];
-    const esc = (v: unknown) => {
-      const s = String(v ?? "");
-      return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const lines = flat.map(({ b, eventName }) =>
       [
         eventName, b.firstName, b.lastName, fmtDoc(b.documentId, b.country),
@@ -4031,16 +3781,13 @@ const BirthdaysAdmin = () => {
         b.idPhotoPath ? "Sí" : "No",
         b.userId ? "Sí" : "No",
         b.notes ?? "",
-      ].map(esc).join(",")
+      ]
     );
-    const csv = "﻿" + [headers.join(","), ...lines].join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `odisea-cumpleanos-${giftFilter === "pending" ? "sin-regalo" : "con-regalo"}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    descargarCsv(
+      `odisea-cumpleanos-${giftFilter === "pending" ? "sin-regalo" : "con-regalo"}`,
+      headers,
+      lines
+    );
   };
 
   const openNew = () => {
@@ -4424,7 +4171,7 @@ const IdPhotoModal = ({ row, onClose }: { row: BirthdaySignup; onClose: () => vo
               {fmtDoc(row.documentId, row.country)}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-muted" aria-label="Cerrar">
+          <button onClick={onClose} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>

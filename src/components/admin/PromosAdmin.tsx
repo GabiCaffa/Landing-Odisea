@@ -11,6 +11,7 @@ import {
   deleteTicketPromo,
   promoVigente,
 } from "@/lib/ticketPromos";
+import { usePuede } from "@/lib/adminPermisos";
 
 /**
  * Catálogo de promos de entrada (v21).
@@ -64,6 +65,10 @@ const ATAJOS: Array<{ label: string; everyN: number; discountedUnits: number; pe
 
 const PromosAdmin = () => {
   const confirm = useConfirm();
+  // Borrar una promo del catálogo la saca de todos los eventos que la usan:
+  // sólo admin (ticket_promos_delete_admin, v22). Crear y editar sí puede el
+  // operador, incluso desactivarla — que es el camino reversible.
+  const puedeBorrar = usePuede("promos:borrar");
   const [promos, setPromos] = useState<TicketPromo[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TicketPromo | null>(null);
@@ -205,14 +210,16 @@ const PromosAdmin = () => {
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() => handleDelete(p)}
-                    className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-destructive hover:text-destructive-foreground"
-                    title="Eliminar"
-                    aria-label="Eliminar promo"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {puedeBorrar && (
+                    <button
+                      onClick={() => handleDelete(p)}
+                      className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                      title="Eliminar"
+                      aria-label="Eliminar promo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
