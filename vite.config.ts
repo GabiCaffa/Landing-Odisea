@@ -442,6 +442,14 @@ export default defineConfig(({ mode }) => {
             // 49 a 128 KB). Devolviendo undefined, Rollup lo trata como lo que
             // es: el chunk del import() dinámico, que sólo baja cuando se pide.
             if (id.includes('lottie-web')) return;
+            // lucide-react, por el MISMO motivo y con la misma forma de falla.
+            //
+            // Cada icono es un módulo suelto. Cayendo en "vendor" se juntaban
+            // todos ahí, así que los ~40 que usa sólo el panel los descargaba
+            // cualquiera que entrara a ver una fiesta — aunque `/admin` esté en
+            // un chunk lazy. Sin agrupar, Rollup pone cada icono donde se usa:
+            // los del sitio en el chunk del sitio, los del panel en el de Admin.
+            if (id.includes('lucide-react')) return;
             if (id.includes('libphonenumber')) return 'telefono';
             if (id.includes('recharts') || id.includes('d3-')) return 'graficos';
             if (id.includes('@radix-ui')) return 'radix';

@@ -33,6 +33,7 @@ const Register = () => {
     documentId: "",
     country: DEFAULT_COUNTRY_CODE,
     state: "",
+    city: "",
     phone: "",
     email: "",
     confirmEmail: "",
@@ -88,6 +89,11 @@ const Register = () => {
       setSubmitting(false);
       return;
     }
+    if (!form.city.trim()) {
+      toast.error("Indicá tu ciudad o localidad");
+      setSubmitting(false);
+      return;
+    }
     const phoneE164 = normalizePhone(form.phone, form.country as CountryCode);
     if (!phoneE164) {
       toast.error("Número de teléfono inválido para ese país");
@@ -130,6 +136,7 @@ const Register = () => {
       phone: phoneE164,
       country: form.country,
       state: form.state.trim(),
+      city: form.city.trim(),
     });
 
     if (!result.ok) {
@@ -237,7 +244,9 @@ const Register = () => {
                   country={form.country}
                   state={form.state}
                   onCountryChange={(c) => setForm((p) => ({ ...p, country: c, state: "" }))}
-                  onStateChange={(s) => setForm((p) => ({ ...p, state: s }))}
+                  onStateChange={(s) => setForm((p) => ({ ...p, state: s, city: "" }))}
+                  city={form.city}
+                  onCityChange={(c) => setForm((p) => ({ ...p, city: c }))}
                   required
                 />
               </FormSection>

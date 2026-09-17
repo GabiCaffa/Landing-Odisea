@@ -96,7 +96,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v14_birthday_minor_warning.sql` → `v15_ticket_types.sql` →
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
-`v20_birthday_role.sql` → `v21_ticket_promos.sql`.
+`v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
+`v23_profile_city.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -433,6 +434,122 @@ promo escondida detrás de un click no vende nada.
 > guardado lo llama **al final**. Es el mismo bug latente que tenían las entradas
 > desde v15.
 
+
+**v22 — El operador gestiona el panel casi entero.** Hasta acá veía 2 de 9
+pestañas, porque todo lo demás —eventos, entradas, promos, cuentas,
+apariencia— colgaba de `is_admin()`. Ahora hace el trabajo del día: crea y
+edita eventos, tipos de entrada y promos.
+
+    is_admin()           → sólo lisoftuy@gmail.com
+    is_manager()         → admin, operador          ← NUEVA
+    is_staff()           → admin, operador          → Entregas          (v11)
+    is_birthday_staff()  → admin, operador, cumples → Cumpleaños        (v20)
+
+> **`is_manager()` e `is_staff()` dan hoy el mismo conjunto y aun así son dos
+> funciones.** No es duplicación: significan cosas distintas —"puede gestionar
+> el contenido del sitio" contra "puede ver la recaudación"— y el día que
+> aparezca un rol que sólo cargue eventos se cambia una sin tocar la otra.
+
+**Qué NO puede el operador, y por qué.** `payment_accounts` es a dónde va la
+plata; `site_settings` es la cara pública; `profiles` es cambiar roles y dar
+de baja gente (la lee entera, no la escribe); y el DELETE de `events`,
+`ticket_types` y `ticket_promos`, que no se deshace.
+
+> **El corte de DELETE es por tabla, no por rol.** Las tablas de unión
+> (`event_ticket_types`, `event_ticket_promos`) SÍ le dejan borrar, y es
+> obligatorio: `saveEventTickets()` y `saveEventPromos()` **borran** las filas
+> que salieron antes de insertar las nuevas (v15, v21). Ahí "borrar" es un paso
+> de editar un evento, no una baja. Lo que queda cerrado es borrar el EVENTO
+> entero o un tipo/promo del CATÁLOGO, que le pega a todos los eventos.
+
+> **El candado de la cuenta de cobro es un trigger, no una política.** Sin él,
+> "el operador no toca las cuentas" sería mentira: no puede crear ni editar una,
+> pero podría **editar un evento** y apuntarlo a otra. El techo del daño es bajo
+> —sólo elige entre cuentas que ya existen— pero la promesa tiene que valer en
+> la base y no sólo en la pantalla. `events_payment_account_lock` corre sólo en
+> UPDATE: al CREAR hay que poder elegirla, porque `payment_account_id` es
+> `not null` (v13).
+
+**Front: `src/lib/adminPermisos.ts`** reemplaza a `TABS_POR_ROL`. Esa era una
+lista de pestañas y ya no alcanza: "ve Eventos" y "puede borrar un evento" son
+dos preguntas distintas y una lista sólo contesta la primera. Cada permiso tiene
+su espejo en la base, anotado en el archivo; si se agrega uno que la base no
+tiene, el botón aparece y la acción falla con un error de RLS. El hook
+`usePuede("eventos:borrar")` existe para que esconder un botón sea **una línea**:
+si cuesta tres, termina no haciéndose.
+
+**v23 — Ciudad en el perfil.** `profiles` guardaba país y departamento (v3) y
+eso es demasiado grueso para decidir dónde hacer una fecha: de los eventos
+cargados, **dos son en el departamento de Colonia pero en ciudades distintas**
+—Colonia del Sacramento y Nueva Helvecia—, y para el filtro del panel eran el
+mismo "Colonia".
+
+**La columna es nullable, y no es pereza.** Ponerla `not null` obligaría a
+inventarle un valor a todos los perfiles que ya existen, y un `''` o un
+"Sin especificar" es **peor que un NULL**: se cuela en los filtros como si fuera
+una ciudad de verdad y no hay forma de distinguir "no lo sabemos" de "eligió
+eso". Se exige en el **registro nuevo**, que es donde se puede exigir sin
+mentirle a nadie.
+
+**El catálogo vive en `src/lib/ciudades.ts`, NO en `locations.ts`.** Ese archivo
+lo importa `PhoneInput`, que sí está en la cara pública, así que las 122
+localidades viajarían de arrastre con el prefijo telefónico de cada país. Es la
+trampa de `manualChunks` (§6.4) a nivel de módulo.
+
+> **Lista y no texto libre.** "Nueva Helvecia", "nueva helvecia" y "N. Helvecia"
+> son tres ciudades distintas para un filtro, y los desplegables del panel se
+> arman **con los datos que hay** (§6.9): texto libre los convierte en un puré.
+> Pero la lista tiene las localidades principales, no las ~1.100 del país, así
+> que **siempre hay una opción "Otra"** que deja escribir: sin salida, alguien de
+> un pueblo chico no puede terminar de registrarse, y eso es mucho peor que un
+> dato imperfecto. Lo que llega por "Otra" se guarda tal cual y se ve en el
+> panel; si una se repite, se sube al catálogo.
+
+> **El valor NO se normaliza en la DB.** Un trigger que "arregle" mayúsculas y
+> tildes rompe el nombre propio de un pueblo antes de arreglar nada.
+
+> **Sin el cambio al trigger, el campo se perdía en silencio.** El perfil no lo
+> crea el front: lo crea `handle_email_confirmed()` al confirmarse el email
+> (v7), leyendo la metadata de `auth.users`. Si esa función no copia `city`, el
+> registro pide la ciudad, la manda... y nunca llega a `profiles`. La migración
+> reescribe la función entera porque no hay forma de agregarle una columna a una
+> función; lo único que cambia respecto de v7 son tres líneas.
+
+> **El único backfill posible es Montevideo**, que es el único departamento del
+> país con una sola ciudad. Cualquier otra deducción sería inventar el dato.
+
+**Se le pide a los que ya están, sin trabarlos (`AvisoCiudad`).** Una barra
+abajo con el desplegable ahí mismo y un "Ahora no" de verdad; quien la cierra no
+la vuelve a ver por dos semanas. La alternativa era un modal que no se puede
+saltear: llena la base más rápido, pero **si le aparece a alguien que estaba por
+comprar una entrada, se pierde la venta** — y es justo la gente que más
+interesa. No vuelve "nunca más" a propósito: el dato sigue haciendo falta y la
+persona puede estar apurada hoy y no la semana que viene.
+
+> **Son dos archivos (`AvisoCiudad` + `AvisoCiudadBarra`) por dos motivos.** La
+> barra importa el catálogo de localidades, así que tiene que ir diferida o entra
+> en el bundle de la landing para cualquiera que pase a mirar una fiesta. Y un
+> `lazy` suelto que se suspende durante el render inicial —que es síncrono— hace
+> que React avise por consola en **cada carga**, aunque el `fallback` sea `null`
+> y no se vea nada; un error benigno que aparece siempre es exactamente lo que
+> después tapa uno de verdad. Con el chequeo de sesión afuera, la suspensión pasa
+> a ocurrir cuando llega `currentUser` —un cambio asincrónico— y no hay aviso. De
+> yapa, el chunk **no se descarga** para quien no lo necesita.
+
+> **El campo de ciudad de `LocationSelect` es opt-in por prop.** Ese componente
+> lo usa también el formulario de cumpleaños del panel, y `birthday_signups`
+> **no tiene columna de ciudad**: si apareciera solo, ahí se completaría para
+> nada y encima `required` trabaría un formulario que el staff usa a diario.
+
+> **Si el valor guardado no está en la lista, el campo abre en modo "Otra" con el
+> texto puesto.** Sin eso, alguien que escribió "Puerto Gómez" abre su perfil, ve
+> el desplegable en "Seleccioná..." y **al guardar pierde su ciudad sin haber
+> tocado nada**.
+
+> **Los nombres de los departamentos tienen que coincidir exactamente con los de
+> `locations.ts`.** Si no coinciden, el desplegable de ciudad queda vacío y **no
+> falla nada**: es silencioso. Por eso `departamentosSinCiudades()` existe y hay
+> una prueba que la usa.
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
@@ -1108,6 +1225,94 @@ carga — y como el `<body>` es una SPA vacía, esos comentarios eran literalmen
 > `<div id="root"></div>`, que no puede estar duplicado, y se avisa por consola
 > si un ancla no está.
 
+
+## 6.9 El panel en el celular
+
+El panel se hizo pensando en una pantalla grande y se notaba. Con el operador
+viendo 2 pestañas se toleraba; desde v22 ve 7 y el admin 9, así que lo que antes
+era incómodo pasó a ser inusable.
+
+**La navegación va en un `Sheet`, no en una tira.** El sidebar era
+`flex md:flex-col` con `overflow-x-auto`: en el teléfono quedaba una fila de
+botones con scroll horizontal, donde no se ve dónde termina ni dónde estás
+parado. Ahora en celular hay una barra superior **`sticky`** —con listas largas,
+tener que subir hasta arriba para cambiar de pestaña era la mitad del problema—
+y el menú se desliza desde el costado con las 9 verticales. De `md:` para
+arriba no cambió nada.
+
+> **No se agregó ninguna librería.** `sheet.tsx`, `drawer.tsx`,
+> `dropdown-menu` y `tabs` ya estaban instalados de shadcn y sin usar. Y hay un
+> motivo más fuerte que el ahorro: `manualChunks` manda cualquier dependencia
+> nueva al chunk `vendor`, que **sí se precarga en la landing** — una librería
+> de tablas serían 40-200 KB que baja todo el que entra a ver una fiesta.
+
+**Tarjetas en celular, tabla en escritorio.** Eventos y Usuarios eran tablas con
+`min-w-[720px]`, o sea scroll lateral. Ahora siguen el patrón que Entregas y
+Cumpleaños ya usaban.
+
+**Los modales.** Tres de los nueve (tipo de entrada, cuenta y evento) se abrían
+como un diálogo flotante con `p-4` **también en el teléfono**, desperdiciando
+pantalla. Pasan a hoja completa con `h-[100dvh]`, y el encabezado baja de
+`p-6`/`text-2xl` a `px-4 py-3`/`text-lg` en celular: medido en la cara pública,
+esa combinación se comía 157 px, el 23 % del modal. Los botones de cerrar pasan
+de 40 a 44 px, el mínimo táctil.
+
+> **`ModalAdmin` envuelve a `ModalShell`, no lo copia.** El panel no tiene el
+> problema del ancestro con `transform` que obligó a portar los modales públicos
+> (§6.5), pero todo lo demás que ModalShell resuelve —`100dvh` en iOS, trabar el
+> scroll del fondo, cerrar con Escape y con el velo— hace falta igual. Un segundo
+> shell era garantizar que uno de los dos se quedara atrás. **Los 6 modales
+> restantes todavía no se migraron**: mover el botón de guardar a un pie fijo lo
+> saca del `<form>` y hay que engancharlo con `form="id"`. Es su propio PR.
+
+**Usuarios: filtros, ficha y export.** Era un buscador de texto y 7 columnas, y
+mostraba menos de la mitad de lo que la base guarda (faltaban teléfono, país,
+departamento y foto). Ahora hay 10 filtros —rol, país, departamento, con o sin
+teléfono, edad, mes de cumpleaños, antigüedad, si compró, estado de la promo de
+cumpleaños y si tiene foto—, cinco ordenamientos y export CSV de lo filtrado.
+
+> **`profiles` es la única tabla del panel que se cruza con las otras dos**
+> (`ticket_deliveries.user_id`, `birthday_signups.user_id`) y ese cruce no se
+> usaba en ningún lado: "¿este tipo ya compró alguna vez?" no tenía dónde
+> contestarse. La ficha ahora muestra qué compró, cuánto gastó y en qué quedó su
+> promo de cumpleaños. **Los cruces se piden aparte y si fallan la lista se
+> muestra igual**: son datos de adorno para esta pantalla, y romper la pestaña
+> entera sería cambiar un problema chico por uno grande.
+
+> **Los desplegables de ubicación se arman con los usuarios que hay, no con el
+> catálogo.** La primera versión usaba `getCountry(f.pais)?.states`, y
+> `getCountry("")` devuelve `undefined`: **mientras no eligieras un país la
+> lista de departamentos quedaba vacía**. Abrías "Departamento", veías sólo
+> "Todos" y parecía roto — así lo reportó el autor. Y para un panel donde
+> prácticamente todos son de Uruguay, obligar a elegir "Uruguay" antes de poder
+> elegir "Colonia" es un paso escondido que nadie adivina. Armarlos desde los
+> datos arregla eso y dos cosas más: **ninguna opción ofrecida puede dar cero**
+> —el catálogo trae 19 países de los que se usan dos o tres— y los perfiles
+> anteriores a v3, que tienen `country` y `state` en NULL, dejan de ser
+> **imposibles de listar**: van bajo "Sin país cargado", que necesita un valor
+> centinela porque en un `<select>` el string vacío ya significa "Todos".
+> **La foto del documento NO se muestra en la ficha**, a propósito. Vive en un
+> bucket privado y se abre sólo desde la pestaña Cumpleaños con una URL firmada
+> de 5 minutos (v12). Una cédula no se muestra "de paso".
+
+> **La edad se calcula cortando el string ISO.** El `calcAge` viejo hacía
+> `new Date("1990-05-15")`, que se parsea como medianoche **UTC**: con los
+> getters locales en Uruguay (UTC−3) devolvía el 14. Es el mismo motivo por el
+> que `formatEventDate` corta el string, y acá importa el doble — una edad
+> corrida un día puede marcar mayor a un menor.
+
+**`lucide-react` salió de `vendor`, y es la misma trampa que `lottie-web`.**
+Cada icono es un módulo suelto; cayendo en el `return 'vendor'` final se
+juntaban todos ahí, así que **los ~40 que usa sólo el panel los descargaba
+cualquiera que entrara a ver una fiesta**, aunque `/admin` esté en un chunk
+lazy. Sin agrupar, Rollup pone cada icono donde se usa. Medido:
+`vendor` 162 → 137 KB (−25 KB; −5,2 KB en brotli), `index` +5 KB, y el resto se
+va al chunk de Admin, que sólo baja el staff.
+
+**El CSV vive en `src/lib/csv.ts`.** El mismo bloque —escape, BOM y el baile del
+`<a>` temporal— estaba copiado en Entregas y Cumpleaños; con Usuarios iban a ser
+tres. El BOM se escribe como `\uFEFF` y no como carácter literal: escrito a mano
+deja un byte invisible en el fuente que dispara `no-irregular-whitespace`.
 
 ## 7. Branding / UI
 

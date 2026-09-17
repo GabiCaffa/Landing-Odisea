@@ -37,12 +37,25 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   /** Ancho máximo del panel en escritorio. */
-  ancho?: "md" | "2xl";
+  ancho?: Ancho;
   /** Para lectores de pantalla: qué es este diálogo. */
   etiqueta: string;
 }
 
-const ANCHOS = { md: "sm:max-w-md", "2xl": "sm:max-w-2xl" } as const;
+/**
+ * Los anchos grandes los usa el panel (`ModalAdmin`), donde los formularios
+ * tienen dos columnas y una vista previa al lado. En la cara pública no hay
+ * nada que necesite más de `2xl`.
+ */
+export type Ancho = "md" | "lg" | "2xl" | "3xl" | "5xl";
+
+const ANCHOS: Record<Ancho, string> = {
+  md: "sm:max-w-md",
+  lg: "sm:max-w-lg",
+  "2xl": "sm:max-w-2xl",
+  "3xl": "sm:max-w-3xl",
+  "5xl": "sm:max-w-5xl",
+};
 
 const ModalShell = ({ onClose, children, ancho = "2xl", etiqueta }: Props) => {
   // En un ref para que cambiar el handler no re-arme los listeners.
