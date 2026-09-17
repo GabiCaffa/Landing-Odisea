@@ -345,21 +345,38 @@ unión `event_ticket_promos`, mismo molde que `ticket_types` ↔
 `event_ticket_types` (v15) y por el mismo motivo: **la misma promo se aplica a
 varios eventos**.
 
-**Un solo mecanismo, dos números.** `cada N entradas, 1 con X% de descuento`
-cubre todo lo que se pidió, porque los dos ejemplos del autor son el mismo
-mecanismo: "2x1" es cada 2 con 100%, "la segunda al 50%" es cada 2 con 50%. De
-yapa sale 3x2. La cuenta vive en `src/lib/ticketPromos.ts`:
+**Un solo mecanismo, tres números.** `cada N entradas, M con X% de descuento`.
+La cuenta vive en `src/lib/ticketPromos.ts`:
 
-    descuento = floor(cantidad / everyN) * precio * percentOff / 100
+    descuento = floor(cantidad / everyN) * discountedUnits * precio * percentOff / 100
+
+| Promo | N | M | X |
+|---|---|---|---|
+| 2x1 | 2 | 1 | 100% |
+| 2da al 50% | 2 | 1 | 50% |
+| 3x2 | 3 | 1 | 100% |
+| 3 al precio de 1 | 3 | 2 | 100% |
+| cada 4, 2 a mitad | 4 | 2 | 50% |
+
+> **El tercer número se agregó después de probarlo.** La primera versión tenía M
+> fijo en 1, que alcanza para 2x1 y 3x2 pero **no** para "3 al precio de 1" ni
+> "cada 4, dos a mitad de precio" — el autor lo detectó cargando promos reales.
+> Un CHECK exige `M < N`: descontar las N sería regalar el grupo entero.
 
 > **Con el doble de entradas la promo entra DOS veces**, a propósito. Si entrara
 > una sola vez, premiaría comprar de a dos y castigaría comprar de a cuatro.
 > Verificado: 4 entradas de $700 con "2da al 50%" pagan $2100.
 
-> **Los dos números son INTERNOS.** El comprador ve el `name` que escribió el
-> admin ("2x1") y el precio ya descontado, nunca la fórmula. Por eso el form del
-> panel muestra en vivo un ejemplo con plata: "cada 2, 1 al 50%" no le dice nada
-> a nadie, "2 entradas de $1000 → $1000" sí.
+> **Los tres números son INTERNOS.** El comprador ve el `name` que escribió el
+> admin ("2x1") y el precio ya descontado, nunca la fórmula.
+
+**El formulario se rehízo porque no se entendía.** La primera versión eran cajas
+con las etiquetas "CADA N ENTRADAS" y "DESCUENTO EN 1 (%)": correctas y bastante
+incomprensibles. Ahora tiene **atajos** (2x1, 3x2, 2da al 50%, 3 al precio de 1)
+que cargan los tres números de un click —nadie piensa "cada 2, 1 al 100%", piensa
+"2x1"—, la regla escrita como **una frase con los números adentro** ("Cada `3`
+entradas, `2` salen con `100`% de descuento"), y el ejemplo en vivo con plata,
+que es lo único que de verdad se lee.
 
 > **Apunta al CATÁLOGO `ticket_types`, no a `event_ticket_types`.** Misma lección
 > que v18: `saveEventTickets` **borra** filas de esa tabla cuando un evento deja
@@ -405,6 +422,16 @@ promo escondida detrás de un click no vende nada.
 > **Trampa encontrada por TypeScript:** `promos.filter(promoVigente)` le pasa el
 > **índice** como segundo argumento, que en esa función es `hoy`. Comparaba las
 > fechas contra un número. Va `.filter((p) => promoVigente(p))`.
+
+> **La carrera que hacía parecer que no se guardaba nada.** El autor reportó
+> "clickeo la promo, guardo, y no se guarda" — pero en la base estaba bien. El
+> realtime **sólo escucha la tabla `events`**: al guardar, `updateEvent` la toca
+> y dispara una recarga que corre **antes** de `saveEventTickets` y
+> `saveEventPromos`, así que lee el estado anterior. Y como
+> `event_ticket_types` y `event_ticket_promos` no tienen suscripción propia,
+> nada la vuelve a disparar. Por eso `AuthContext` expone `refreshEvents` y el
+> guardado lo llama **al final**. Es el mismo bug latente que tenían las entradas
+> desde v15.
 
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
