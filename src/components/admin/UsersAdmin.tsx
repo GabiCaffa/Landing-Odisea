@@ -26,9 +26,9 @@ import {
 import { usePuede } from "@/lib/adminPermisos";
 import { fetchDeliveries, type TicketDelivery } from "@/lib/deliveries";
 import { fetchBirthdays, type BirthdaySignup } from "@/lib/birthdays";
-import { COUNTRIES, getCountry } from "@/lib/locations";
+import { getCountry } from "@/lib/locations";
 import { formatPhoneDisplay } from "@/lib/validators";
-import { foldText } from "@/lib/utils";
+import { SIN_DATO, contarPorValor, foldText } from "@/lib/utils";
 import { descargarCsv } from "@/lib/csv";
 
 /**
@@ -319,8 +319,8 @@ const UsersAdmin = () => {
         if (!heno.includes(texto)) return false;
       }
       if (f.rol !== "todos" && u.role !== f.rol) return false;
-      if (f.pais && (u.country ?? "") !== f.pais) return false;
-      if (f.depto && (u.state ?? "") !== f.depto) return false;
+      if (f.pais && (u.country || SIN_DATO) !== f.pais) return false;
+      if (f.depto && (u.state || SIN_DATO) !== f.depto) return false;
       if (f.telefono === "con" && !u.phone) return false;
       if (f.telefono === "sin" && u.phone) return false;
       if (f.foto === "con" && !u.avatarUrl) return false;
@@ -392,7 +392,36 @@ const UsersAdmin = () => {
     [f]
   );
 
-  const deptos = useMemo(() => getCountry(f.pais)?.states ?? [], [f.pais]);
+  /**
+   * Los dos desplegables de ubicación se arman con **los usuarios que hay**, no
+   * con el catálogo de `locations.ts`.
+   *
+   * Antes la lista de departamentos era `getCountry(f.pais)?.states`, y
+   * `getCountry("")` devuelve `undefined`: mientras no eligieras un país el
+   * desplegable quedaba **vacío**. Abrías "Departamento", veías sólo "Todos" y
+   * parecía roto. Y para un panel donde prácticamente todos son de Uruguay,
+   * obligar a elegir "Uruguay" antes de poder elegir "Colonia" es un paso
+   * escondido que nadie adivina.
+   *
+   * Armarlos desde los datos arregla eso y dos cosas más: **no se ofrece una
+   * opción que va a dar cero** —el catálogo trae 19 países y 19 departamentos,
+   * de los que se usan dos o tres— y los perfiles sin ubicación cargada dejan
+   * de ser invisibles. De paso el conteo al lado dice dónde está la gente sin
+   * tener que ir probando.
+   */
+  const paises = useMemo(() => contarPorValor(users.map((u) => u.country)), [users]);
+
+  // El departamento se acota al país elegido, pero **sin país muestra todos**:
+  // ése era justamente el caso que no andaba.
+  const deptos = useMemo(
+    () =>
+      contarPorValor(
+        users
+          .filter((u) => !f.pais || (u.country || SIN_DATO) === f.pais)
+          .map((u) => u.state)
+      ),
+    [users, f.pais]
+  );
 
   const resumen = useMemo(
     () => ({
@@ -536,9 +565,11 @@ const UsersAdmin = () => {
                   la lista sale vacía sin explicación. */}
               <Sel value={f.pais} onChange={(v) => setF({ ...f, pais: v, depto: "" })}>
                 <option value="">Todos</option>
-                {COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.flag} {c.name}
+                {paises.map(([code, n]) => (
+                  <option key={code} value={code}>
+                    {code === SIN_DATO
+                      ? `Sin país cargado (${n})`
+                      : `${getCountry(code)?.flag ?? ""} ${getCountry(code)?.name ?? code} (${n})`}
                   </option>
                 ))}
               </Sel>
@@ -547,9 +578,9 @@ const UsersAdmin = () => {
             <Campo label="Departamento">
               <Sel value={f.depto} onChange={(v) => setF({ ...f, depto: v })}>
                 <option value="">Todos</option>
-                {deptos.map((d) => (
+                {deptos.map(([d, n]) => (
                   <option key={d} value={d}>
-                    {d}
+                    {d === SIN_DATO ? `Sin departamento cargado (${n})` : `${d} (${n})`}
                   </option>
                 ))}
               </Sel>

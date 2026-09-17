@@ -1205,6 +1205,18 @@ cumpleaños y si tiene foto—, cinco ordenamientos y export CSV de lo filtrado.
 > muestra igual**: son datos de adorno para esta pantalla, y romper la pestaña
 > entera sería cambiar un problema chico por uno grande.
 
+> **Los desplegables de ubicación se arman con los usuarios que hay, no con el
+> catálogo.** La primera versión usaba `getCountry(f.pais)?.states`, y
+> `getCountry("")` devuelve `undefined`: **mientras no eligieras un país la
+> lista de departamentos quedaba vacía**. Abrías "Departamento", veías sólo
+> "Todos" y parecía roto — así lo reportó el autor. Y para un panel donde
+> prácticamente todos son de Uruguay, obligar a elegir "Uruguay" antes de poder
+> elegir "Colonia" es un paso escondido que nadie adivina. Armarlos desde los
+> datos arregla eso y dos cosas más: **ninguna opción ofrecida puede dar cero**
+> —el catálogo trae 19 países de los que se usan dos o tres— y los perfiles
+> anteriores a v3, que tienen `country` y `state` en NULL, dejan de ser
+> **imposibles de listar**: van bajo "Sin país cargado", que necesita un valor
+> centinela porque en un `<select>` el string vacío ya significa "Todos".
 > **La foto del documento NO se muestra en la ficha**, a propósito. Vive en un
 > bucket privado y se abre sólo desde la pestaña Cumpleaños con una URL firmada
 > de 5 minutos (v12). Una cédula no se muestra "de paso".
