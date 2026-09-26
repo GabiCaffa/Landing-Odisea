@@ -19,6 +19,13 @@ export interface DeliveryTicketLine {
   name: string;
   quantity: number;
   unitPrice: number;
+  /**
+   * Promo del catálogo que se aplicó en esta línea (v24). Es lo que cuenta
+   * para el cupo de la promo: una venta cargada sin esto no descuenta cupo.
+   */
+  promoId?: string;
+  /** Nombre de esa promo, embebido (`ticket_promos(name)`). */
+  promoName?: string;
 }
 
 export interface TicketDelivery {
@@ -69,6 +76,10 @@ function lineFromDb(row: any): DeliveryTicketLine {
     name: type?.name ?? "Entrada",
     quantity: row.quantity,
     unitPrice: Number(row.unit_price),
+    promoId: row.promo_id ?? undefined,
+    promoName:
+      (Array.isArray(row.ticket_promos) ? row.ticket_promos[0] : row.ticket_promos)?.name ??
+      undefined,
   };
 }
 
@@ -113,15 +124,22 @@ function toDb(input: Partial<DeliveryInput>): Record<string, any> {
   return out;
 }
 
+/**
+ * **Si la consulta falla, TIRA; no devuelve una lista vacía.** Antes devolvía
+ * `[]`, y en producción faltó la tabla de v18 durante semanas: el embed de
+ * abajo fallaba y la pestaña Entregas se veía vacía, igual que un evento sin
+ * ventas. "No hay entregas" y "no pude leer las entregas" no pueden verse
+ * igual.
+ */
 export async function fetchDeliveries(): Promise<TicketDelivery[]> {
   const { data, error } = await supabase
     .from("ticket_deliveries")
     // El desglose por tipo viene embebido (v18): son 1 o 2 filas por entrega y
     // se muestran en la misma lista, no vale la pena una segunda consulta.
-    .select("*, delivery_ticket_types(*, ticket_types(name))")
+    .select("*, delivery_ticket_types(*, ticket_types(name), ticket_promos(name))")
     .order("created_at", { ascending: false });
-  if (error || !data) return [];
-  return data.map(fromDb);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(fromDb);
 }
 
 /**
@@ -167,6 +185,7 @@ export async function saveDeliveryTickets(
       ticket_type_id: l.ticketTypeId,
       quantity: l.quantity,
       unit_price: l.unitPrice,
+      promo_id: l.promoId ?? null,
     })),
     { onConflict: "delivery_id,ticket_type_id" }
   );
@@ -174,9 +193,11 @@ export async function saveDeliveryTickets(
   return { ok: true };
 }
 
-/** Resumen legible del desglose: "2 General · 1 VIP". */
+/** Resumen legible del desglose: "2 General (2x1) · 1 VIP". */
 export function ticketsSummary(lines: DeliveryTicketLine[]): string {
-  return lines.map((l) => `${l.quantity} ${l.name}`).join(" · ");
+  return lines
+    .map((l) => `${l.quantity} ${l.name}${l.promoName ? ` (${l.promoName})` : ""}`)
+    .join(" · ");
 }
 
 export async function updateDelivery(

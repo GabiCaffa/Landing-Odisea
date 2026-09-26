@@ -101,12 +101,17 @@ import {
 } from "@/lib/birthdays";
 import { birthdayMessageFor, buildBirthdayWhatsAppUrl } from "@/lib/birthdayMessage";
 import PromosAdmin from "@/components/admin/PromosAdmin";
-import EventPromosEditor, { EventPromoSelection } from "@/components/admin/EventPromosEditor";
+import EventPromosEditor, {
+  EventPromoSelection,
+  problemasPromos,
+  seleccionAGuardar,
+  seleccionDesdeEvento,
+} from "@/components/admin/EventPromosEditor";
 import AdminShell from "@/components/admin/AdminShell";
 import UsersAdmin from "@/components/admin/UsersAdmin";
 import { descargarCsv } from "@/lib/csv";
 import { AdminTab, rotuloDePanel, tabsDe, usePuede } from "@/lib/adminPermisos";
-import { saveEventPromos } from "@/lib/ticketPromos";
+import { saveEventPromos, descuentoDe } from "@/lib/ticketPromos";
 import {
   PaymentAccount,
   PaymentAccountInput,
@@ -450,7 +455,7 @@ const EventsAdmin = () => {
       // un tipo de entrada, así que no tiene sentido guardarlas si las
       // entradas fallaron. Mismo criterio que arriba si algo sale mal: el
       // evento ya quedó, se avisa para reintentar editándolo.
-      const promosResult = await saveEventPromos(eventId, promos);
+      const promosResult = await saveEventPromos(eventId, seleccionAGuardar(promos));
       if (!promosResult.ok) {
         toast.error(
           `Evento guardado, pero las promos no: ${promosResult.error ?? "error desconocido"}`
@@ -1395,8 +1400,12 @@ const EventFormModal = ({
    * del evento ya en la mano (ver `saveEventPromos`).
    */
   const [promosSel, setPromosSel] = useState<EventPromoSelection[]>(
-    () => (initial?.promos ?? []).map((p) => ({ promoId: p.promoId, ticketTypeId: p.ticketTypeId }))
+    // Con la ventana, el cupo y el precio (v24): `saveEventPromos` borra y
+    // reinserta, así que lo que no se cargue acá se pierde al guardar.
+    () => (initial?.promos ?? []).map(seleccionDesdeEvento)
   );
+  // Nombres de las promos, para que los errores digan cuál ("2x1: ...").
+  const [nombresPromos, setNombresPromos] = useState<Record<string, string>>({});
   // ISO (UTC) → valor para <input type="datetime-local"> en hora local
   const isoToLocalInput = (iso?: string) => {
     if (!iso) return "";
@@ -1506,6 +1515,11 @@ const EventFormModal = ({
     }
     if (form.tickets.some((t) => !(t.price > 0))) {
       toast.error("Poné el precio de cada tipo de entrada");
+      return;
+    }
+    const problemaPromo = problemasPromos(promosSel, form.tickets, nombresPromos);
+    if (problemaPromo) {
+      toast.error(problemaPromo);
       return;
     }
     setSaving(true);
@@ -1631,6 +1645,7 @@ const EventFormModal = ({
                 tickets={form.tickets}
                 value={promosSel}
                 onChange={setPromosSel}
+                onCatalogo={setNombresPromos}
               />
             </FormField>
 
@@ -2316,10 +2331,21 @@ const DeliveriesAdmin = () => {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [prefill, setPrefill] = useState<DeliveryPrefill | null>(null);
 
+  // Si la lectura falla se muestra el error y NO una lista vacía (ver
+  // fetchDeliveries): "no hay ventas" y "no pude leerlas" tienen que verse
+  // distinto. Lo que ya estaba cargado se conserva.
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const reload = async () => {
-    const data = await fetchDeliveries();
-    setDeliveries(data);
-    setLoading(false);
+    try {
+      const data = await fetchDeliveries();
+      setDeliveries(data);
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -2454,6 +2480,23 @@ const DeliveriesAdmin = () => {
 
   return (
     <div className="space-y-5">
+      {loadError && (
+        <div role="alert" className="border border-charrua/40 bg-charrua/10 p-4 text-sm">
+          <p className="font-semibold text-charrua">No se pudieron leer las entregas.</p>
+          <p className="mt-1 text-muted-foreground">
+            Lo que ves abajo puede estar incompleto o vacío aunque haya ventas cargadas. Detalle:{" "}
+            <span className="break-words font-mono text-xs">{loadError}</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => reload()}
+            className="mt-2 text-xs font-semibold underline underline-offset-2"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
       {/* Resumen general */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MiniStat icon={<DollarSign className="w-4 h-4" />} label="Recaudado" value={fmtMoney(summary.totalValue)} />
@@ -2811,8 +2854,34 @@ const PasteMessageModal = ({
         unitPrice: item.qty > 0 ? item.amount / item.qty : type.price,
       });
     }
-    return { lines, unmatched };
-  }, [data?.items, selectedEvent]);
+
+    /*
+     * Promo de cada línea (v24): "PROMO: 2x1 en General (-$700)" → la línea
+     * General lleva el 2x1 del evento. Es lo que descuenta el cupo, así que
+     * si no se puede cruzar se avisa en vez de cargar la venta sin promo.
+     * Se busca entre TODAS las promos del evento, vigentes o no: la venta se
+     * carga a veces después de que la promo venció.
+     */
+    const promosSinCruzar: string[] = [];
+    for (const pl of data?.promoLines ?? []) {
+      const tipo = foldText(pl.ticketName).trim();
+      const line = lines.find((l) => foldText(l.name).trim() === tipo);
+      const promo = line
+        ? (selectedEvent?.promos ?? []).find(
+            (p) =>
+              p.ticketTypeId === line.ticketTypeId &&
+              foldText(p.name).trim() === foldText(pl.label).trim()
+          )
+        : undefined;
+      if (line && promo) {
+        line.promoId = promo.promoId;
+        line.promoName = promo.name;
+      } else {
+        promosSinCruzar.push(`${pl.label} en ${pl.ticketName}`);
+      }
+    }
+    return { lines, unmatched, promosSinCruzar };
+  }, [data?.items, data?.promoLines, selectedEvent]);
 
   const value = data ? data.total ?? data.itemsTotal : null;
 
@@ -2946,6 +3015,14 @@ const PasteMessageModal = ({
                   <span className="font-semibold text-celeste-deep">{p}</span>
                 </ParsedRow>
               ))}
+              {matched.promosSinCruzar.length > 0 && (
+                <ParsedRow label="Ojo">
+                  <span className="text-xs text-charrua">
+                    No encontré {matched.promosSinCruzar.join(", ")} entre las promos del evento.
+                    Elegila a mano en el paso siguiente: si no, esta venta no descuenta el cupo.
+                  </span>
+                </ParsedRow>
+              )}
             </div>
           )}
 
@@ -3052,11 +3129,55 @@ const DeliveryFormModal = ({
     return initial;
   });
 
+  /**
+   * Promo aplicada en cada tipo de entrada (v24), por ticketTypeId. "" = sin
+   * promo. Es de donde sale el cupo vendido de la promo: una venta cargada
+   * sin esto no lo descuenta.
+   */
+  const [linePromos, setLinePromos] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const line of prefill?.lines ?? editing?.tickets ?? []) {
+      if (line.promoId) initial[line.ticketTypeId] = line.promoId;
+    }
+    return initial;
+  });
+
   const set = (field: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
   const selectedUser = users.find((u) => u.id === form.userId) ?? null;
   const selectedEvent = events.find((ev) => ev.id === form.eventId) ?? null;
+
+  /**
+   * Promos que se pueden elegir para un tipo: TODAS las del evento sobre ese
+   * tipo, vigentes o no —la venta a veces se carga después de que la promo
+   * venció—, más la que la entrega ya tenía aunque el evento la haya sacado
+   * (mismo rescate que los tipos huérfanos de abajo).
+   */
+  const promosDelTipo = (ticketTypeId: string) => {
+    const delEvento = (selectedEvent?.promos ?? []).filter((p) => p.ticketTypeId === ticketTypeId);
+    const vieja = editing?.tickets.find((l) => l.ticketTypeId === ticketTypeId);
+    const opciones = delEvento.map((p) => ({ promoId: p.promoId, name: p.name }));
+    if (vieja?.promoId && !opciones.some((o) => o.promoId === vieja.promoId)) {
+      opciones.push({ promoId: vieja.promoId, name: vieja.promoName ?? "Promo anterior" });
+    }
+    return opciones;
+  };
+
+  /**
+   * Cuánto descuenta la promo elegida sobre una línea, para proponer el total.
+   * Se calcula SIN ventana ni cupo: si el staff dice que se vendió con la
+   * promo, se vendió con la promo, aunque la carga llegue tarde.
+   */
+  const descuentoLinea = (ticketTypeId: string, precio: number, cantidad: number, promoId?: string) => {
+    if (!promoId) return 0;
+    const promo = (selectedEvent?.promos ?? []).find(
+      (p) => p.ticketTypeId === ticketTypeId && p.promoId === promoId
+    );
+    if (!promo) return 0;
+    const sinLimites = { ...promo, active: true, startsAt: undefined, endsAt: undefined, remaining: undefined };
+    return descuentoDe(sinLimites, precio, cantidad)?.monto ?? 0;
+  };
 
   /**
    * Tipos que se pueden cargar: los del evento, más los que esta entrega ya
@@ -3078,19 +3199,32 @@ const DeliveryFormModal = ({
     return sortEventTickets([...fromEvent, ...orphans]);
   }, [selectedEvent, editing]);
 
-  /** Al tocar el desglose, la cantidad y el total se recalculan solos. */
-  const setLine = (ticketTypeId: string, quantity: number) => {
-    const next = { ...lines, [ticketTypeId]: Math.max(0, quantity) };
-    setLines(next);
+  /**
+   * Al tocar el desglose (cantidades o promo), la cantidad y el total se
+   * recalculan solos, con el descuento de la promo elegida.
+   */
+  const recalcular = (nextLines: Record<string, number>, nextPromos: Record<string, string>) => {
     let qty = 0;
     let sum = 0;
     for (const row of typeRows) {
-      const q = next[row.ticketTypeId] ?? 0;
+      const q = nextLines[row.ticketTypeId] ?? 0;
       qty += q;
-      sum += q * row.price;
+      sum += q * row.price - descuentoLinea(row.ticketTypeId, row.price, q, nextPromos[row.ticketTypeId]);
     }
-    // El total queda editable: puede cobrarse distinto (promo, cortesía).
+    // El total queda editable: puede cobrarse distinto (redondeo, cortesía).
     if (qty > 0) setForm((p) => ({ ...p, quantity: String(qty), value: String(sum) }));
+  };
+
+  const setLine = (ticketTypeId: string, quantity: number) => {
+    const next = { ...lines, [ticketTypeId]: Math.max(0, quantity) };
+    setLines(next);
+    recalcular(next, linePromos);
+  };
+
+  const setLinePromo = (ticketTypeId: string, promoId: string) => {
+    const next = { ...linePromos, [ticketTypeId]: promoId };
+    setLinePromos(next);
+    recalcular(lines, next);
   };
 
   const ticketLines: DeliveryTicketLine[] = typeRows
@@ -3099,6 +3233,7 @@ const DeliveryFormModal = ({
       name: row.name,
       quantity: lines[row.ticketTypeId] ?? 0,
       unitPrice: row.price,
+      promoId: linePromos[row.ticketTypeId] || undefined,
     }))
     .filter((line) => line.quantity > 0);
 
@@ -3382,29 +3517,51 @@ const DeliveryFormModal = ({
                 Tipo de entrada
               </span>
               <div className="border border-border divide-y divide-border">
-                {typeRows.map((row) => (
-                  <div key={row.ticketTypeId} className="flex items-center gap-3 px-3 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">
-                        {row.name}
-                        {!row.active && (
-                          <span className="ml-2 text-xs font-normal text-muted-foreground">
-                            (ya no se vende)
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{fmtMoney(row.price)} c/u</p>
+                {typeRows.map((row) => {
+                  const opcionesPromo = promosDelTipo(row.ticketTypeId);
+                  return (
+                    <div key={row.ticketTypeId} className="px-3 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold truncate">
+                            {row.name}
+                            {!row.active && (
+                              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                (ya no se vende)
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{fmtMoney(row.price)} c/u</p>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={lines[row.ticketTypeId] ?? 0}
+                          onChange={(e) => setLine(row.ticketTypeId, parseInt(e.target.value, 10) || 0)}
+                          className="input-techno w-20 text-center py-1.5"
+                          aria-label={`Cantidad de ${row.name}`}
+                        />
+                      </div>
+                      {/* Sólo si el tipo tiene promos y hay entradas cargadas:
+                          si no, es un desplegable que no se puede usar. */}
+                      {opcionesPromo.length > 0 && (lines[row.ticketTypeId] ?? 0) > 0 && (
+                        <select
+                          value={linePromos[row.ticketTypeId] ?? ""}
+                          onChange={(e) => setLinePromo(row.ticketTypeId, e.target.value)}
+                          className="input-techno mt-2 py-1.5 text-sm"
+                          aria-label={`Promo aplicada en ${row.name}`}
+                        >
+                          <option value="">Sin promo</option>
+                          {opcionesPromo.map((o) => (
+                            <option key={o.promoId} value={o.promoId}>
+                              {o.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
-                    <input
-                      type="number"
-                      min={0}
-                      value={lines[row.ticketTypeId] ?? 0}
-                      onChange={(e) => setLine(row.ticketTypeId, parseInt(e.target.value, 10) || 0)}
-                      className="input-techno w-20 text-center py-1.5"
-                      aria-label={`Cantidad de ${row.name}`}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
                 Al cargar el desglose, la cantidad y el total se calculan solos (y se pueden

@@ -157,6 +157,15 @@ export interface ParsedPurchaseItem {
   amount: number;
 }
 
+export interface ParsedPromoLine {
+  /** El nombre de la promo, tal como lo ve el cliente ("2x1"). */
+  label: string;
+  /** El tipo de entrada sobre el que se aplicó ("General"). */
+  ticketName: string;
+  /** Cuánto descontó, positivo. */
+  amount: number;
+}
+
 export interface ParsedPurchase {
   eventName: string | null;
   /** Fecha tal como venía en el mensaje ("12 de septiembre"), sin interpretar. */
@@ -185,6 +194,14 @@ export interface ParsedPurchase {
    * la entrega.
    */
   promos: string[];
+  /**
+   * Las mismas promos, desarmadas (v24): cuál, sobre qué tipo y cuánto. Es lo
+   * que deja al importador del panel poner la promo en la línea de la entrega
+   * (`delivery_ticket_types.promo_id`), que es de donde sale el cupo vendido.
+   * Una línea que no se puede desarmar queda en `promos` igual, y se carga a
+   * mano.
+   */
+  promoLines: ParsedPromoLine[];
   /** Desglose legible ("2 General · 1 VIP"), para el campo Notas. */
   itemsSummary: string;
 }
@@ -208,6 +225,13 @@ const CHAT_STAMP =
 const ITEM_RE = /^-\s*(\d+)\s+entradas?\s+(.+?)\s*\(\s*\$?\s*([\d.,]+)\s*\)\s*$/i;
 const EVENT_RE = /^quiero comprar para\s+(.+?)\s*\(([^)]*)\)\s*:?\s*$/i;
 const TOTAL_RE = /^total:\s*\$?\s*([\d.,]+)\s*$/i;
+/**
+ * Lo que sigue a "PROMO:", tal como lo arma `buildPurchaseMessage`:
+ * "2x1 en General (-$700)". El nombre de la promo es GOLOSO a propósito: si el
+ * admin la llamó "Preventa en pareja", el " en " que separa es el último, y
+ * los nombres de los tipos de entrada del catálogo no llevan " en ".
+ */
+const PROMO_LINE_RE = /^(.+)\s+en\s+(.+?)\s*\(\s*-\s*\$?\s*([\d.,]+)\s*\)\s*$/i;
 
 /** Etiquetas conocidas: si una línea empieza con una, no es el nombre del que manda. */
 const KNOWN_LABELS = Object.values(MSG).map(foldText);
@@ -332,6 +356,16 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
     .filter((l) => foldText(l).startsWith(wantPromo))
     .map((l) => l.slice(MSG.promo.length).trim())
     .filter(Boolean);
+  const promoLines: ParsedPromoLine[] = [];
+  for (const p of promos) {
+    const m = PROMO_LINE_RE.exec(p);
+    if (!m) continue;
+    promoLines.push({
+      label: m[1].trim(),
+      ticketName: m[2].trim(),
+      amount: parseMoney(m[3]) ?? 0,
+    });
+  }
 
   const warnings: string[] = [];
   if (!fullName) warnings.push("No encontré el nombre completo.");
@@ -368,6 +402,7 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
       itemsTotal,
       birthdayPromo,
       promos,
+      promoLines,
       itemsSummary,
     },
     warnings,

@@ -10,7 +10,12 @@ import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { PaymentAccount, fetchAccountForEvent } from "@/lib/paymentAccounts";
 import { EventTicket } from "@/lib/ticketTypes";
-import { EventPromo, mejorDescuento, promoVigente } from "@/lib/ticketPromos";
+import {
+  EventPromo,
+  mejorDescuento,
+  promoVigente,
+  textoVencimiento,
+} from "@/lib/ticketPromos";
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
 import { toast } from "sonner";
 
@@ -90,6 +95,20 @@ const TicketPurchaseModal = ({
     };
   }, [isOpen, eventId]);
 
+  /**
+   * El "ahora" contra el que se miran las promos (v24), refrescado cada 30 s
+   * mientras el modal está abierto. Sin esto, una promo que vence con el modal
+   * abierto se seguiría aplicando en el total y en el mensaje. 30 s y no 1 s:
+   * acá el vencimiento se muestra en minutos, y cada tic recalcula el carrito.
+   */
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isOpen) return;
+    setAhora(Date.now());
+    const id = window.setInterval(() => setAhora(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const updateQuantity = (ticketName: string, change: number) => {
@@ -112,7 +131,7 @@ const TicketPurchaseModal = ({
   const lineas = tickets.map((t) => {
     const qty = quantities[t.name] ?? 0;
     const bruto = t.price * qty;
-    const d = qty > 0 ? mejorDescuento(promos, t.ticketTypeId, t.price, qty) : null;
+    const d = qty > 0 ? mejorDescuento(promos, t.ticketTypeId, t.price, qty, ahora) : null;
     return { ticket: t, qty, bruto, descuento: d, subtotal: bruto - (d?.monto ?? 0) };
   });
 
@@ -121,7 +140,7 @@ const TicketPurchaseModal = ({
 
   /** Promos vigentes de un tipo, para mostrarlas aunque todavía no se apliquen. */
   const promosDe = (ticketTypeId: string) =>
-    promos.filter((p) => p.ticketTypeId === ticketTypeId && promoVigente(p));
+    promos.filter((p) => p.ticketTypeId === ticketTypeId && promoVigente(p, ahora));
 
   const buildMessage = () => {
     const selected = getSelectedTickets();
@@ -269,18 +288,46 @@ const TicketPurchaseModal = ({
                       {promosDe(ticket.ticketTypeId).map((p) => {
                         const l = lineas.find((x) => x.ticket.name === ticket.name);
                         const aplicada = l?.descuento?.promo.promoId === p.promoId;
+                        const vence = textoVencimiento(p.endsAt, ahora);
+                        // Si se piden más entradas de las que quedan en promo,
+                        // hay que decirlo: si no, el total "no cierra" y parece
+                        // un error del sitio.
+                        const excede =
+                          aplicada && p.remaining !== undefined && (l?.qty ?? 0) > p.remaining;
                         return (
-                          <p
-                            key={p.id}
-                            className={`mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                              aplicada
-                                ? "bg-celeste text-accent-foreground"
-                                : "border border-celeste/40 text-celeste-deep"
-                            }`}
-                          >
-                            {p.name}
-                            {aplicada && l?.descuento ? ` · −$${l.descuento.monto}` : ""}
-                          </p>
+                          <div key={p.id} className="mt-1.5">
+                            <p
+                              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                                aplicada
+                                  ? "bg-celeste text-accent-foreground"
+                                  : "border border-celeste/40 text-celeste-deep"
+                              }`}
+                            >
+                              {p.name}
+                              {p.kind === "precio_especial" && p.specialPrice !== undefined
+                                ? ` · $${p.specialPrice}`
+                                : ""}
+                              {aplicada && l?.descuento ? ` · −$${l.descuento.monto}` : ""}
+                            </p>
+                            {(vence || p.remaining !== undefined) && (
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                {[
+                                  vence,
+                                  p.remaining !== undefined
+                                    ? `Quedan ${p.remaining} en promo`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            )}
+                            {excede && (
+                              <p className="mt-0.5 text-[11px] font-medium text-foreground">
+                                La promo cubre {p.remaining} entrada
+                                {p.remaining === 1 ? "" : "s"}; el resto va a precio normal.
+                              </p>
+                            )}
+                          </div>
                         );
                       })}
                     </div>

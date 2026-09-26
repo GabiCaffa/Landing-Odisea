@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { supabase, EVENT_IMAGES_BUCKET } from "@/lib/supabase";
 import { EventTicket, eventTicketFromDb, sortEventTickets } from "@/lib/ticketTypes";
-import { EventPromo, eventPromoFromDb } from "@/lib/ticketPromos";
+import {
+  EventPromo,
+  eventPromoFromDb,
+  fetchCuposRestantes,
+  cupoKey,
+} from "@/lib/ticketPromos";
 
 export type { EventTicket };
 
@@ -264,15 +269,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const loadEvents = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("events")
-      // Los tipos de entrada y las promos vienen embebidos: el sitio los
-      // necesita para el modal de compra y así evitamos una consulta por
-      // evento. Las promos traen adentro la fila del catálogo, que es donde
-      // viven el mecanismo y la ventana de fechas.
-      .select("*, event_ticket_types(*, ticket_types(*)), event_ticket_promos(*, ticket_promos(*))")
-      .order("date", { ascending: true });
-    if (!error && data) setEvents(data.map(eventFromDb));
+    const [{ data, error }, cupos] = await Promise.all([
+      supabase
+        .from("events")
+        // Los tipos de entrada y las promos vienen embebidos: el sitio los
+        // necesita para el modal de compra y así evitamos una consulta por
+        // evento. Las promos traen adentro la fila del catálogo (el
+        // mecanismo); la ventana, el cupo y el precio especial son de la
+        // fila de unión (v24).
+        .select("*, event_ticket_types(*, ticket_types(*)), event_ticket_promos(*, ticket_promos(*))")
+        .order("date", { ascending: true }),
+      // En paralelo y no embebido: lo vendido sale de las entregas, que el
+      // público no puede leer. Si falla, las promos quedan sin `remaining` y
+      // se muestran igual (ver EventPromo.remaining).
+      fetchCuposRestantes(),
+    ]);
+    if (error || !data) return;
+    const eventos = data.map(eventFromDb);
+    if (cupos) {
+      for (const e of eventos) {
+        for (const p of e.promos) {
+          const restantes = cupos.get(cupoKey(e.id, p.promoId, p.ticketTypeId));
+          if (restantes !== undefined) p.remaining = restantes;
+        }
+      }
+    }
+    setEvents(eventos);
   }, []);
 
   const loadUsers = useCallback(async () => {

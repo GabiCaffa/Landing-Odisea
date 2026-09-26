@@ -5,32 +5,30 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import {
   TicketPromo,
   TicketPromoInput,
+  PromoKind,
   fetchTicketPromos,
   createTicketPromo,
   updateTicketPromo,
   deleteTicketPromo,
-  promoVigente,
 } from "@/lib/ticketPromos";
 import { usePuede } from "@/lib/adminPermisos";
 
 /**
- * Catálogo de promos de entrada (v21).
+ * Catálogo de promos de entrada (v21, v24).
  *
  * Vive en su propio archivo y no dentro de `Admin.tsx` como el resto de las
  * pestañas: ese archivo ya pasa las 5000 líneas y seguir apilando ahí es cómo
  * llegó a ese tamaño. Lo nuevo empieza afuera.
  *
- * **Los dos números del mecanismo son internos.** Acá se configuran; el
- * comprador ve el `name` y el precio final. Por eso el form muestra en vivo un
- * ejemplo con números redondos: es la única forma de que quien carga la promo
- * entienda qué acaba de configurar sin tener que hacer la cuenta.
+ * **Los números del mecanismo son internos.** Acá se configuran; el comprador
+ * ve el `name` y el precio final. Por eso el form muestra en vivo un ejemplo
+ * con números redondos: es la única forma de que quien carga la promo entienda
+ * qué acaba de configurar sin tener que hacer la cuenta.
+ *
+ * **Acá no hay fechas** (v24). Cuándo arranca y cuándo vence una promo se
+ * carga al asignarla a cada evento: el mismo "2x1" vence a distinta hora en
+ * cada fecha. El catálogo es sólo el mecanismo.
  */
-
-const fmtFecha = (iso?: string) => {
-  if (!iso) return null;
-  const [a, m, d] = iso.split("-");
-  return `${d}/${m}/${a}`;
-};
 
 /** Qué paga alguien que lleva `cant` entradas de `precio` con esta promo. */
 const ejemplo = (
@@ -43,7 +41,7 @@ const ejemplo = (
   const c = cant ?? everyN;
   const bruto = precio * c;
   const desc = Math.round(
-    Math.floor(c / everyN) * Math.max(1, discountedUnits) * precio * (percentOff / 100)
+    Math.floor(c / Math.max(1, everyN)) * Math.max(1, discountedUnits) * precio * (percentOff / 100)
   );
   return { c, bruto, desc, total: bruto - desc };
 };
@@ -61,7 +59,17 @@ const ATAJOS: Array<{ label: string; everyN: number; discountedUnits: number; pe
   { label: "3x2", everyN: 3, discountedUnits: 1, percentOff: 100 },
   { label: "2da al 50%", everyN: 2, discountedUnits: 1, percentOff: 50 },
   { label: "3 al precio de 1", everyN: 3, discountedUnits: 2, percentOff: 100 },
+  // v24: "% off en todas" es la misma fórmula con N = 1.
+  { label: "20% off", everyN: 1, discountedUnits: 1, percentOff: 20 },
+  { label: "50% off", everyN: 1, discountedUnits: 1, percentOff: 50 },
 ];
+
+/** La promo en una línea para la lista, con plata y no con la fórmula. */
+const resumen = (p: TicketPromo): string => {
+  if (p.kind === "precio_especial") return "Precio especial: el precio se pone en cada evento.";
+  const e = ejemplo(p.everyN ?? 2, p.discountedUnits, p.percentOff ?? 0);
+  return `${e.c} entrada${e.c === 1 ? "" : "s"} de $1000 → $${e.total} (−$${e.desc})`;
+};
 
 const PromosAdmin = () => {
   const confirm = useConfirm();
@@ -110,7 +118,7 @@ const PromosAdmin = () => {
   const handleDelete = async (p: TicketPromo) => {
     const ok = await confirm({
       title: "Eliminar promo",
-      description: `¿Eliminar "${p.name}"? Si algún evento la está usando no se va a poder borrar: en ese caso sacala de esos eventos o desactivala.`,
+      description: `¿Eliminar "${p.name}"? Si algún evento la está usando o tiene ventas cargadas no se va a poder borrar: en ese caso desactivala.`,
       confirmText: "Eliminar",
       destructive: true,
     });
@@ -129,7 +137,8 @@ const PromosAdmin = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Las promos se crean acá y se aplican a los eventos desde el form de cada evento.
+          Acá se crea el mecanismo. Las fechas, el cupo y el precio especial se ponen al
+          aplicarla en el form de cada evento.
         </p>
         <button
           onClick={() => {
@@ -148,82 +157,62 @@ const PromosAdmin = () => {
         </p>
       ) : (
         <div className="space-y-2">
-          {promos.map((p) => {
-            const e = ejemplo(p.everyN, p.discountedUnits, p.percentOff);
-            const vigente = promoVigente(p);
-            return (
-              <div
-                key={p.id}
-                className="flex flex-col gap-3 border border-border p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold">{p.name}</span>
-                    {!p.active ? (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] uppercase text-muted-foreground">
-                        desactivada
-                      </span>
-                    ) : !vigente ? (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] uppercase text-muted-foreground">
-                        fuera de fecha
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-celeste px-2 py-0.5 text-[11px] uppercase text-accent-foreground">
-                        vigente
-                      </span>
-                    )}
-                  </div>
-                  {p.description && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{p.description}</p>
-                  )}
-                  {/* El mecanismo se muestra como un ejemplo con plata, no como
-                      "cada 2, 1 al 50%": es lo que de verdad hay que entender. */}
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {e.c} entradas de $1000 → <b className="text-foreground">${e.total}</b>{" "}
-                    (−${e.desc})
-                  </p>
-                  {(p.startsAt || p.endsAt) && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {p.startsAt ? `Desde ${fmtFecha(p.startsAt)}` : "Sin fecha de inicio"}
-                      {" · "}
-                      {p.endsAt ? `hasta ${fmtFecha(p.endsAt)}` : "sin fecha de fin"}
-                    </p>
+          {promos.map((p) => (
+            <div
+              key={p.id}
+              className="flex flex-col gap-3 border border-border p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">{p.name}</span>
+                  {/* "Vigente" ya no se puede decir acá: la ventana es de cada
+                      evento. Lo único del catálogo es si está activa. */}
+                  {!p.active && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] uppercase text-muted-foreground">
+                      desactivada
+                    </span>
                   )}
                 </div>
-                <div className="flex flex-shrink-0 items-center gap-1">
-                  <button
-                    onClick={() => handleToggle(p)}
-                    className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-muted"
-                    title={p.active ? "Desactivar" : "Activar"}
-                    aria-label={p.active ? "Desactivar promo" : "Activar promo"}
-                  >
-                    {p.active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditing(p);
-                      setShowForm(true);
-                    }}
-                    className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-muted"
-                    title="Editar"
-                    aria-label="Editar promo"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  {puedeBorrar && (
-                    <button
-                      onClick={() => handleDelete(p)}
-                      className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-destructive hover:text-destructive-foreground"
-                      title="Eliminar"
-                      aria-label="Eliminar promo"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
+                {p.description && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{p.description}</p>
+                )}
+                {/* El mecanismo se muestra como un ejemplo con plata, no como
+                    "cada 2, 1 al 50%": es lo que de verdad hay que entender. */}
+                <p className="mt-1 text-xs text-muted-foreground">{resumen(p)}</p>
               </div>
-            );
-          })}
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <button
+                  onClick={() => handleToggle(p)}
+                  className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-muted"
+                  title={p.active ? "Desactivar" : "Activar"}
+                  aria-label={p.active ? "Desactivar promo" : "Activar promo"}
+                >
+                  {p.active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+                <button
+                  onClick={() => {
+                    setEditing(p);
+                    setShowForm(true);
+                  }}
+                  className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-muted"
+                  title="Editar"
+                  aria-label="Editar promo"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                {puedeBorrar && (
+                  <button
+                    onClick={() => handleDelete(p)}
+                    className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                    title="Eliminar"
+                    aria-label="Eliminar promo"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -241,6 +230,17 @@ const PromosAdmin = () => {
   );
 };
 
+/** Estado local del form: los números siempre presentes, aunque no apliquen. */
+interface PromoForm {
+  name: string;
+  description: string;
+  kind: PromoKind;
+  everyN: number;
+  discountedUnits: number;
+  percentOff: number;
+  active: boolean;
+}
+
 const PromoFormModal = ({
   editing,
   onClose,
@@ -250,39 +250,60 @@ const PromoFormModal = ({
   onClose: () => void;
   onSave: (data: TicketPromoInput) => void | Promise<void>;
 }) => {
-  const [form, setForm] = useState<TicketPromoInput>({
+  const [form, setForm] = useState<PromoForm>({
     name: editing?.name ?? "",
     description: editing?.description ?? "",
+    kind: editing?.kind ?? "descuento",
     everyN: editing?.everyN ?? 2,
     discountedUnits: editing?.discountedUnits ?? 1,
     percentOff: editing?.percentOff ?? 100,
-    startsAt: editing?.startsAt ?? "",
-    endsAt: editing?.endsAt ?? "",
     active: editing?.active ?? true,
   });
   const [saving, setSaving] = useState(false);
 
-  const set = <K extends keyof TicketPromoInput>(k: K, v: TicketPromoInput[K]) =>
+  const set = <K extends keyof PromoForm>(k: K, v: PromoForm[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
+
+  const esDescuento = form.kind === "descuento";
+  // El único caso que la base prohíbe (v24): descontar el 100% de TODAS.
+  const regala = form.discountedUnits >= form.everyN && form.percentOff >= 100;
 
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!form.name.trim()) return toast.error("Poné un nombre (es lo que ve el cliente)");
-    if (form.everyN < 2) return toast.error("El mínimo es cada 2 entradas");
-    if (form.discountedUnits < 1) return toast.error("Se tiene que descontar al menos 1");
-    if (form.discountedUnits >= form.everyN)
-      return toast.error("Las que se descuentan tienen que ser menos que el total del grupo");
-    if (form.percentOff < 1 || form.percentOff > 100)
-      return toast.error("El descuento va entre 1% y 100%");
-    if (form.startsAt && form.endsAt && form.startsAt > form.endsAt)
-      return toast.error("La fecha de inicio es posterior a la de fin");
+    if (esDescuento) {
+      if (form.everyN < 1) return toast.error("El mínimo es cada 1 entrada");
+      if (form.discountedUnits < 1) return toast.error("Se tiene que descontar al menos 1");
+      if (form.discountedUnits > form.everyN)
+        return toast.error("No se pueden descontar más entradas que las del grupo");
+      if (form.percentOff < 1 || form.percentOff > 100)
+        return toast.error("El descuento va entre 1% y 100%");
+      if (regala) return toast.error("Así todas las entradas salen gratis");
+    }
     setSaving(true);
-    await onSave({ ...form, name: form.name.trim() });
+    await onSave({
+      name: form.name.trim(),
+      description: form.description,
+      kind: form.kind,
+      everyN: esDescuento ? form.everyN : null,
+      discountedUnits: esDescuento ? form.discountedUnits : 1,
+      percentOff: esDescuento ? form.percentOff : null,
+      active: form.active,
+    });
     setSaving(false);
   };
 
-  const e2 = ejemplo(form.everyN, form.discountedUnits, form.percentOff);
-  const e4 = ejemplo(form.everyN, form.discountedUnits, form.percentOff, 1000, form.everyN * 2);
+  // Con N = 1 ("% off en todas") el ejemplo de "el doble" no dice nada: se
+  // muestran 1 y 3 entradas, que es lo que deja ver que aplica a cada una.
+  const todas = form.everyN === 1;
+  const e1 = ejemplo(form.everyN, form.discountedUnits, form.percentOff);
+  const e2 = ejemplo(
+    form.everyN,
+    form.discountedUnits,
+    form.percentOff,
+    1000,
+    todas ? 3 : form.everyN * 2
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-0 backdrop-blur-sm sm:p-4">
@@ -312,7 +333,7 @@ const PromoFormModal = ({
             <input
               value={form.name}
               onChange={(ev) => set("name", ev.target.value)}
-              placeholder="2x1"
+              placeholder={esDescuento ? "2x1" : "Preventa"}
               className="input-techno"
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
@@ -325,7 +346,7 @@ const PromoFormModal = ({
               Detalle (opcional)
             </label>
             <input
-              value={form.description ?? ""}
+              value={form.description}
               onChange={(ev) => set("description", ev.target.value)}
               placeholder="Válido sólo en preventa"
               className="input-techno"
@@ -333,146 +354,171 @@ const PromoFormModal = ({
           </div>
 
           {/*
-            Atajos primero. Casi siempre la promo que se quiere cargar es una de
-            estas cuatro, y elegirla de un click evita tener que traducir "2x1" a
-            tres números. Los números quedan visibles abajo igual, para el caso
-            que no esté en la lista.
+            El tipo primero, porque cambia todo lo de abajo. Una promo que ya
+            está en algún evento no puede cambiar de tipo: lo frena la base
+            (lock_promo_kind, v24) con un mensaje que dice qué hacer.
           */}
           <div>
             <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Atajos
+              Tipo
             </label>
-            <div className="flex flex-wrap gap-2">
-              {ATAJOS.map((a) => {
-                const igual =
-                  form.everyN === a.everyN &&
-                  form.discountedUnits === a.discountedUnits &&
-                  form.percentOff === a.percentOff;
-                return (
-                  <button
-                    key={a.label}
-                    type="button"
-                    onClick={() =>
-                      setForm((p) => ({
-                        ...p,
-                        everyN: a.everyN,
-                        discountedUnits: a.discountedUnits,
-                        percentOff: a.percentOff,
-                        // El nombre sólo se completa si está vacío: si el admin
-                        // ya escribió el suyo, un atajo no se lo pisa.
-                        name: p.name.trim() ? p.name : a.label,
-                      }))
-                    }
-                    className={`border px-3 py-2 text-xs transition-colors ${
-                      igual
-                        ? "border-celeste bg-celeste/10 font-semibold"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    {a.label}
-                  </button>
-                );
-              })}
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["descuento", "Descuento", "2x1, 3x2, 20% off…"],
+                  ["precio_especial", "Precio especial", "La entrada a un precio fijo"],
+                ] as const
+              ).map(([kind, titulo, sub]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => set("kind", kind)}
+                  className={`border px-3 py-2 text-left transition-colors ${
+                    form.kind === kind
+                      ? "border-celeste bg-celeste/10"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{titulo}</span>
+                  <span className="block text-[11px] text-muted-foreground">{sub}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/*
-            La regla escrita como una frase, con los números adentro.
-            Antes eran dos cajas con las etiquetas "CADA N ENTRADAS" y
-            "DESCUENTO EN 1 (%)": correctas y bastante incomprensibles. Leída
-            de corrido —"cada 3 entradas, 2 con 100% de descuento"— no hace
-            falta explicar nada.
-          */}
-          <div className="border border-border p-3">
-            <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              La regla
-            </label>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span>Cada</span>
-              <input
-                type="number"
-                min={2}
-                value={form.everyN}
-                onChange={(ev) => set("everyN", Number(ev.target.value))}
-                className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
-                aria-label="Cada cuántas entradas"
-              />
-              <span>entradas,</span>
-              <input
-                type="number"
-                min={1}
-                value={form.discountedUnits}
-                onChange={(ev) => set("discountedUnits", Number(ev.target.value))}
-                className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
-                aria-label="Cuántas se descuentan"
-              />
-              <span>{form.discountedUnits === 1 ? "sale con" : "salen con"}</span>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={form.percentOff}
-                onChange={(ev) => set("percentOff", Number(ev.target.value))}
-                className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
-                aria-label="Porcentaje de descuento"
-              />
-              <span>% de descuento{form.percentOff === 100 ? " (o sea, gratis)" : ""}</span>
-            </div>
-            {form.discountedUnits >= form.everyN && (
-              <p className="mt-2 text-xs font-semibold text-charrua">
-                Las que se descuentan tienen que ser menos que el total: si no, el grupo
-                entero sale gratis.
+          {esDescuento ? (
+            <>
+              {/*
+                Atajos primero. Casi siempre la promo que se quiere cargar es una
+                de éstas, y elegirla de un click evita tener que traducir "2x1" a
+                tres números. Los números quedan visibles abajo igual, para el
+                caso que no esté en la lista.
+              */}
+              <div>
+                <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  Atajos
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {ATAJOS.map((a) => {
+                    const igual =
+                      form.everyN === a.everyN &&
+                      form.discountedUnits === a.discountedUnits &&
+                      form.percentOff === a.percentOff;
+                    return (
+                      <button
+                        key={a.label}
+                        type="button"
+                        onClick={() =>
+                          setForm((p) => ({
+                            ...p,
+                            everyN: a.everyN,
+                            discountedUnits: a.discountedUnits,
+                            percentOff: a.percentOff,
+                            // El nombre sólo se completa si está vacío: si el
+                            // admin ya escribió el suyo, un atajo no se lo pisa.
+                            name: p.name.trim() ? p.name : a.label,
+                          }))
+                        }
+                        className={`border px-3 py-2 text-xs transition-colors ${
+                          igual
+                            ? "border-celeste bg-celeste/10 font-semibold"
+                            : "border-border hover:bg-muted"
+                        }`}
+                      >
+                        {a.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/*
+                La regla escrita como una frase, con los números adentro. Leída
+                de corrido —"cada 3 entradas, 2 con 100% de descuento"— no hace
+                falta explicar nada.
+              */}
+              <div className="border border-border p-3">
+                <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  La regla
+                </label>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span>Cada</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.everyN}
+                    onChange={(ev) => set("everyN", Number(ev.target.value))}
+                    className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
+                    aria-label="Cada cuántas entradas"
+                  />
+                  <span>{form.everyN === 1 ? "entrada," : "entradas,"}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.discountedUnits}
+                    onChange={(ev) => set("discountedUnits", Number(ev.target.value))}
+                    className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
+                    aria-label="Cuántas se descuentan"
+                  />
+                  <span>{form.discountedUnits === 1 ? "sale con" : "salen con"}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={form.percentOff}
+                    onChange={(ev) => set("percentOff", Number(ev.target.value))}
+                    className="w-16 border border-border bg-background px-2 py-1.5 text-center text-base sm:text-sm"
+                    aria-label="Porcentaje de descuento"
+                  />
+                  <span>% de descuento{form.percentOff === 100 ? " (o sea, gratis)" : ""}</span>
+                </div>
+                {form.discountedUnits > form.everyN && (
+                  <p className="mt-2 text-xs font-semibold text-charrua">
+                    No se pueden descontar más entradas que las del grupo.
+                  </p>
+                )}
+                {regala && form.discountedUnits <= form.everyN && (
+                  <p className="mt-2 text-xs font-semibold text-charrua">
+                    Así todas las entradas salen gratis. Bajá el porcentaje o descontá menos
+                    entradas.
+                  </p>
+                )}
+              </div>
+
+              {/*
+                El ejemplo en vivo es lo que hace entendible la pantalla. Se
+                muestra también una cantidad mayor, porque que la promo se
+                aplique DOS veces con el doble de entradas es la parte que
+                sorprende.
+              */}
+              <div className="border border-celeste/40 bg-celeste/5 p-3">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-celeste-deep">
+                  <Tag className="h-3.5 w-3.5" /> Lo que va a pagar el cliente
+                </p>
+                <p className="text-sm">
+                  {e1.c} entrada{e1.c === 1 ? "" : "s"} de $1000 → <b>${e1.total}</b>{" "}
+                  <span className="text-muted-foreground">(se descuentan ${e1.desc})</span>
+                </p>
+                <p className="text-sm">
+                  {e2.c} entradas de $1000 → <b>${e2.total}</b>{" "}
+                  <span className="text-muted-foreground">
+                    {todas ? "(aplica a cada entrada)" : "(la promo entra dos veces)"}
+                  </span>
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="border border-celeste/40 bg-celeste/5 p-3 text-sm">
+              <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-celeste-deep">
+                <Tag className="h-3.5 w-3.5" /> Cómo funciona
               </p>
-            )}
-          </div>
-
-          {/*
-            El ejemplo en vivo es lo que hace entendible la pantalla. Se muestra
-            también el doble de cantidad, porque que la promo se aplique DOS
-            veces con el doble de entradas es la parte que sorprende.
-          */}
-          <div className="border border-celeste/40 bg-celeste/5 p-3">
-            <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-celeste-deep">
-              <Tag className="h-3.5 w-3.5" /> Lo que va a pagar el cliente
-            </p>
-            <p className="text-sm">
-              {e2.c} entradas de $1000 → <b>${e2.total}</b>{" "}
-              <span className="text-muted-foreground">(se descuentan ${e2.desc})</span>
-            </p>
-            <p className="text-sm">
-              {e4.c} entradas de $1000 → <b>${e4.total}</b>{" "}
-              <span className="text-muted-foreground">(la promo entra dos veces)</span>
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                Desde
-              </label>
-              <input
-                type="date"
-                value={form.startsAt ?? ""}
-                onChange={(ev) => set("startsAt", ev.target.value)}
-                className="input-techno"
-              />
+              <p>
+                Mientras dure la promo, cada entrada sale al precio especial en vez del de lista.
+                El precio <b>no se pone acá</b>: depende del evento y del tipo de entrada, así que
+                se carga al aplicar la promo en el form de cada evento.
+              </p>
             </div>
-            <div>
-              <label className="mb-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                Hasta
-              </label>
-              <input
-                type="date"
-                value={form.endsAt ?? ""}
-                onChange={(ev) => set("endsAt", ev.target.value)}
-                className="input-techno"
-              />
-            </div>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Vacías = sin límite. Las dos fechas son inclusivas: una promo que termina hoy
-            todavía aplica hoy.
-          </p>
+          )}
         </div>
 
         <div className="flex flex-shrink-0 gap-3 border-t border-border p-4 md:p-6">

@@ -573,6 +573,22 @@ sección "PROMOS ACTIVAS" de la home con contador regresivo. Tres cambios:
    mano. La home lo lee con la RPC `promo_cupos_restantes()`
    (`security definer`, sólo devuelve el número restante).
 
+**Front.** `promoVigente` compara instantes (`Date.parse`), no días. El cupo
+se aplica sólo a las entradas que quedan (quedan 3 y se compran 4 en 2x1: un
+2x1 y dos a precio de lista). Las fechas se **muestran** siempre en hora de
+Uruguay (`formatFinPromo`, armado con `formatToParts` porque `format()` cambia
+entre motores: salía "11:59 p. m."). `AuthContext.loadEvents` pide
+`promo_cupos_restantes` en paralelo y lo cuelga en `EventPromo.remaining`; si
+falla, las promos se muestran igual. En el form de evento las fechas se cargan
+**una vez por promo** (el editor las copia a todas sus filas) y el cupo y el
+precio van por tipo. En Entregas cada tipo tiene "Promo aplicada", que el
+importador de WhatsApp completa cruzando la línea `PROMO:` (el parser ahora la
+devuelve desarmada en `promoLines`); si no la puede cruzar, avisa.
+
+> **`fetchDeliveries` ahora TIRA si la consulta falla.** La v18 nunca se había
+> corrido en producción: el embed fallaba, devolvía `[]` y la pestaña Entregas
+> se veía vacía sin ningún error. Ahora el panel muestra el error.
+
 > **Ojo en la transición:** `saveEventPromos` borra y reinserta las filas de
 > `event_ticket_promos` **cada vez que se guarda un evento**, aunque no se
 > toquen sus promos. Con el front anterior a v24 eso **borra las ventanas
