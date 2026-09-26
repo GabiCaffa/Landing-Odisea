@@ -732,5 +732,9 @@ function translateAuthError(msg: string): string {
   if (m.includes("email not confirmed")) return "Confirmá tu email antes de ingresar";
   if (m.includes("password should be at least")) return "La contraseña es muy corta";
   if (m.includes("rate limit")) return "Demasiados intentos, esperá un momento";
+  // Falla del SMTP (Resend) al mandar confirmación, reseteo o cambio de email.
+  if (m.includes("error sending") || m.includes("email address not authorized")) {
+    return "No pudimos enviarte el email. Probá de nuevo en unos minutos o escribinos a odiseaoficialcolonia@gmail.com";
+  }
   return msg;
 }
