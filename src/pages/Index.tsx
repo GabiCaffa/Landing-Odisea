@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
+import PromosActivasSection from "@/components/PromosActivasSection";
 import EventsSection from "@/components/EventsSection";
 import PromosSection from "@/components/PromosSection";
 import Footer from "@/components/Footer";
@@ -24,6 +25,9 @@ const Index = () => {
       <Header />
       <main>
         <Hero />
+        {/* Entre el hero y los eventos: una promo que vence en horas es lo más
+            urgente de la página. Si no hay ninguna vigente, no se renderiza. */}
+        <PromosActivasSection />
         <EventsSection />
         <PromosSection />
       </main>

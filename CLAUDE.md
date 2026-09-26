@@ -585,6 +585,18 @@ precio van por tipo. En Entregas cada tipo tiene "Promo aplicada", que el
 importador de WhatsApp completa cruzando la línea `PROMO:` (el parser ahora la
 devuelve desarmada en `promoLines`); si no la puede cruzar, avisa.
 
+**Home: `PromosActivasSection`**, entre el hero y los eventos. Una tarjeta es
+**una promo en un evento** (el mismo 2x1 sobre General y VIP es una sola que
+dice "en General y VIP"), ordenadas por la que vence antes. **Si no hay
+ninguna vigente la sección no se renderiza**, ni el título. Con más de
+`HORAS_CONTADOR` (72) horas dice "Hasta el vie 12/10, 23:59"; después,
+contador de días/hs/min/seg, en rojo en la última hora. El reloj late cada
+segundo **sólo** si hay un contador a la vista; si no, cada minuto. El
+contador es `role="timer"` sin `aria-live` (anunciar cada segundo es
+inusable) y con el dato en el `aria-label`. "Comprar" abre el mismo
+`TicketPurchaseModal` del evento, que aplica el descuento con la misma
+`promoVigente`.
+
 > **`fetchDeliveries` ahora TIRA si la consulta falla.** La v18 nunca se había
 > corrido en producción: el embed fallaba, devolvía `[]` y la pestaña Entregas
 > se veía vacía sin ningún error. Ahora el panel muestra el error.
