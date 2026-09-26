@@ -97,7 +97,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
-`v23_profile_city.sql`.
+`v23_profile_city.sql` → `v24_promo_windows.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -550,6 +550,33 @@ persona puede estar apurada hoy y no la semana que viene.
 > `locations.ts`.** Si no coinciden, el desplegable de ciudad queda vacío y **no
 > falla nada**: es silencioso. Por eso `departamentosSinCiudades()` existe y hay
 > una prueba que la usa.
+
+**v24 — Promos con vencimiento por evento, cupo y precio especial.** Base de la
+sección "PROMOS ACTIVAS" de la home con contador regresivo. Tres cambios:
+
+1. **La ventana pasa a la asignación y lleva hora.** `event_ticket_promos`
+   gana `starts_at`/`ends_at` `timestamptz`: el mismo "2x1" puede vencer el
+   viernes en una fecha y el sábado en otra, y un contador necesita hora. Las
+   ventanas de v21 (`date`, en el catálogo) se copian **una sola vez** —al
+   crear las columnas— como 00:00 a 23:59:59 hora de Uruguay. Las columnas del
+   catálogo quedan **obsoletas pero no se borran** todavía: el front viejo las
+   usa.
+2. **Mecanismos nuevos.** "% off en todas" es la fórmula de v21 con N = 1; el
+   CHECK de unidades se reescribió para prohibir sólo descontar el 100% de
+   todas. "Precio especial" es `kind = 'precio_especial'` con el precio en
+   `event_ticket_promos.special_price` (depende del evento y del tipo). Un
+   trigger exige precio para ese tipo y lo rechaza para los descuentos, y otro
+   impide cambiarle el tipo a una promo que ya está en un evento.
+3. **Cupo contado desde las ventas.** `quota` (entradas, las de regalo
+   incluidas) en la asignación; lo vendido sale de
+   `delivery_ticket_types.promo_id` (nueva, `restrict`), no de un contador a
+   mano. La home lo lee con la RPC `promo_cupos_restantes()`
+   (`security definer`, sólo devuelve el número restante).
+
+> **Ojo en la transición:** `saveEventPromos` borra y reinserta las filas de
+> `event_ticket_promos` **cada vez que se guarda un evento**, aunque no se
+> toquen sus promos. Con el front anterior a v24 eso **borra las ventanas
+> migradas**. Entre correr la migración y el deploy, no guardar ningún evento.
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
