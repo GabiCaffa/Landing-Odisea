@@ -3,6 +3,7 @@ import { X, Check } from "lucide-react";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
+import { Link } from "react-router-dom";
 import ModalShell from "./ModalShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { normalizePhone, formatPhoneDisplay, usableDocumentId } from "@/lib/validators";
@@ -19,9 +20,26 @@ import {
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
 import { toast } from "sonner";
 
-interface TicketPurchaseModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface CompraEntradasProps {
+  /**
+   * Dónde se está dibujando.
+   *
+   * - `modal`: sobre el sitio, con velo y botón de cerrar. Lo usan las
+   *   secciones de promos de la home.
+   * - `pagina`: dentro de la página del evento, sin cáscara. Ahí un modal
+   *   encima de una página que ya es de ese evento es un paso de más, y en una
+   *   página a la que se llega desde un anuncio cada paso cuesta ventas.
+   *
+   * **Es un parámetro y no dos componentes** porque lo que está en juego es el
+   * camino de la plata: las cantidades, los descuentos, el total y el armado
+   * del mensaje tienen que salir del MISMO código. Dos copias que algún día
+   * muestran números distintos es exactamente lo que no puede pasar.
+   */
+  modo?: "modal" | "pagina";
+  /** Sólo en modo `modal`. */
+  isOpen?: boolean;
+  /** Sólo en modo `modal`. */
+  onClose?: () => void;
   eventId?: string;
   eventName: string;
   eventDate: string;
@@ -33,8 +51,9 @@ interface TicketPurchaseModalProps {
 
 type Step = "auth-prompt" | "purchase";
 
-const TicketPurchaseModal = ({
-  isOpen,
+const CompraEntradas = ({
+  modo = "modal",
+  isOpen = true,
   onClose,
   eventId,
   eventName,
@@ -42,10 +61,19 @@ const TicketPurchaseModal = ({
   eventLocation,
   tickets,
   promos = [],
-}: TicketPurchaseModalProps) => {
+}: CompraEntradasProps) => {
   const { currentUser } = useAuth();
 
-  const [step, setStep] = useState<Step>("auth-prompt");
+  /**
+   * En la página se entra derecho al formulario.
+   *
+   * El paso de "iniciá sesión o seguí como invitado" es un empujón a
+   * registrarse, y en el modal está bien porque ahí la persona ya decidió
+   * comprar. En la página del evento —que es a la que llega alguien desde un
+   * anuncio— es una pared antes de ver siquiera el precio. El empujón no se
+   * pierde: queda como una línea arriba del formulario.
+   */
+  const [step, setStep] = useState<Step>(modo === "pagina" ? "purchase" : "auth-prompt");
 
   const [quantities, setQuantities] = useState<{ [key: string]: number }>(
     tickets.reduce((acc, t) => ({ ...acc, [t.name]: 0 }), {})
@@ -74,9 +102,12 @@ const TicketPurchaseModal = ({
           ? formatPhoneDisplay(currentUser.phone).replace(/^\+\d+\s*/, "")
           : "",
       });
-    } else {
+    } else if (modo === "modal") {
       setStep("auth-prompt");
     }
+    // `modo` no va en las dependencias: no cambia en la vida de un montaje, y
+    // ponerlo sugeriría que este efecto reacciona a él.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentUser]);
 
   // Datos de transferencia del evento. Si el evento no tiene cuenta (o falla la
@@ -110,6 +141,8 @@ const TicketPurchaseModal = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const cerrar = () => onClose?.();
 
   const updateQuantity = (ticketName: string, change: number) => {
     setQuantities((prev) => ({
@@ -201,8 +234,33 @@ const TicketPurchaseModal = ({
     !!formData.phone.trim() &&
     hasSelectedTickets;
 
-  return (
-    <ModalShell onClose={onClose} etiqueta={`Comprar entradas para ${eventName}`}>
+  const claseCuerpo =
+    modo === "modal"
+      ? "flex-1 space-y-6 overflow-y-auto p-4 sm:space-y-8 sm:p-6"
+      : "space-y-6 sm:space-y-8";
+  /**
+   * En el modal el pie va FIJO; en la página, no.
+   *
+   * En el modal es un hijo flex que no se encoge, y tiene que serlo: el panel
+   * tiene alto fijo y el cuerpo scrollea adentro, así que si el total viviera
+   * al final del contenido quedaría debajo del pliegue (§6.5).
+   *
+   * En la página se intentó con `sticky bottom-0` y **no funciona**: el pie es
+   * el último hijo de su contenedor, así que no hay rango donde pegarse —
+   * sticky necesita contenido debajo dentro del mismo contenedor—. Medido:
+   * quedaba 47 px por debajo del viewport. Y hacerlo `fixed` sería peor,
+   * porque chocaría con la barra de `AvisoCiudad`, que también es fija abajo.
+   *
+   * Igual acá no hace falta: en una página, bajar hasta el final de un
+   * formulario para ver el total y enviar es lo que todo el mundo espera. El
+   * problema de §6.5 era de una hoja de alto fijo, no de una página.
+   */
+  const clasePie =
+    modo === "modal"
+      ? "flex-shrink-0 space-y-3 border-t border-border bg-background p-4 sm:p-6"
+      : "mt-6 space-y-3 border-t border-border pt-4";
+  const contenido = (
+    <>
       {/*
         Encabezado FIJO. Antes era `sticky` dentro del panel que scrolleaba, con
         `p-6` y el título en `text-2xl`: medido en un celular de 360 px se comía
@@ -210,6 +268,7 @@ const TicketPurchaseModal = ({
         todavía más. Ahora es un hijo flex que no se encoge, y las medidas suben
         recién en `sm:`.
       */}
+      {modo === "modal" && (
       <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-border p-4 sm:p-6">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold leading-tight sm:text-2xl">{eventName}</h2>
@@ -227,6 +286,7 @@ const TicketPurchaseModal = ({
           <X className="h-6 w-6" />
         </button>
       </div>
+      )}
 
       {step === "auth-prompt" ? (
         <div className="flex-1 overflow-y-auto">
@@ -241,10 +301,21 @@ const TicketPurchaseModal = ({
         <>
           {/* El cuerpo es lo ÚNICO que scrollea. */}
           <div
-            className="flex-1 space-y-6 overflow-y-auto p-4 sm:space-y-8 sm:p-6"
+            className={claseCuerpo}
             style={{ fontFamily: "Inter, sans-serif", letterSpacing: "normal" }}
           >
             {/* Banner usuario logueado */}
+            {!currentUser && modo === "pagina" && (
+              // Reemplaza al paso de autenticación que el modal muestra antes:
+              // invita a entrar sin bloquear la compra.
+              <p className="text-xs text-muted-foreground">
+                ¿Ya tenés cuenta?{" "}
+                <Link to="/login" className="font-semibold text-foreground underline underline-offset-2">
+                  Iniciá sesión
+                </Link>{" "}
+                y tus datos se completan solos.
+              </p>
+            )}
             {currentUser && (
               <div className="flex items-center gap-3 border border-border bg-secondary/40 p-3">
                 <Check className="h-4 w-4 flex-shrink-0 text-foreground" />
@@ -470,7 +541,7 @@ const TicketPurchaseModal = ({
             gestos del iPhone.
           */}
           <div
-            className="flex-shrink-0 space-y-3 border-t border-border bg-background p-4 sm:p-6"
+            className={clasePie}
             style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
           >
             {hasSelectedTickets && (
@@ -511,8 +582,16 @@ const TicketPurchaseModal = ({
           </div>
         </>
       )}
+    </>
+  );
+
+  if (modo === "pagina") return contenido;
+
+  return (
+    <ModalShell onClose={cerrar} etiqueta={`Comprar entradas para ${eventName}`}>
+      {contenido}
     </ModalShell>
   );
 };
 
-export default TicketPurchaseModal;
+export default CompraEntradas;

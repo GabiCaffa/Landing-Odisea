@@ -4,7 +4,7 @@ import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 // Diferido, igual que en EventCard: arrastra PhoneInput -> libphonenumber.
 // Estaba importado directo acá, y por eso esos ~35 KB seguían entrando en la
 // carga inicial de la home aunque EventCard ya lo tuviera diferido.
-const TicketPurchaseModal = lazy(() => import("./TicketPurchaseModal"));
+const CompraEntradas = lazy(() => import("./CompraEntradas"));
 // Diferido: arrastra PhoneInput -> libphonenumber (~35 KB comprimido) y sólo
 // hace falta si alguien abre la promo de cumpleaños.
 const BirthdayPromoModal = lazy(() => import("./BirthdayPromoModal"));
@@ -155,7 +155,7 @@ const PromosSection = () => {
       {/* Ticket modal reutilizado */}
       {selectedEvent && (
         <Suspense fallback={null}>
-        <TicketPurchaseModal
+        <CompraEntradas
           isOpen={isModalOpen}
           onClose={() => { setIsModalOpen(false); setSelectedEvent(null); }}
           eventId={selectedEvent.id}

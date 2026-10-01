@@ -13,7 +13,7 @@ import { playThud } from "@/lib/spookySound";
 
 // Diferido, igual que en EventCard y PromosSection: arrastra PhoneInput ->
 // libphonenumber, y sólo hace falta si alguien toca "Comprar".
-const TicketPurchaseModal = lazy(() => import("./TicketPurchaseModal"));
+const CompraEntradas = lazy(() => import("./CompraEntradas"));
 
 /**
  * "PROMOS ACTIVAS": las promos vigentes de todos los eventos, con su contador.
@@ -168,7 +168,7 @@ const PromosActivasSection = () => {
 
       {comprando && (
         <Suspense fallback={null}>
-          <TicketPurchaseModal
+          <CompraEntradas
             isOpen
             onClose={() => setComprando(null)}
             eventId={comprando.id}

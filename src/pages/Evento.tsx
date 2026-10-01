@@ -1,32 +1,35 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, lazy, Suspense } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarDays, Instagram, MapPin, Ticket } from "lucide-react";
+import { ArrowLeft, CalendarDays, Instagram, MapPin } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import WhatsAppIcon from "@/components/WhatsAppIcon";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
 import { promoVigente, textoVencimiento } from "@/lib/ticketPromos";
-import { playThud } from "@/lib/spookySound";
 
-const TicketPurchaseModal = lazy(() => import("@/components/TicketPurchaseModal"));
+const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
 
 /**
  * Página de un evento: `/evento/<slug>` (v25).
  *
  * **Existe para ponerla en un anuncio y para compartirla por WhatsApp.** Eso
- * manda dos cosas:
+ * manda tres cosas:
  *
  * - **Tiene que cargar aunque el evento sea de hace cinco minutos.** Lee de
  *   Supabase como todo el resto del sitio, así que una fecha recién creada en
  *   el panel ya tiene página. Lo único que espera al próximo deploy es el
- *   `og:image` del preview, que lo hornea `bakeEventos` en un archivo HTML real
- *   porque WhatsApp no ejecuta JavaScript.
+ *   `og:image` del preview, que se hornea en un archivo HTML real porque
+ *   WhatsApp no ejecuta JavaScript.
  * - **No puede parpadear "no existe".** Quien llega desde un anuncio pagado y
  *   ve ese cartel medio segundo, se va. Por eso se espera a `eventsLoaded` —la
  *   bandera de "la consulta ya volvió"— y no a que `events` tenga algo: con una
  *   lista vacía las dos situaciones se ven iguales.
+ * - **El formulario de compra está puesto, no detrás de un botón.** Un modal
+ *   encima de una página que YA es de este evento es un paso de más, y acá cada
+ *   paso cuesta ventas. Es el mismo componente que usan los modales de la home
+ *   (`CompraEntradas` con `modo="pagina"`), no una copia: el cálculo del total
+ *   y el armado del mensaje no pueden vivir en dos lados.
  *
  * El título del documento **sí** se toca acá, al revés que en la home (§6.8).
  * Allá había un `document.title` que pisaba el escrito para Google; acá no hay
@@ -38,12 +41,8 @@ const TicketPurchaseModal = lazy(() => import("@/components/TicketPurchaseModal"
 const Evento = () => {
   const { slug } = useParams<{ slug: string }>();
   const { events, eventsLoaded } = useAuth();
-  const [comprando, setComprando] = useState(false);
 
-  const evento = useMemo(
-    () => events.find((e) => e.slug === slug),
-    [events, slug]
-  );
+  const evento = useMemo(() => events.find((e) => e.slug === slug), [events, slug]);
 
   useEffect(() => {
     if (!evento) return;
@@ -86,8 +85,6 @@ const Evento = () => {
     entradas.length === 0 ||
     (evento.saleEndsAt ? new Date() >= new Date(evento.saleEndsAt) : false);
 
-  const desde = entradas.length ? Math.min(...entradas.map((t) => t.price)) : 0;
-
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
@@ -103,7 +100,9 @@ const Evento = () => {
 
           <div className="grid gap-6 md:grid-cols-2 md:gap-10">
             {/* ── El flyer ─────────────────────────────────────────────── */}
-            <div className="relative overflow-hidden border border-border bg-papel">
+            {/* `self-start` para que no se estire a lo alto de la columna de
+                al lado, que ahora lleva el formulario entero. */}
+            <div className="relative self-start overflow-hidden border border-border bg-papel">
               <img
                 src={imagenRedimensionada(evento.image, 960)}
                 srcSet={srcSetRedimensionado(evento.image) || undefined}
@@ -124,7 +123,7 @@ const Evento = () => {
               )}
             </div>
 
-            {/* ── La info ──────────────────────────────────────────────── */}
+            {/* ── La info y la compra ──────────────────────────────────── */}
             <div className="flex flex-col">
               <h1 className="font-sport text-3xl font-black leading-[0.95] tracking-wide text-tinta sm:text-4xl md:text-5xl">
                 {evento.name}
@@ -143,6 +142,17 @@ const Evento = () => {
                     {evento.location}
                   </span>
                 </p>
+                {evento.instagramUrl && (
+                  <a
+                    href={evento.instagramUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Instagram className="h-4 w-4 flex-shrink-0" />
+                    <span className="underline underline-offset-2">Ver en Instagram</span>
+                  </a>
+                )}
               </div>
 
               {evento.description && (
@@ -156,7 +166,7 @@ const Evento = () => {
                 <div className="mt-5 space-y-2">
                   {/* Deduplicadas por nombre: el mismo "2x1" sobre General y
                       sobre VIP es un solo cartel. Sobre qué entrada aplica se
-                      ve al comprar, igual que en la tarjeta. */}
+                      ve abajo, en cada entrada. */}
                   {[...new Map(promos.map((p) => [p.name, p])).values()].map((p) => (
                     <div
                       key={p.name}
@@ -178,56 +188,35 @@ const Evento = () => {
                 </div>
               )}
 
-              {/* ── Entradas ───────────────────────────────────────────── */}
-              {entradas.length > 0 && (
-                <div className="mt-5 border border-border">
-                  <p className="flex items-center gap-2 border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wider">
-                    <Ticket className="h-3.5 w-3.5" /> Entradas
-                  </p>
-                  <ul className="divide-y divide-border">
-                    {entradas.map((t) => (
-                      <li key={t.ticketTypeId} className="px-3 py-2">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className="text-sm font-semibold">{t.name}</span>
-                          <span className="text-sm font-bold">
-                            ${t.price.toLocaleString("es-UY")}
-                          </span>
-                        </div>
-                        {t.description && (
-                          <p className="text-xs text-muted-foreground">{t.description}</p>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* ── Comprar ────────────────────────────────────────────── */}
-              <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-                <button
-                  onClick={() => {
-                    playThud();
-                    setComprando(true);
-                  }}
-                  disabled={agotado}
-                  className="btn-techno min-h-12 flex-1 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <WhatsAppIcon className="h-5 w-5" />
-                  <span>
-                    {agotado ? "Agotado" : `Comprar · desde $${desde.toLocaleString("es-UY")}`}
-                  </span>
-                </button>
-
-                {evento.instagramUrl && (
-                  <a
-                    href={evento.instagramUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-techno-outline inline-flex min-h-12 items-center justify-center gap-2 px-5 text-sm"
+              {/* ── La compra, sin modal de por medio ──────────────────── */}
+              <div className="mt-6 border-t border-border pt-6">
+                {agotado ? (
+                  <div className="border border-border p-4 text-center">
+                    <p className="font-sport text-lg font-black uppercase tracking-wide">
+                      Entradas agotadas
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Seguinos en Instagram para enterarte de las próximas fechas.
+                    </p>
+                  </div>
+                ) : (
+                  <Suspense
+                    fallback={
+                      <p className="py-6 text-center text-sm text-muted-foreground">
+                        Cargando entradas...
+                      </p>
+                    }
                   >
-                    <Instagram className="h-5 w-5" />
-                    <span className="sm:hidden">Ver en Instagram</span>
-                  </a>
+                    <CompraEntradas
+                      modo="pagina"
+                      eventId={evento.id}
+                      eventName={evento.name}
+                      eventDate={formatEventDate(evento.date)}
+                      eventLocation={evento.location}
+                      tickets={entradas}
+                      promos={evento.promos}
+                    />
+                  </Suspense>
                 )}
               </div>
             </div>
@@ -236,21 +225,6 @@ const Evento = () => {
       </main>
 
       <Footer />
-
-      {comprando && (
-        <Suspense fallback={null}>
-          <TicketPurchaseModal
-            isOpen
-            onClose={() => setComprando(false)}
-            eventId={evento.id}
-            eventName={evento.name}
-            eventDate={formatEventDate(evento.date)}
-            eventLocation={evento.location}
-            tickets={entradas}
-            promos={evento.promos}
-          />
-        </Suspense>
-      )}
     </div>
   );
 };
