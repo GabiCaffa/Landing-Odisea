@@ -771,6 +771,46 @@ FALTAN sí aparecen como campo, ahí mismo.
 > de los hooks entre renders. Lo cazó el lint; es la segunda vez en el proyecto
 > que aparece esta misma forma de falla.
 
+**Todo el flujo entra en UNA pantalla, sin scroll.** Es lo que pidió el autor,
+sobre la alternativa de hacerlo en pasos. La cuenta, en un teléfono de 375×812
+(quedan 743 px bajo el header): el layout anterior sumaba **~1400 px**.
+
+| | ¿entra sin scroll? | |
+|---|---|---|
+| Celular normal (375×812) | **sí** | 33 px de sobra |
+| Celular chico (375×667, tipo SE) | no | faltan 112 px |
+| Escritorio (1440×900) | no | faltan 149 px |
+
+> **El techo de esta decisión.** Entra con **dos o tres** tipos de entrada; con
+> más, vuelve a scrollear. Hacerlo en pasos escalaba sin límite y se descartó a
+> propósito. Si algún día una fecha vende cinco tipos, esto es lo primero que
+> se cae.
+
+Lo que se recortó: filas de entrada en **una sola línea** con el nombre truncado
+(§6.5 las apilaba en celular para que un nombre largo no se partiera contra el
+contador; truncar cuesta 0 px de alto), campos más bajos, la descripción del
+tipo de entrada fuera, el aviso de sesión en una línea y **los datos de la
+transferencia plegados** — ese bloque mide ~230 px y aparece justo al final,
+cuando menos lugar queda; el mensaje de WhatsApp los lleva igual.
+
+**El flyer pasa a miniatura en celular** (96 px, flotando a la izquierda del
+título) y sigue grande en escritorio. Tocarlo lo abre a tamaño real.
+
+> **Dos trampas de CSS, las dos del mismo tipo: `float` no funciona contra un
+> contenedor que crea su propio contexto de formato.**
+>
+> 1. El contenedor era `grid gap-6 md:grid-cols-2` — o sea **grid también en
+>    celular**, de una columna. Dentro de un grid el `float` no hace nada: el
+>    flyer y el texto quedaban apilados. Va `md:grid`, sin `grid` a secas.
+> 2. La columna del contenido era `flex flex-col`. **Un contenedor flex no se
+>    superpone a un float: se encoge al lado.** La columna entera quedó de
+>    235 px y los nombres de las entradas se truncaban a "G...". Va
+>    `md:flex md:flex-col`, y el bloque de compra lleva `clear-both`.
+
+> **Ninguna de las dos daba error ni se veía rota a simple vista** — se veían
+> como un problema de diseño. Las encontró medir el ancho de la fila (235 px
+> donde debía haber 343).
+
 **La tarjeta del carrusel perdió el botón de comprar.** La tarjeta entera ya es
 el link a la página, así que un botón al lado era una segunda llamada a la
 acción compitiendo con ella, en una tarjeta que ya tiene flyer, fecha, lugar y
