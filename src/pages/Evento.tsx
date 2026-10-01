@@ -2,7 +2,6 @@ import { useEffect, useMemo, lazy, Suspense } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CalendarDays, Instagram, MapPin, Ticket } from "lucide-react";
 import Header from "@/components/Header";
-import Footer from "@/components/Footer";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
@@ -71,8 +70,7 @@ const Evento = () => {
             Ver todas las fechas
           </Link>
         </main>
-        <Footer />
-      </div>
+        </div>
     );
   }
 
@@ -93,7 +91,7 @@ const Evento = () => {
       <Header />
 
       <main className="flex-1 pt-[88px] md:pt-[92px]">
-        <div className="mx-auto w-full max-w-6xl px-4 pb-6 sm:px-6 sm:pb-8">
+        <div className="mx-auto w-full max-w-6xl px-4 pb-2 sm:px-6 sm:pb-6">
           <div className="md:grid md:grid-cols-2 md:gap-10">
             {/* ── El flyer ─────────────────────────────────────────────── */}
             {/*
@@ -112,7 +110,7 @@ const Evento = () => {
               href={imagenRedimensionada(evento.image, 1600)}
               target="_blank"
               rel="noopener noreferrer"
-              className="relative float-left mb-2 mr-3 block w-20 overflow-hidden border border-border bg-papel sm:w-32 md:float-none md:m-0 md:w-full md:self-start md:sticky md:top-6"
+              className="relative float-left mb-2 mr-3 block w-20 overflow-hidden sm:w-32 md:float-none md:m-0 md:w-full md:self-start md:sticky md:top-6"
               aria-label={`Ver el flyer de ${evento.name} en tamaño completo`}
             >
               <img
@@ -249,7 +247,6 @@ const Evento = () => {
         </div>
       </main>
 
-      <Footer />
     </div>
   );
 };
