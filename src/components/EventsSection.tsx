@@ -120,7 +120,7 @@ const EventsSection = () => {
                   style={{ transitionDelay: `${index * 100}ms` }}
                 >
                   <EventCard
-                    id={event.id}
+                    slug={event.slug}
                     image={event.image}
                     imagePosition={event.imagePosition}
                     name={event.name}

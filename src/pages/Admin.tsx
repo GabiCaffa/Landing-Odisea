@@ -109,6 +109,8 @@ import EventPromosEditor, {
 } from "@/components/admin/EventPromosEditor";
 import AdminShell from "@/components/admin/AdminShell";
 import UsersAdmin from "@/components/admin/UsersAdmin";
+import BotonActualizarPaginas from "@/components/admin/BotonActualizarPaginas";
+import CampoDireccion from "@/components/admin/CampoDireccion";
 import { descargarCsv } from "@/lib/csv";
 import { AdminTab, rotuloDePanel, tabsDe, usePuede } from "@/lib/adminPermisos";
 import { saveEventPromos, descuentoDe } from "@/lib/ticketPromos";
@@ -510,16 +512,19 @@ const EventsAdmin = () => {
             className="input-techno pl-10"
           />
         </div>
-        <button
-          onClick={() => {
-            setEditing(null);
-            setShowForm(true);
-          }}
-          className="btn-techno text-xs py-3 px-5 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          Nuevo evento
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <BotonActualizarPaginas />
+          <button
+            onClick={() => {
+              setEditing(null);
+              setShowForm(true);
+            }}
+            className="btn-techno text-xs py-3 px-5"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo evento
+          </button>
+        </div>
       </div>
 
       {/* Lista: tarjetas en celular, tabla de md: para arriba.
@@ -1420,6 +1425,8 @@ const EventFormModal = ({
   // ejemplo, no van acá: se guardan aparte con `saveEventPromos`).
   const [form, setForm] = useState<NewEventInput>({
     name: initial?.name ?? "",
+    // Vacío al crear: lo deriva la DB del nombre (trigger events_slug, v25).
+    slug: initial?.slug ?? "",
     date: initial?.date ?? "",
     location: initial?.location ?? "",
     description: initial?.description ?? "",
@@ -1597,6 +1604,12 @@ const EventFormModal = ({
                 placeholder="ODISEA CIUDAD"
               />
             </FormField>
+
+            <CampoDireccion
+              slug={form.slug ?? ""}
+              esNuevo={!initial}
+              onChange={(v) => setForm({ ...form, slug: v })}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Fecha">
