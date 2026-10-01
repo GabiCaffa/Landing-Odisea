@@ -1,6 +1,9 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+// Importados de la app con ruta relativa: dentro de la config de Vite el alias
+// "@" todavía no existe. Los dos archivos son texto puro, sin nada del navegador.
+import { paginasDeEventos } from "./vite/paginasEvento";
 import { componentTagger } from "lovable-tagger";
 
 /**
@@ -416,8 +419,11 @@ export default defineConfig(({ mode }) => {
       bakeTheme(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY),
       bakeEventos(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY),
       cssNoBloqueante(),
-      // Último: limpia el HTML ya armado por todos los anteriores.
+      // Último de los que tocan el HTML: limpia lo armado por los anteriores.
       seoEstatico(),
+      // Corre en closeBundle, o sea después de todo: parte del dist/index.html
+      // ya terminado para emitir una página por evento.
+      paginasDeEventos(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY),
     ].filter(Boolean),
     build: {
       rollupOptions: {

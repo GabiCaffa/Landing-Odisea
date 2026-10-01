@@ -85,6 +85,14 @@ export const DEFAULT_IMAGE_TRANSFORM: ImageTransform = {
 export interface AdminEvent {
   id: string;
   name: string;
+  /**
+   * Tramo de la URL pública del evento (v25): /evento/<slug>.
+   *
+   * Lo genera y garantiza único un trigger en la DB, así que acá nunca viene
+   * vacío. Es lo que se publica en un anuncio: cambiarlo rompe los links ya
+   * repartidos.
+   */
+  slug: string;
   date: string;
   location: string;
   description: string;
@@ -123,7 +131,10 @@ export interface AdminEvent {
  * compatibilidad con el form —`eventToDb` lo ignora—, pero para algo nuevo no
  * tiene sentido repetir eso.
  */
-export type NewEventInput = Omit<AdminEvent, "id" | "createdAt" | "promos">;
+export type NewEventInput = Omit<AdminEvent, "id" | "createdAt" | "promos" | "slug"> & {
+  /** Vacío o ausente = lo deriva la DB del nombre (trigger `events_slug`, v25). */
+  slug?: string;
+};
 
 interface AuthResult {
   ok: boolean;
@@ -136,6 +147,8 @@ interface AuthContextValue {
   currentUser: User | null;
   users: User[];
   events: AdminEvent[];
+  /** La primera consulta de eventos ya volvió (con o sin error). */
+  eventsLoaded: boolean;
   /**
    * Vuelve a leer los eventos con sus entradas y promos embebidas.
    *
@@ -198,6 +211,7 @@ function eventFromDb(row: any): AdminEvent {
   return {
     id: row.id,
     name: row.name,
+    slug: row.slug ?? "",
     date: row.date,
     location: row.location,
     description: row.description ?? "",
@@ -223,6 +237,9 @@ function eventToDb(e: Partial<NewEventInput>) {
   if (e.description !== undefined) out.description = e.description;
   // price NO se escribe: lo deriva la DB del tipo de entrada más barato
   // (trigger sync_event_price). Ver supabase/v15_ticket_types.sql.
+  // Vacío se manda como null para que el trigger lo derive del nombre en vez
+  // de guardar un slug en blanco.
+  if (e.slug !== undefined) out.slug = e.slug.trim() || null;
   if (e.capacity !== undefined) out.capacity = e.capacity;
   if (e.status !== undefined) out.status = e.status;
   if (e.saleEndsAt !== undefined) out.sale_ends_at = e.saleEndsAt || null;
@@ -257,6 +274,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  /**
+   * ¿Ya volvió la primera consulta de eventos?
+   *
+   * `loading` es de la SESIÓN y se apaga mucho antes. Sin esta bandera, la
+   * página de un evento no puede distinguir "todavía cargando" de "no existe"
+   * y muestra un cartel de no encontrado por un instante — justo a quien llega
+   * desde un anuncio.
+   */
+  const [eventsLoaded, setEventsLoaded] = useState(false);
 
   const loadProfile = useCallback(async (userId: string): Promise<User | null> => {
     const { data, error } = await supabase
@@ -284,7 +310,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // se muestran igual (ver EventPromo.remaining).
       fetchCuposRestantes(),
     ]);
-    if (error || !data) return;
+    if (error || !data) {
+      setEventsLoaded(true);
+      return;
+    }
     const eventos = data.map(eventFromDb);
     if (cupos) {
       for (const e of eventos) {
@@ -295,6 +324,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
     setEvents(eventos);
+    setEventsLoaded(true);
   }, []);
 
   const loadUsers = useCallback(async () => {
@@ -662,6 +692,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         currentUser,
         users,
         events,
+        eventsLoaded,
         refreshEvents: loadEvents,
         loading,
         login,

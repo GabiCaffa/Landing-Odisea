@@ -17,6 +17,7 @@ import Index from "./pages/Index";
 // Páginas secundarias: code-splitting para que NO entren en el bundle inicial
 // de la home. Así la landing (y sus eventos) arranca con mucho menos JS.
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Evento = lazy(() => import("./pages/Evento"));
 const Register = lazy(() => import("./pages/Register"));
 const Login = lazy(() => import("./pages/Login"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -46,6 +47,10 @@ const App = () => (
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
               <Route path="/" element={<Index />} />
+              {/* La página de una fecha. El tramo tiene que coincidir con
+                  RUTA_EVENTO (src/lib/rutas.ts), que es de donde lo saca el
+                  plugin que hornea el HTML de cada evento. */}
+              <Route path="/evento/:slug" element={<Evento />} />
               <Route path="/registro" element={<Register />} />
               <Route path="/login" element={<Login />} />
               <Route path="/recuperar" element={<ForgotPassword />} />
