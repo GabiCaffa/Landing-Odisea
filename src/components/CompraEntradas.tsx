@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Check } from "lucide-react";
+import { X, Check, ChevronDown } from "lucide-react";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
@@ -267,10 +267,24 @@ const CompraEntradas = ({
 
   const datosResumidos = Boolean(currentUser) && !editandoDatos;
 
-  const claseCuerpo =
-    modo === "modal"
-      ? "flex-1 space-y-6 overflow-y-auto p-4 sm:space-y-8 sm:p-6"
-      : "space-y-6 sm:space-y-8";
+  /**
+   * Modo compacto: todo el flujo tiene que entrar en UNA pantalla, sin scroll.
+   *
+   * Es lo que pidió el autor para la página del evento. La cuenta, en un
+   * teléfono de 375×812 (quedan 743 px bajo el header): el layout anterior
+   * sumaba ~1400 px. Acá se recorta cada bloque —filas de entrada en una sola
+   * línea, campos más bajos, los datos de la transferencia plegados— hasta
+   * ~580 px con dos tipos de entrada.
+   *
+   * **Tiene un techo**: con ~6 tipos de entrada vuelve a no entrar. Es el
+   * precio de esta decisión frente a hacerlo en pasos, que escalaba sin
+   * límite.
+   */
+  const compacto = modo === "pagina";
+
+  const claseCuerpo = compacto
+    ? "space-y-4"
+    : "flex-1 space-y-6 overflow-y-auto p-4 sm:space-y-8 sm:p-6";
   /**
    * En el modal el pie va FIJO; en la página, no.
    *
@@ -291,7 +305,7 @@ const CompraEntradas = ({
   const clasePie =
     modo === "modal"
       ? "flex-shrink-0 space-y-3 border-t border-border bg-background p-4 sm:p-6"
-      : "mt-6 space-y-3 border-t border-border pt-4";
+      : "mt-3 space-y-2 border-t border-border pt-3";
   const contenido = (
     <>
       {/*
@@ -341,43 +355,80 @@ const CompraEntradas = ({
             {!currentUser && modo === "pagina" && (
               // Reemplaza al paso de autenticación que el modal muestra antes:
               // invita a entrar sin bloquear la compra.
-              <p className="text-xs text-muted-foreground">
-                ¿Ya tenés cuenta?{" "}
+              <p className="truncate text-[11px] text-muted-foreground">
+                ¿Tenés cuenta?{" "}
                 <Link to="/login" className="font-semibold text-foreground underline underline-offset-2">
                   Iniciá sesión
                 </Link>{" "}
-                y tus datos se completan solos.
+                y se completan solos.
               </p>
             )}
-            {currentUser && (
-              <div className="flex items-center gap-3 border border-border bg-secondary/40 p-3">
-                <Check className="h-4 w-4 flex-shrink-0 text-foreground" />
-                <p className="text-xs text-muted-foreground">
+            {currentUser &&
+              (compacto ? (
+                // Una línea: en modo compacto una caja de 60 px para decir algo
+                // que la persona ya sabe es espacio que le falta al formulario.
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Check className="h-3.5 w-3.5 flex-shrink-0" />
                   Conectado como{" "}
-                  <span className="font-semibold text-foreground">{currentUser.firstName}</span>.
-                  Tus datos ya están cargados.
+                  <span className="font-semibold text-foreground">{currentUser.firstName}</span>
                 </p>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center gap-3 border border-border bg-secondary/40 p-3">
+                  <Check className="h-4 w-4 flex-shrink-0 text-foreground" />
+                  <p className="text-xs text-muted-foreground">
+                    Conectado como{" "}
+                    <span className="font-semibold text-foreground">{currentUser.firstName}</span>.
+                    Tus datos ya están cargados.
+                  </p>
+                </div>
+              ))}
 
             {/* Ticket Selection */}
             <div>
-              <h3 className="mb-3 text-base font-medium sm:mb-4 sm:text-lg">
-                Seleccionar entradas
+              <h3
+                className={
+                  compacto
+                    ? "mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                    : "mb-3 text-base font-medium sm:mb-4 sm:text-lg"
+                }
+              >
+                {compacto ? "Entradas" : "Seleccionar entradas"}
               </h3>
-              <div className="space-y-3">
+              <div className={compacto ? "space-y-2" : "space-y-3"}>
                 {tickets.map((ticket) => (
                   <div
                     key={ticket.name}
                     // En celular el nombre va arriba y el contador abajo: con
                     // los dos en la misma fila, un nombre como "Backstage +23"
                     // se partía en dos líneas contra el contador.
-                    className="flex flex-col gap-3 border border-border p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                    // Compacto: nombre y contador SIEMPRE en la misma línea,
+                    // con el nombre truncado. §6.5 los apilaba en celular para
+                    // que un nombre largo no se partiera contra el contador;
+                    // acá se resuelve truncando, que cuesta 0 px de alto.
+                    className={
+                      compacto
+                        ? "flex items-center justify-between gap-3 border border-border p-2.5 transition-colors hover:bg-muted/50"
+                        : "flex flex-col gap-3 border border-border p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                    }
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium leading-tight">{ticket.name}</p>
-                      <p className="text-sm text-muted-foreground">${ticket.price}</p>
-                      {ticket.description && (
+                      {compacto ? (
+                        <p className="flex items-baseline gap-2 leading-tight">
+                          <span className="truncate font-medium">{ticket.name}</span>
+                          <span className="flex-shrink-0 text-sm text-muted-foreground">
+                            ${ticket.price}
+                          </span>
+                        </p>
+                      ) : (
+                        <>
+                          <p className="font-medium leading-tight">{ticket.name}</p>
+                          <p className="text-sm text-muted-foreground">${ticket.price}</p>
+                        </>
+                      )}
+                      {/* La descripción del tipo de entrada se cae en compacto:
+                          son ~18 px por fila para un texto que casi siempre
+                          repite el nombre ("Acceso general al evento"). */}
+                      {ticket.description && !compacto && (
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {ticket.description}
                         </p>
@@ -468,7 +519,15 @@ const CompraEntradas = ({
             {/* Form */}
             {hasSelectedTickets && (
               <div>
-                <h3 className="mb-3 text-base font-medium sm:mb-4 sm:text-lg">Tus datos</h3>
+                <h3
+                  className={
+                    compacto
+                      ? "mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                      : "mb-3 text-base font-medium sm:mb-4 sm:text-lg"
+                  }
+                >
+                  Tus datos
+                </h3>
                 {datosResumidos && (
                   <div className="mb-4 flex items-start justify-between gap-3 border border-border bg-secondary/30 p-3">
                     <div className="min-w-0 text-sm">
@@ -499,7 +558,7 @@ const CompraEntradas = ({
                     obligar a entrar en "Editar" por un solo campo. */}
                 {datosResumidos && !formData.phone.trim() && (
                   <div className="mb-4">
-                    <label className="mb-2 block text-sm font-medium">Teléfono *</label>
+                    <label className={compacto ? "mb-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground" : "mb-2 block text-sm font-medium"}>Teléfono *</label>
                     <PhoneInput
                       country={country}
                       value={formData.phone}
@@ -510,9 +569,9 @@ const CompraEntradas = ({
                   </div>
                 )}
 
-                <div className={datosResumidos ? "hidden" : "space-y-4"}>
+                <div className={datosResumidos ? "hidden" : compacto ? "space-y-2" : "space-y-4"}>
                   <div>
-                    <label className="mb-2 block text-sm font-medium" htmlFor="compra-nombre">
+                    <label className={compacto ? "mb-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground" : "mb-2 block text-sm font-medium"} htmlFor="compra-nombre">
                       Nombre completo *
                     </label>
                     <input
@@ -522,13 +581,13 @@ const CompraEntradas = ({
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       // text-base = 16px. Por debajo de eso Safari de iOS hace
                       // zoom al enfocar el campo y descoloca todo el modal.
-                      className="w-full border border-border bg-background p-3 text-base transition-colors focus:border-foreground focus:outline-none"
+                      className={`w-full border border-border bg-background text-base transition-colors focus:border-foreground focus:outline-none ${compacto ? "px-2.5 py-2" : "p-3"}`}
                       placeholder="Tu nombre completo"
                       autoComplete="name"
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium" htmlFor="compra-email">
+                    <label className={compacto ? "mb-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground" : "mb-2 block text-sm font-medium"} htmlFor="compra-email">
                       Email *
                     </label>
                     <input
@@ -537,13 +596,13 @@ const CompraEntradas = ({
                       inputMode="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full border border-border bg-background p-3 text-base transition-colors focus:border-foreground focus:outline-none"
+                      className={`w-full border border-border bg-background text-base transition-colors focus:border-foreground focus:outline-none ${compacto ? "px-2.5 py-2" : "p-3"}`}
                       placeholder="tu@email.com"
                       autoComplete="email"
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium">Teléfono *</label>
+                    <label className={compacto ? "mb-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground" : "mb-2 block text-sm font-medium"}>Teléfono *</label>
                     <PhoneInput
                       country={country}
                       value={formData.phone}
@@ -558,8 +617,14 @@ const CompraEntradas = ({
 
             {/* Bank Info */}
             {hasSelectedTickets && isFormValid && (
-              <div className="space-y-3 border border-border bg-secondary/30 p-4">
-                <h4 className="text-base font-medium">Datos para transferencia</h4>
+              <details
+                className="group space-y-3 border border-border bg-secondary/30 p-4"
+                open={!compacto}
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-base font-medium">
+                  Datos para transferencia
+                  <ChevronDown className="h-4 w-4 flex-shrink-0 transition-transform group-open:rotate-180" />
+                </summary>
                 {account ? (
                   <div className="space-y-1 text-sm">
                     <p className="font-medium">{account.holderName}</p>
@@ -600,7 +665,7 @@ const CompraEntradas = ({
                     o PDF) cuando envíes el mensaje de WhatsApp.
                   </p>
                 </div>
-              </div>
+              </details>
             )}
           </div>
 
