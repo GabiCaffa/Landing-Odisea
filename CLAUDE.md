@@ -777,11 +777,25 @@ sobre la alternativa de hacerlo en pasos. La cuenta, en un teléfono de 375×812
 
 | | ¿entra sin scroll? | |
 |---|---|---|
-| Celular (375×812) | **sí** | 33 px de sobra |
-| Tablet (768×1024) | **sí** | 85 px |
-| Escritorio (1440×900) | **sí** | 41 px |
-| Portátil bajo (1440×768) | no | faltan 91 px |
-| Celular chico (375×667, tipo SE) | no | faltan ~110 px |
+| Celular (375×812) | **sí** | 0 px de scroll |
+| Tablet (768×1024) | **sí** | 0 |
+| Escritorio (1440×900) | **sí** | 0 |
+| Portátil bajo (1440×768) | no | 123 px de scroll |
+| Celular chico (375×667, tipo SE) | no | 136 px |
+
+Medido **con entradas elegidas**, que es el caso largo: ahí aparecen los tres
+campos de datos.
+
+> **La página del evento NO lleva `<Footer />`.** Pedido explícito del autor:
+> tiene que ser una pantalla y nada más. Los links de Términos y Privacidad
+> siguen en el footer de la home. Si alguna vez una plataforma de anuncios los
+> exige en la página de destino, es acá donde hay que volver a ponerlos.
+
+> **El flyer no lleva marco.** Tenía `border border-border bg-papel`; el fondo
+> estaba para que un PNG con transparencia no quedara flotando, pero con
+> `object-contain` lo que hace es pintar de claro las franjas que sobran — o
+> sea, un marco alrededor del arte. Sin fondo, esas franjas muestran el fondo
+> de la página y desaparecen.
 
 > **El `<Header>` es `fixed top-0 z-50` y mide 69 px en celular y 85 en
 > escritorio: flota SOBRE el contenido.** El resto de las páginas lo compensan
