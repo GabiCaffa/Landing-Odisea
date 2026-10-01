@@ -86,6 +86,20 @@ const CompraEntradas = ({
     phone: "",
   });
 
+  /**
+   * Con sesión, los datos se muestran resumidos en vez de tres campos grandes.
+   *
+   * Ya los tenemos del perfil: repetirlos como formulario es pedirle a la
+   * persona que revise algo que no tiene que tocar, y en una página a la que se
+   * llega desde un anuncio cada pantalla de más cuesta ventas. Los que FALTAN
+   * sí se muestran como campo, ahí mismo.
+   *
+   * Va acá arriba y no donde se usa: debajo está el `if (!isOpen) return null`,
+   * y un hook después de un return temprano cambia el orden de los hooks entre
+   * renders.
+   */
+  const [editandoDatos, setEditandoDatos] = useState(false);
+
   // Cuenta de cobro del evento (la carga el admin desde el panel).
   const [account, setAccount] = useState<PaymentAccount | null>(null);
 
@@ -228,11 +242,30 @@ const CompraEntradas = ({
   };
 
   const hasSelectedTickets = getSelectedTickets().length > 0;
-  const isFormValid =
-    !!formData.name.trim() &&
-    !!formData.email.trim() &&
-    !!formData.phone.trim() &&
-    hasSelectedTickets;
+  const datosCompletos =
+    !!formData.name.trim() && !!formData.email.trim() && !!formData.phone.trim();
+  const isFormValid = datosCompletos && hasSelectedTickets;
+
+  /**
+   * Por qué el botón está apagado, en castellano.
+   *
+   * Antes quedaba gris y la pantalla no decía nada: el caso real que lo destapó
+   * fue el de alguien con sesión iniciada **sin teléfono en el perfil** — los
+   * otros dos campos venían llenos, así que el formulario se veía completo y el
+   * botón no andaba. Un botón apagado sin motivo es un callejón sin salida.
+   */
+  const faltaPara = (() => {
+    if (!hasSelectedTickets) return "Elegí al menos una entrada";
+    const faltan: string[] = [];
+    if (!formData.name.trim()) faltan.push("tu nombre");
+    if (!formData.email.trim()) faltan.push("tu email");
+    if (!formData.phone.trim()) faltan.push("tu teléfono");
+    if (faltan.length === 0) return null;
+    // "tu nombre, tu email y tu teléfono" — la última coma pasa a "y".
+    return `Falta ${faltan.join(", ").replace(/, ([^,]*)$/, " y $1")}`;
+  })();
+
+  const datosResumidos = Boolean(currentUser) && !editandoDatos;
 
   const claseCuerpo =
     modo === "modal"
@@ -436,7 +469,48 @@ const CompraEntradas = ({
             {hasSelectedTickets && (
               <div>
                 <h3 className="mb-3 text-base font-medium sm:mb-4 sm:text-lg">Tus datos</h3>
-                <div className="space-y-4">
+                {datosResumidos && (
+                  <div className="mb-4 flex items-start justify-between gap-3 border border-border bg-secondary/30 p-3">
+                    <div className="min-w-0 text-sm">
+                      {formData.name.trim() && (
+                        <p className="truncate font-medium">{formData.name}</p>
+                      )}
+                      {formData.email.trim() && (
+                        <p className="truncate text-xs text-muted-foreground">{formData.email}</p>
+                      )}
+                      {formData.phone.trim() ? (
+                        <p className="text-xs text-muted-foreground">{formData.phone}</p>
+                      ) : (
+                        <p className="text-xs font-semibold text-charrua">Falta tu teléfono</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditandoDatos(true)}
+                      className="flex-shrink-0 text-xs font-semibold uppercase tracking-wider underline underline-offset-2 hover:text-celeste-deep"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                )}
+
+                {/* El teléfono suelto: es el que más falta en los perfiles, y
+                    sin él el botón no se habilita. Aparece acá mismo para no
+                    obligar a entrar en "Editar" por un solo campo. */}
+                {datosResumidos && !formData.phone.trim() && (
+                  <div className="mb-4">
+                    <label className="mb-2 block text-sm font-medium">Teléfono *</label>
+                    <PhoneInput
+                      country={country}
+                      value={formData.phone}
+                      onCountryChange={setCountry}
+                      onChange={(v) => setFormData({ ...formData, phone: v })}
+                      autoComplete="tel"
+                    />
+                  </div>
+                )}
+
+                <div className={datosResumidos ? "hidden" : "space-y-4"}>
                   <div>
                     <label className="mb-2 block text-sm font-medium" htmlFor="compra-nombre">
                       Nombre completo *
@@ -574,10 +648,14 @@ const CompraEntradas = ({
               <WhatsAppIcon className="h-5 w-5" />
               <span>Enviar por WhatsApp</span>
             </button>
-            {isFormValid && (
+            {isFormValid ? (
               <p className="text-center text-xs text-muted-foreground">
                 Recordá adjuntar el comprobante de pago en WhatsApp
               </p>
+            ) : (
+              faltaPara && (
+                <p className="text-center text-xs font-semibold text-charrua">{faltaPara}</p>
+              )
             )}
           </div>
         </>

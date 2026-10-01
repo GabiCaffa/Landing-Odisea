@@ -1,6 +1,6 @@
 import { useEffect, useMemo, lazy, Suspense } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarDays, Instagram, MapPin } from "lucide-react";
+import { ArrowLeft, CalendarDays, Instagram, MapPin, Ticket } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import LoadingScreen from "@/components/LoadingScreen";
@@ -85,6 +85,9 @@ const Evento = () => {
     entradas.length === 0 ||
     (evento.saleEndsAt ? new Date() >= new Date(evento.saleEndsAt) : false);
 
+  // El tipo activo más barato, para el "desde $X" de arriba.
+  const desde = entradas.length ? Math.min(...entradas.map((t) => t.price)) : 0;
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
@@ -100,17 +103,32 @@ const Evento = () => {
 
           <div className="grid gap-6 md:grid-cols-2 md:gap-10">
             {/* ── El flyer ─────────────────────────────────────────────── */}
-            {/* `self-start` para que no se estire a lo alto de la columna de
-                al lado, que ahora lleva el formulario entero. */}
-            <div className="relative self-start overflow-hidden border border-border bg-papel">
+            {/*
+              **Capado al 45% de la pantalla en celular.** Un flyer vertical a
+              ancho completo se comía la primera pantalla entera: medido, había
+              que scrollear 845 px —más que el alto de la ventana— para ver un
+              solo precio. Con `object-contain` se sigue viendo completo, sólo
+              que más chico, y tocarlo lo abre a tamaño real (ahí el navegador
+              da zoom con los dedos, que es mejor que cualquier visor nuestro).
+
+              De `md:` para arriba no se capa, y además va `sticky`: la columna
+              de la derecha mide el doble que ésta, así que sin esto quedaban
+              520 px de vacío al bajar. Pegado, el flyer acompaña la compra.
+            */}
+            <a
+              href={imagenRedimensionada(evento.image, 1600)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative block self-start overflow-hidden border border-border bg-papel md:sticky md:top-6"
+              aria-label={`Ver el flyer de ${evento.name} en tamaño completo`}
+            >
               <img
                 src={imagenRedimensionada(evento.image, 960)}
                 srcSet={srcSetRedimensionado(evento.image) || undefined}
                 sizes="(min-width: 768px) 480px, 100vw"
                 alt={evento.name}
-                className="w-full"
+                className="max-h-[45vh] w-full object-contain md:max-h-none"
                 style={{
-                  objectFit: evento.imagePosition.fit,
                   objectPosition: `${evento.imagePosition.x}% ${evento.imagePosition.y}%`,
                 }}
               />
@@ -121,7 +139,7 @@ const Evento = () => {
                   </span>
                 </div>
               )}
-            </div>
+            </a>
 
             {/* ── La info y la compra ──────────────────────────────────── */}
             <div className="flex flex-col">
@@ -142,6 +160,16 @@ const Evento = () => {
                     {evento.location}
                   </span>
                 </p>
+                {!agotado && desde > 0 && (
+                  // El precio arriba del pliegue: es lo que decide, y antes
+                  // estaba a una pantalla de scroll de distancia.
+                  <p className="flex items-center gap-2 text-sm">
+                    <Ticket className="h-4 w-4 flex-shrink-0 text-celeste-deep" />
+                    <span className="font-semibold uppercase tracking-wide">
+                      Desde ${desde.toLocaleString("es-UY")}
+                    </span>
+                  </p>
+                )}
                 {evento.instagramUrl && (
                   <a
                     href={evento.instagramUrl}
@@ -154,12 +182,6 @@ const Evento = () => {
                   </a>
                 )}
               </div>
-
-              {evento.description && (
-                <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-                  {evento.description}
-                </p>
-              )}
 
               {/* ── Promos ─────────────────────────────────────────────── */}
               {!agotado && promos.length > 0 && (
@@ -219,6 +241,16 @@ const Evento = () => {
                   </Suspense>
                 )}
               </div>
+
+              {/* ── La descripción, DESPUÉS de las entradas ────────────── */}
+              {/* Decisión del autor: primero el precio y el contador, después
+                  el texto. Quien ya decidió comprar no tiene que pasar por
+                  arriba de un párrafo; quien quiere leer, baja. */}
+              {evento.description && (
+                <p className="mt-6 whitespace-pre-line border-t border-border pt-6 text-sm leading-relaxed text-muted-foreground">
+                  {evento.description}
+                </p>
+              )}
             </div>
           </div>
         </div>
