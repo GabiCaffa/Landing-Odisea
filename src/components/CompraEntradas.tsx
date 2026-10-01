@@ -519,15 +519,9 @@ const CompraEntradas = ({
             {/* Form */}
             {hasSelectedTickets && (
               <div>
-                <h3
-                  className={
-                    compacto
-                      ? "mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                      : "mb-3 text-base font-medium sm:mb-4 sm:text-lg"
-                  }
-                >
-                  Tus datos
-                </h3>
+                {!compacto && (
+                  <h3 className="mb-3 text-base font-medium sm:mb-4 sm:text-lg">Tus datos</h3>
+                )}
                 {datosResumidos && (
                   <div className="mb-4 flex items-start justify-between gap-3 border border-border bg-secondary/30 p-3">
                     <div className="min-w-0 text-sm">
