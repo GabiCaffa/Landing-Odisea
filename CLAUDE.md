@@ -97,7 +97,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
-`v23_profile_city.sql` → `v24_promo_windows.sql`.
+`v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -605,6 +605,106 @@ inusable) y con el dato en el `aria-label`. "Comprar" abre el mismo
 > `event_ticket_promos` **cada vez que se guarda un evento**, aunque no se
 > toquen sus promos. Con el front anterior a v24 eso **borra las ventanas
 > migradas**. Entre correr la migración y el deploy, no guardar ningún evento.
+
+**v25 — URL propia por evento.** `odiseaoficial.com/evento/halloween-colonia`.
+Nace de dos necesidades que se pedían juntas: **poner una fecha en un anuncio** y
+**que compartirla por WhatsApp muestre el flyer de esa fiesta** y no el logo.
+Estaba propuesto desde el 16/09/2026 y pospuesto a propósito.
+
+**Son dos mitades con costos muy distintos, y conviene no confundirlas.**
+
+1. **La página funciona al instante.** La arma React leyendo Supabase, igual que
+   todo el resto: una fecha creada hace cinco minutos ya tiene URL. Para un
+   anuncio esto alcanza — el creativo se sube a Meta, no sale del `og:image`.
+2. **El preview del link NO se actualiza solo.** WhatsApp, Instagram y Facebook
+   **no ejecutan JavaScript**: leen el HTML crudo. Por eso se hornea un archivo
+   real por evento en el build, y por eso el panel tiene el botón
+   **"Actualizar páginas"** (dispara un Deploy Hook de Vercel, guardado en
+   `admin_settings`).
+
+> **El botón no "publica" el evento, que ya está publicado.** Pone al día el
+> preview y el sitemap. Por eso dice lo que dice y no "Publicar".
+
+**El slug es una COLUMNA, no algo que se calcula del nombre al vuelo.** Si se
+derivara, cambiarle una tilde a un evento rompería todos los anuncios que estén
+corriendo. Y lo garantiza un **trigger** y no un `not null`: el `not null`
+obligaría al front a inventarlo y haría fallar cualquier insert hecho a mano.
+El trigger además **normaliza** el que se manda, así que el panel no puede
+guardar una URL inválida ni escribiéndola con espacios y tildes.
+
+> **El backfill va fila por fila y no en un solo UPDATE.** En una sola
+> sentencia, el trigger de cada fila lee el snapshot del inicio: dos eventos con
+> el mismo nombre no se ven entre sí, calculan el mismo slug y el índice único
+> revienta.
+
+> **`slugify` usa `translate` y no la extensión `unaccent`**, que hay que
+> instalar y no está en todos los proyectos. El mapeo tiene que tener **el mismo
+> largo de los dos lados** o Postgres borra los sobrantes en silencio (hay una
+> verificación de eso).
+
+**El carrusel: la tarjeta entera lleva a la página**, botón de comprar incluido.
+Va con un *stretched link* —un `::after` del `<Link>` del título que cubre la
+tarjeta— y **no** envolviendo todo en un `<a>`: adentro hay otros dos links
+(Comprar e Instagram) y **un `<a>` dentro de otro `<a>` es HTML inválido**, el
+navegador rompe el árbol y el de adentro deja de andar.
+
+> **`eventsLoaded` en `AuthContext`** distingue "la consulta todavía no volvió"
+> de "no existe". `loading` es de la SESIÓN y se apaga mucho antes; sin esta
+> bandera, quien llega desde un anuncio pagado ve "no encontramos esa fecha"
+> medio segundo y se va.
+
+**El horneado vive en `vite/paginasEvento.ts`, fuera de `vite.config.ts`.** No es
+sólo por tamaño: así `htmlDeEvento` se puede **importar y probar**
+(`scripts/probar-paginas-evento.mjs`, 31 chequeos contra el `dist` real). Corre
+en `closeBundle` y parte del `dist/index.html` **terminado** —con el tema, el CSS
+crítico y los scripts con hash—, en vez de engancharse a `transformIndexHtml` y
+depender del orden de los plugins.
+
+> **La prueba ya encontró un bug, y del tipo que no se ve.** La primera versión
+> reemplazaba el **primer `<noscript>`** del documento… que no es el de contenido
+> sino **el de la hoja de estilos** para quien tiene JavaScript apagado (§6.6).
+> Dejaba a ese visitante sin estilos y metía un `<h1>` dentro del `<head>`. El
+> archivo se veía perfecto. Ahora se ancla a `#root`. Es la misma forma de falla
+> que el `.replace("<body>", …)` de §6.8.
+
+> **Los datos estructurados se REEMPLAZAN, no se agregan.** `bakeEventos` dejó en
+> el HTML un `Event` por cada fecha; en la página de UNA fecha, tener las cuatro
+> le dice a Google que la página habla de las cuatro.
+
+> **Se sacan `og:image:width/height/type`.** Los de la home (1200×630) son de una
+> imagen apaisada hecha a propósito; los flyers son verticales, y declarar una
+> medida que no es la real hace que WhatsApp recorte mal.
+
+> **Se publica página para TODOS los eventos, también los que pasaron.** Un link
+> repartido no deja de existir porque la fiesta terminó. Lo que sí queda afuera
+> del **sitemap** es lo viejo.
+
+**Falla en silencio, como `bakeTheme`.** Si Supabase no contesta durante el build
+no se emite ninguna página: las URLs siguen andando por el rewrite, sin preview
+propio. El **sitemap base sobrevive** porque se reescribe encima del que emitió
+`seoEstatico` en vez de moverse ahí.
+
+> **PENDIENTE DE VERIFICAR EN PRODUCCIÓN:** que Vercel resuelva
+> `/evento/<slug>` (sin barra final) al archivo
+> `evento/<slug>/index.html` **antes** de aplicar el rewrite de la SPA. El
+> proyecto ya depende de que un archivo real le gane al rewrite (`sitemap.xml`,
+> §6.8), pero eso es una ruta exacta y esto necesita además resolución de
+> índice de directorio. **`vite preview` NO lo hace** —con barra final sí sirve
+> el horneado, sin barra gana su fallback— así que localmente no se puede
+> comprobar. Si en producción fallara, lo que se pierde es sólo el preview: la
+> página se ve igual porque la arma React.
+
+> **`admin_settings` es una tabla aparte y no `site_settings`.** Esa es de
+> **lectura pública** a propósito (la landing tiene que saber qué tema pintar
+> antes de que nadie inicie sesión). El Deploy Hook no expone datos, pero quien
+> lo tenga puede hacer que el sitio se reconstruya en loop y quemar la cuota de
+> builds.
+
+> **El botón dispara el hook en `no-cors`, así que NO se puede saber si salió
+> bien.** Los deploy hooks de Vercel están pensados para llamarse desde un
+> servidor y no mandan cabeceras CORS: el navegador deja salir el POST pero no
+> deja leer la respuesta. Por eso el cartel dice "pedido enviado" y no "listo" —
+> confirmarlo pedía un proxy, o sea el primer pedazo de backend del proyecto.
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
