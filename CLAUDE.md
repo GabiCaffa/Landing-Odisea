@@ -724,6 +724,53 @@ propio. El **sitemap base sobrevive** porque se reescribe encima del que emitió
 > problema de §6.5 era de una **hoja de alto fijo** donde el cuerpo scrollea
 > adentro, no de una página.
 
+**El flujo de la página, medido y acortado.** La primera versión se veía bien
+y funcionaba mal. Los números, en un teléfono de 375×812:
+
+| | antes | después |
+|---|---:|---:|
+| Scroll hasta ver el primer precio | 845 px | **en pantalla** |
+| Vacío a la izquierda en escritorio (1440×900) | 520 px | **0** |
+| Por qué el botón está apagado | no se decía | se dice |
+
+**El precio estaba a una pantalla de distancia.** "Seleccionar entradas"
+arrancaba a los 845 px con una ventana de 812: había que scrollear más que el
+alto del teléfono para ver cuánto salía. Ahora hay un "Desde $X" arriba, junto a
+la fecha y el lugar.
+
+**El flyer se capa al 45 % de la pantalla en celular** (`object-contain`, así se
+sigue viendo entero) y **tocarlo lo abre a tamaño real** en una pestaña, donde el
+navegador da zoom con los dedos — mejor que cualquier visor propio.
+
+> **Capar el flyer solo no alcanzaba:** se midió después del cambio y había
+> ahorrado 31 px. El espacio se iba en partes iguales entre el flyer (367),
+> el título que se parte en tres líneas (86) y el bloque de fecha/lugar/precio
+> (128). Vale la pena medir el reparto antes de tocar una sola cosa.
+
+**En escritorio la columna del flyer va `sticky`.** La columna derecha mide el
+doble que la izquierda (1172 contra 583), así que al bajar quedaban 520 px de
+nada. Pegado, el flyer acompaña toda la compra. Verificado: con 300 px de scroll
+el flyer queda clavado en `top-6`.
+
+**La descripción pasó DEBAJO de las entradas** (decisión del autor): primero el
+precio y el contador, después el texto.
+
+**Con sesión, "Tus datos" se muestra resumido.** Tres campos grandes con datos
+que ya tenemos del perfil es pedirle a la persona que revise algo que no tiene
+que tocar. Queda una línea con nombre, email y teléfono más un "Editar"; los que
+FALTAN sí aparecen como campo, ahí mismo.
+
+> **El caso que lo destapó:** una cuenta **sin teléfono en el perfil**. Los otros
+> dos campos venían llenos, así que el formulario se veía completo, el botón
+> estaba gris y **la pantalla no decía nada**. Ahora debajo del botón se lee
+> "Falta tu teléfono" y el campo aparece suelto, sin tener que entrar a "Editar"
+> por un solo dato.
+
+> **El `useState` de "estoy editando" va arriba del `if (!isOpen) return null`.**
+> Puesto donde se usa, quedaba después de un return temprano y cambiaba el orden
+> de los hooks entre renders. Lo cazó el lint; es la segunda vez en el proyecto
+> que aparece esta misma forma de falla.
+
 **La tarjeta del carrusel perdió el botón de comprar.** La tarjeta entera ya es
 el link a la página, así que un botón al lado era una segunda llamada a la
 acción compitiendo con ella, en una tarjeta que ya tiene flyer, fecha, lugar y
