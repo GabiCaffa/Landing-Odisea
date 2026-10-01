@@ -777,11 +777,25 @@ sobre la alternativa de hacerlo en pasos. La cuenta, en un teléfono de 375×812
 
 | | ¿entra sin scroll? | |
 |---|---|---|
-| Celular (375×812) | **sí** | 31 px de sobra |
-| Tablet (768×1024) | **sí** | 109 px |
-| Escritorio (1440×900) | **sí** | 71 px |
-| Portátil bajo (1440×768) | no | faltan 68 px |
-| Celular chico (375×667, tipo SE) | no | faltan 114 px |
+| Celular (375×812) | **sí** | 33 px de sobra |
+| Tablet (768×1024) | **sí** | 85 px |
+| Escritorio (1440×900) | **sí** | 41 px |
+| Portátil bajo (1440×768) | no | faltan 91 px |
+| Celular chico (375×667, tipo SE) | no | faltan ~110 px |
+
+> **El `<Header>` es `fixed top-0 z-50` y mide 69 px en celular y 85 en
+> escritorio: flota SOBRE el contenido.** El resto de las páginas lo compensan
+> con `pt-24 md:pt-32` en su `<main>`; la home no lo necesita porque el `<Hero>`
+> está hecho para pasar por debajo. **La página del evento no tenía ninguno de
+> los dos**, así que el link de "Todas las fechas" quedaba tapado y —peor— el
+> click se lo comía el header: `elementFromPoint` sobre el link devolvía un
+> `div` del header. El bug estuvo desde que se creó la página y recién se hizo
+> visible al apretar los márgenes.
+
+> **El link de volver se sacó en vez de moverse.** Era justo el que quedaba
+> debajo del header, y el header ya lleva a la home por dos lados: el logo
+> (`/`) y "Eventos" (`/#eventos`, que además cae directo en la sección). Entre
+> eso y el `pt` que ahora despeja el header, el saldo de píxeles queda parejo.
 
 **En escritorio lo que más pesaba no era el formulario sino el TÍTULO.** Con
 `max-w-5xl` la columna de texto queda en 470 px y un nombre como "ODISEA x
