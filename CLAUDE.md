@@ -777,9 +777,20 @@ sobre la alternativa de hacerlo en pasos. La cuenta, en un teléfono de 375×812
 
 | | ¿entra sin scroll? | |
 |---|---|---|
-| Celular normal (375×812) | **sí** | 33 px de sobra |
-| Celular chico (375×667, tipo SE) | no | faltan 112 px |
-| Escritorio (1440×900) | no | faltan 149 px |
+| Celular (375×812) | **sí** | 31 px de sobra |
+| Tablet (768×1024) | **sí** | 109 px |
+| Escritorio (1440×900) | **sí** | 71 px |
+| Portátil bajo (1440×768) | no | faltan 68 px |
+| Celular chico (375×667, tipo SE) | no | faltan 114 px |
+
+**En escritorio lo que más pesaba no era el formulario sino el TÍTULO.** Con
+`max-w-5xl` la columna de texto queda en 470 px y un nombre como "ODISEA x
+OVERSIZE HALLOWEEN PAYSANDU" se parte en **cuatro líneas (~230 px)**. Pasando a
+`max-w-6xl` entra en dos (80 px) — ensanchar no agranda los campos, que son de
+ancho completo igual. Eso solo se llevó 130 de los 149 px que faltaban; el resto
+salieron de separaciones `sm:` que estaban generosas. **El flyer se capa también
+en escritorio** (`md:max-h-[72vh]`): al ensanchar el contenedor su columna crecía
+y pasaba a ser ella la que no entraba.
 
 > **El techo de esta decisión.** Entra con **dos o tres** tipos de entrada; con
 > más, vuelve a scrollear. Hacerlo en pasos escalaba sin límite y se descartó a

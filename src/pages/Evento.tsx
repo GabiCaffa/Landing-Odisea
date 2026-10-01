@@ -93,10 +93,10 @@ const Evento = () => {
       <Header />
 
       <main className="flex-1">
-        <div className="mx-auto w-full max-w-5xl px-4 py-3 sm:px-6 sm:py-10">
+        <div className="mx-auto w-full max-w-6xl px-4 py-3 sm:px-6 sm:py-4">
           <Link
             to="/"
-            className="mb-2 inline-flex items-center gap-2 py-1 text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground sm:mb-5 sm:min-h-11 sm:text-xs"
+            className="mb-2 inline-flex items-center gap-2 py-1 text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground sm:mb-3 sm:text-xs"
           >
             <ArrowLeft className="h-4 w-4" /> Todas las fechas
           </Link>
@@ -127,7 +127,7 @@ const Evento = () => {
                 srcSet={srcSetRedimensionado(evento.image) || undefined}
                 sizes="(min-width: 768px) 480px, 100vw"
                 alt={evento.name}
-                className="w-full object-contain"
+                className="w-full object-contain md:max-h-[72vh]"
                 style={{
                   objectPosition: `${evento.imagePosition.x}% ${evento.imagePosition.y}%`,
                 }}
@@ -143,11 +143,11 @@ const Evento = () => {
 
             {/* ── La info y la compra ──────────────────────────────────── */}
             <div className="md:flex md:flex-col">
-              <h1 className="font-sport text-xl font-black leading-[1.05] tracking-wide text-tinta sm:text-3xl md:text-5xl">
+              <h1 className="font-sport text-xl font-black leading-[1.05] tracking-wide text-tinta sm:text-3xl md:text-4xl">
                 {evento.name}
               </h1>
 
-              <div className="mt-1.5 space-y-0.5 sm:mt-4 sm:space-y-2">
+              <div className="mt-1.5 space-y-0.5 sm:mt-3 sm:space-y-1">
                 <p className="flex items-center gap-2 text-sm">
                   <CalendarDays className="h-4 w-4 flex-shrink-0 text-celeste-deep" />
                   <span className="font-semibold uppercase tracking-wide">
@@ -175,7 +175,7 @@ const Evento = () => {
                     href={evento.instagramUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground sm:min-h-11 sm:py-1 sm:text-sm"
+                    className="inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground sm:text-sm"
                   >
                     <Instagram className="h-4 w-4 flex-shrink-0" />
                     <span className="underline underline-offset-2">Ver en Instagram</span>
@@ -211,7 +211,7 @@ const Evento = () => {
               )}
 
               {/* ── La compra, sin modal de por medio ──────────────────── */}
-              <div className="clear-both mt-2 border-t border-border pt-2 sm:mt-6 sm:pt-6">
+              <div className="clear-both mt-2 border-t border-border pt-2 sm:mt-4 sm:pt-4">
                 {agotado ? (
                   <div className="border border-border p-4 text-center">
                     <p className="font-sport text-lg font-black uppercase tracking-wide">
