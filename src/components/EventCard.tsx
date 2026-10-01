@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-import { Instagram } from "lucide-react";
-import WhatsAppIcon from "@/components/WhatsAppIcon";
+import { ArrowRight, Instagram } from "lucide-react";
 import { playHover, playThud } from "@/lib/spookySound";
 import { imagenRedimensionada, srcSetRedimensionado, PROPORCION_EVENTO } from "@/lib/imagenes";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
@@ -172,27 +171,21 @@ const EventCard = ({
           {description}
         </p>
 
-        <div className="mt-auto flex gap-2">
-          {isSoldOut || !destino ? (
-            // Agotado no bloquea ver la página: la tarjeta entera sigue siendo
-            // un link. Lo que se apaga es la llamada a comprar, que es el
-            // mensaje que hay que dar.
-            <span className="btn-techno pointer-events-none flex-1 cursor-not-allowed px-3 py-2.5 text-xs opacity-50">
-              <WhatsAppIcon className="h-4 w-4" />
-              <span>{isSoldOut ? "Agotado" : "Comprar"}</span>
-            </span>
-          ) : (
-            <Link
-              to={destino}
-              // En celular no hay hover: si el sonido no está también acá,
-              // desde un teléfono el sitio es mudo.
-              onClick={playThud}
-              className="btn-techno relative z-10 flex-1 px-3 py-2.5 text-xs"
-            >
-              <WhatsAppIcon className="h-4 w-4" />
-              <span>Comprar</span>
-            </Link>
-          )}
+        {/*
+          Sin botón de comprar.
+
+          La tarjeta ENTERA es el link a la página del evento, así que un botón
+          al lado era una segunda llamada a la acción compitiendo con ella y
+          agregando ruido a una tarjeta que ya tiene flyer, fecha, lugar y
+          promo. Queda sólo una pista de que se puede tocar —si no, nada dice
+          que la tarjeta lleva a algún lado— y el acceso a Instagram, que va a
+          otro destino y por eso sigue siendo un botón de verdad.
+        */}
+        <div className="mt-auto flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-celeste-deep">
+            {isSoldOut ? "Ver la fecha" : "Ver y comprar"}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </span>
 
           {instagramUrl && (
             <a

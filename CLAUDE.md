@@ -694,6 +694,48 @@ propio. El **sitemap base sobrevive** porque se reescribe encima del que emitió
 > comprobar. Si en producción fallara, lo que se pierde es sólo el preview: la
 > página se ve igual porque la arma React.
 
+**Un solo camino a la compra: `CompraEntradas`.** El componente que era
+`TicketPurchaseModal` toma un `modo`:
+
+- `modal` — sobre el sitio, con velo y botón de cerrar. Lo usan las dos
+  secciones de promos de la home.
+- `pagina` — dentro de la página del evento, **sin cáscara y sin botón que lo
+  abra**: el formulario está puesto. Un modal encima de una página que ya es de
+  ese evento es un paso de más, y a esa página se llega desde un anuncio.
+
+> **Es un parámetro y no dos componentes**, y el motivo es el camino de la
+> plata: las cantidades, los descuentos, el total y el armado del mensaje tienen
+> que salir del MISMO código. Dos copias que algún día muestran números
+> distintos es exactamente lo que no puede pasar.
+
+> **En la página se entra derecho al formulario.** El paso de "iniciá sesión o
+> seguí como invitado" es un empujón a registrarse, y en el modal está bien
+> porque ahí la persona ya decidió comprar; en la página del evento es una pared
+> antes de ver siquiera el precio. El empujón queda como una línea arriba del
+> formulario. **Ojo:** no alcanzaba con el valor inicial del `useState` — hay un
+> efecto que vuelve a `auth-prompt` cuando no hay sesión, y pisaba el valor.
+
+> **El pie fijo es del modal, no de la página.** Se intentó con
+> `sticky bottom-0` y **no funciona**: el pie es el último hijo de su
+> contenedor, así que no hay rango donde pegarse —sticky necesita contenido
+> debajo dentro del mismo contenedor—; medido, quedaba 47 px por debajo del
+> viewport. Y `fixed` sería peor, porque chocaría con la barra de
+> `AvisoCiudad` (v23), que también es fija abajo. Igual acá no hace falta: el
+> problema de §6.5 era de una **hoja de alto fijo** donde el cuerpo scrollea
+> adentro, no de una página.
+
+**La tarjeta del carrusel perdió el botón de comprar.** La tarjeta entera ya es
+el link a la página, así que un botón al lado era una segunda llamada a la
+acción compitiendo con ella, en una tarjeta que ya tiene flyer, fecha, lugar y
+cartel de promo. Queda una pista —"VER Y COMPRAR →"; sin algo, nada dice que la
+tarjeta lleva a algún lado— y el acceso a Instagram, que va a otro destino y por
+eso sigue siendo un botón de verdad.
+
+> **Lo que se paga:** desde la home ahora hay un toque más para comprar. Es la
+> decisión del autor y tiene sentido —la página del evento convierte mejor que
+> una tarjeta— pero si alguna vez se mide una caída en las ventas que vienen de
+> la home, acá está el cambio que la explica.
+
 > **`admin_settings` es una tabla aparte y no `site_settings`.** Esa es de
 > **lectura pública** a propósito (la landing tiene que saber qué tema pintar
 > antes de que nadie inicie sesión). El Deploy Hook no expone datos, pero quien
