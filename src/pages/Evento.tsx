@@ -331,9 +331,18 @@ const Evento = () => {
               )}
             </div>
           </div>
+
+          <p className="clear-both mt-4 text-center text-[10px] text-muted-foreground">
+            <Link to="/terminos" className="hover:text-foreground">
+              Términos de Uso
+            </Link>
+            {" · "}
+            <Link to="/privacidad" className="hover:text-foreground">
+              Política de Privacidad
+            </Link>
+          </p>
         </div>
       </main>
-
     </div>
   );
 };
