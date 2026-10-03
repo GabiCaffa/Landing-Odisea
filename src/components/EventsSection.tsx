@@ -2,7 +2,8 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import EventCard from "./EventCard";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
-import { useAuth, formatEventDate } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { agruparEventos } from "@/lib/grupos";
 import SpookySpiders from "./SpookySpiders";
 
 const EventsSection = () => {
@@ -13,13 +14,19 @@ const EventsSection = () => {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
-  // Solo eventos activos y agotados, ordenados por fecha
+  /**
+   * Eventos activos y agotados, ordenados por fecha, **con los días de una
+   * misma fiesta colapsados en una sola tarjeta** (v26).
+   *
+   * Una fiesta de tres días son tres eventos en la base; en el carrusel tiene
+   * que ser una tarjeta, o la home de una fecha de fin de semana largo es la
+   * misma imagen tres veces seguidas. Qué día se compra se elige adentro.
+   *
+   * Sin ningún evento agrupado `agruparEventos` es la identidad, así que esto
+   * no cambia nada para lo que ya existe.
+   */
   const visibleEvents = useMemo(
-    () =>
-      events
-        .filter((e) => e.status !== "finalizado")
-        .slice()
-        .sort((a, b) => a.date.localeCompare(b.date)),
+    () => agruparEventos(events.filter((e) => e.status !== "finalizado")),
     [events]
   );
 
@@ -113,25 +120,39 @@ const EventsSection = () => {
               className="flex gap-6 md:gap-8 overflow-x-auto scrollbar-hide pb-4 px-2 md:px-8"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
-              {visibleEvents.map((event, index) => (
+              {visibleEvents.map((entrada, index) => (
                 <div
-                  key={event.id}
+                  key={entrada.key}
                   className={`flex-shrink-0 transition-all duration-700`}
                   style={{ transitionDelay: `${index * 100}ms` }}
                 >
+                  {/*
+                    La tarjeta muestra lo del GRUPO (nombre, rango de fechas) y
+                    linkea al primer día que todavía venda, pero el flyer, la
+                    descripción y el Instagram salen de ese día: son los datos
+                    que el grupo no tiene, porque no es una fila en la base
+                    sino dos columnas repetidas (v26).
+
+                    `soldOut` y `tickets` vienen ya resueltos del grupo. La
+                    tarjeta sabe calcular "agotado" sola, pero para un grupo la
+                    cuenta es otra —lo está sólo si lo están TODOS los días— así
+                    que se la damos hecha y le pasamos las entradas de todos.
+                    Por lo mismo no va `saleEndsAt`: el cierre de un día no
+                    cierra la fiesta.
+                  */}
                   <EventCard
-                    slug={event.slug}
-                    image={event.image}
-                    imagePosition={event.imagePosition}
-                    name={event.name}
-                    date={formatEventDate(event.date)}
-                    location={event.location}
-                    description={event.description}
-                    instagramUrl={event.instagramUrl}
-                    soldOut={event.status === "agotado"}
-                    saleEndsAt={event.saleEndsAt}
-                    tickets={event.tickets.filter((t) => t.active)}
-                    promos={event.promos}
+                    slug={entrada.destino.slug}
+                    image={entrada.destino.image}
+                    imagePosition={entrada.destino.imagePosition}
+                    name={entrada.nombre}
+                    date={entrada.fecha}
+                    location={entrada.lugar}
+                    description={entrada.destino.description}
+                    instagramUrl={entrada.destino.instagramUrl}
+                    soldOut={entrada.agotado}
+                    tickets={entrada.dias.flatMap((d) => d.tickets.filter((t) => t.active))}
+                    promos={entrada.dias.flatMap((d) => d.promos)}
+                    dias={entrada.dias.length}
                   />
                 </div>
               ))}

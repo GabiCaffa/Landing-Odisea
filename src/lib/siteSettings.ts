@@ -62,3 +62,40 @@ export async function fetchTheme(): Promise<SiteTheme> {
 export async function saveTheme(theme: SiteTheme): Promise<void> {
   await saveSetting("theme", theme);
 }
+
+// ─── Cartel de las tarjetas de evento ───────────────────────────────────────
+
+/**
+ * Texto que se muestra como cartel en las tarjetas de los eventos activos.
+ * Vacío o ausente = sin cartel.
+ *
+ * **Es SÓLO una etiqueta. No descuenta nada, y no tiene que descontar nada.**
+ * Eso no es un detalle de implementación sino la regla del negocio: el precio
+ * que se carga en el evento YA viene con el descuento aplicado. Si esto se
+ * cargara como una promo de verdad (v21), el sitio le restaría el porcentaje
+ * **otra vez** sobre un precio que ya lo tiene — una entrada de $1.000 saldría
+ * $850 cuando $1.000 ya era el precio rebajado.
+ *
+ * Por eso vive acá y no en `ticket_promos`: son dos cosas que se parecen en la
+ * pantalla y no tienen nada que ver abajo. Una pinta, la otra cobra.
+ */
+export const CARTEL_KEY = "cartel_eventos";
+
+/** Entra en una píldora arriba de la tarjeta; más largo se desborda. */
+export const CARTEL_MAX = 24;
+
+export const limpiarCartel = (value: unknown): string =>
+  typeof value === "string" ? value.trim().slice(0, CARTEL_MAX) : "";
+
+/** No tira: un cartel que no se puede leer no es motivo para romper la home. */
+export async function fetchCartel(): Promise<string> {
+  try {
+    return limpiarCartel(await fetchSetting(CARTEL_KEY));
+  } catch {
+    return "";
+  }
+}
+
+export async function saveCartel(texto: string): Promise<void> {
+  await saveSetting(CARTEL_KEY, limpiarCartel(texto));
+}

@@ -6,6 +6,8 @@ import LoadingScreen from "@/components/LoadingScreen";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
 import { promoVigente, textoVencimiento } from "@/lib/ticketPromos";
+import { diasDelGrupo, etiquetaDeDia, eventoAgotado } from "@/lib/grupos";
+import { urlDeEvento } from "@/lib/rutas";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
 
@@ -30,6 +32,14 @@ const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
  *   (`CompraEntradas` con `modo="pagina"`), no una copia: el cálculo del total
  *   y el armado del mensaje no pueden vivir en dos lados.
  *
+ * **Fiestas de varios días (v26):** si el evento está agrupado, arriba del
+ * formulario aparece un selector de día. Cada día es un evento aparte con sus
+ * entradas y su precio, así que elegir un día es **ir a su página** —un
+ * `<Link>` de verdad, no un estado— y por eso el link se puede compartir, abrir
+ * en otra pestaña y volver con el botón de atrás. La compra sigue siendo de un
+ * día: quien va viernes y domingo hace dos compras, que es lo que pidió el
+ * autor.
+ *
  * El título del documento **sí** se toca acá, al revés que en la home (§6.8).
  * Allá había un `document.title` que pisaba el escrito para Google; acá no hay
  * ningún título por evento en el `index.html` que se pueda pisar, y el que
@@ -43,14 +53,25 @@ const Evento = () => {
 
   const evento = useMemo(() => events.find((e) => e.slug === slug), [events, slug]);
 
+  // Los días de la fiesta. Para un evento suelto es él solo, así que todo lo
+  // de abajo funciona igual sin una sola rama extra.
+  const dias = useMemo(
+    () => (evento ? diasDelGrupo(events, evento) : []),
+    [events, evento]
+  );
+  const enGrupo = dias.length > 1;
+  // Para un grupo manda el nombre de la fiesta: es el que dice el anuncio por
+  // el que llegó la persona. El del día va abajo del selector si es distinto.
+  const titulo = (enGrupo && evento?.groupName) || evento?.name || "";
+
   useEffect(() => {
     if (!evento) return;
     const previo = document.title;
-    document.title = `${evento.name} · ${formatEventDate(evento.date)} · ODÍSEA`;
+    document.title = `${titulo} · ${formatEventDate(evento.date)} · ODÍSEA`;
     return () => {
       document.title = previo;
     };
-  }, [evento]);
+  }, [evento, titulo]);
 
   if (!eventsLoaded) return <LoadingScreen />;
 
@@ -135,7 +156,7 @@ const Evento = () => {
             {/* ── La info y la compra ──────────────────────────────────── */}
             <div className="md:flex md:flex-col">
               <h1 className="font-sport text-xl font-black leading-[1.05] tracking-wide text-tinta sm:text-3xl md:text-4xl">
-                {evento.name}
+                {titulo}
               </h1>
 
               <div className="mt-1.5 space-y-0.5 sm:mt-3 sm:space-y-1">
@@ -173,6 +194,72 @@ const Evento = () => {
                   </a>
                 )}
               </div>
+
+              {/* ── El día de la fiesta (v26) ──────────────────────────── */}
+              {/*
+                Va ARRIBA de las promos y de las entradas, y no es casual: lo
+                que se elija acá cambia los precios, las promos y el cupo de
+                todo lo que está debajo. Un selector puesto después sería
+                pedirle a la persona que vuelva a leer lo que ya leyó.
+
+                Son `<Link>` y no botones con estado: cada día es una página
+                propia (v25), así que esto es navegar. Lo que se gana es que el
+                día elegido se pueda compartir, abrir en otra pestaña y
+                deshacer con el botón de atrás.
+              */}
+              {enGrupo && (
+                <div className="clear-both mt-3 sm:mt-4">
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    ¿Qué día vas?
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {dias.map((d) => {
+                      const { dia, fecha } = etiquetaDeDia(d.date);
+                      const esteAgotado = eventoAgotado(d);
+                      const activo = d.id === evento.id;
+                      return (
+                        <Link
+                          key={d.id}
+                          to={urlDeEvento(d.slug)}
+                          aria-current={activo ? "page" : undefined}
+                          className={`flex min-h-11 flex-col justify-center border px-3 py-1.5 text-center leading-tight transition-colors ${
+                            activo
+                              ? "border-celeste bg-celeste text-accent-foreground"
+                              : "border-border hover:border-tinta/40"
+                          }`}
+                        >
+                          <span className="text-[11px] font-bold uppercase tracking-wide">
+                            {dia}
+                          </span>
+                          <span
+                            className={`text-xs font-semibold uppercase ${
+                              activo ? "" : "text-muted-foreground"
+                            }`}
+                          >
+                            {fecha}
+                          </span>
+                          {/* El día agotado se muestra igual, apagado: sacarlo
+                              deja a alguien buscando una fecha que vio en el
+                              anuncio y no encuentra. */}
+                          {esteAgotado && (
+                            <span className="text-[10px] font-bold uppercase text-charrua">
+                              Agotado
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                  {/* El nombre propio del día, si difiere del de la fiesta.
+                      Tres días pueden tener line-ups distintos y ese dato no
+                      está en ningún otro lado de la página. */}
+                  {evento.name !== titulo && (
+                    <p className="mt-1.5 text-xs font-semibold uppercase tracking-wide text-celeste-deep">
+                      {evento.name}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* ── Promos ─────────────────────────────────────────────── */}
               {!agotado && promos.length > 0 && (

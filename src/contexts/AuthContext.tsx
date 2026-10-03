@@ -119,6 +119,20 @@ export interface AdminEvent {
   image: string;
   imagePosition: ImageTransform;
   instagramUrl?: string;
+  /**
+   * Fiesta de varios días (v26). Los eventos con el mismo `groupKey` son días
+   * de la misma fiesta: una sola tarjeta en la home y un selector de día en la
+   * página.
+   *
+   * **Siguen siendo eventos separados en todo lo demás**: cada día tiene sus
+   * entradas, sus precios, su venta y su propia URL. Agrupar es sólo decirle
+   * al sitio que van juntos.
+   *
+   * `undefined` = evento suelto, que es como están casi todos.
+   */
+  groupKey?: string;
+  /** Nombre que muestra la tarjeta agrupada. Repetido en los días del grupo. */
+  groupName?: string;
   createdAt: string;
 }
 
@@ -225,6 +239,8 @@ function eventFromDb(row: any): AdminEvent {
     image: row.image_url ?? "",
     imagePosition: normalizeImageTransform(row.image_position),
     instagramUrl: row.instagram_url ?? undefined,
+    groupKey: row.group_key ?? undefined,
+    groupName: row.group_name ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -247,6 +263,11 @@ function eventToDb(e: Partial<NewEventInput>) {
   if (e.image !== undefined) out.image_url = e.image || null;
   if (e.imagePosition !== undefined) out.image_position = e.imagePosition;
   if (e.instagramUrl !== undefined) out.instagram_url = e.instagramUrl || null;
+  // Vacío se manda como null, no como '': un string en blanco sería un grupo
+  // llamado "" del que todos los eventos sin grupo serían miembros. (El
+  // trigger de v26 lo limpia igual; esto es el lado de acá de la misma regla.)
+  if (e.groupKey !== undefined) out.group_key = e.groupKey?.trim() || null;
+  if (e.groupName !== undefined) out.group_name = e.groupName?.trim() || null;
   return out;
 }
 
