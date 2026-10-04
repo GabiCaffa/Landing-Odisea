@@ -1037,6 +1037,53 @@ lo hace `scroll-snap` nativo, igual que el carrusel de eventos. Verificado:
 > **El slider viaja en el bundle de la landing aunque esté apagado** (~6 KB,
 > ~2 KB en brotli). Diferirlo sería peor: es el LCP, y un `lazy` ahí mete un
 > salto justo en la métrica que §6.6 se dedicó a arreglar.
+### Crear una fiesta de varios días en una sola pantalla
+
+v26 modeló la fiesta de tres días como **tres eventos unidos por un campo**, y
+eso está bien **en la base**: cada día tiene su fecha, sus entradas, su venta y
+su URL de verdad. Lo que estaba mal era **obligar a quien carga la fiesta a
+entender ese modelo**.
+
+> **Cómo se vio que estaba mal.** El autor abrió "Nuevo evento", vio el campo
+> "Fiesta de varios días" y escribió ahí **el día** —`16 de Octubre` primero,
+> `OCTUBRE 16` después—, esperando agregar los otros dos desde esa misma
+> pantalla. No es que no leyera: desde el formulario de UN evento **no hay
+> forma de adivinar** que la respuesta es crear tres. Dos intentos fallidos y
+> un "NO ENTIENDO" son suficiente evidencia de que el problema era la pantalla.
+
+**`FiestaFormModal` invierte el orden**: se describe la fiesta una vez (nombre,
+lugar, flyer, cuenta, Instagram) y después se agregan los días, cada uno con su
+fecha, su line-up y sus entradas. Por abajo sigue creando N eventos agrupados —
+**el modelo no cambió, cambió quién tiene que conocerlo**.
+
+- **Dos botones y no un paso previo que pregunte "¿uno o varios?".** Casi todas
+  las fechas son de un día: cobrarle un click extra a todas para el caso raro
+  es al revés de lo que conviene.
+- **Arranca con dos días**, porque una fiesta de uno se carga con "Nuevo
+  evento".
+- **"Copiar las entradas del primer día a todos"**: en la práctica los precios
+  se repiten, y cargar lo mismo tres veces es donde la gente abandona.
+- **El nombre de cada día se arma solo** (`EXPO FIESTA OCTUBRE — VIE 16`) y se
+  puede pisar.
+
+> **El riesgo real son N inserts sin transacción.** Si el tercer día falla, los
+> dos primeros ya existen, y dejar a alguien sin saber qué quedó creado es peor
+> que el error. Se crean **en orden**, se corta en el primer fallo, y el
+> mensaje dice cuántos quedaron y cómo completar el resto.
+
+> **Quedan afuera a propósito** las promos (se cargan editando cada día:
+> meterlas acá multiplica el formulario por N) y reposicionar el flyer.
+
+> **`TicketsEditor` y `FormField` salieron de `Admin.tsx` a
+> `components/admin/CamposEvento.tsx`.** No es prolijidad: si el modal nuevo
+> las importara de `Admin.tsx` quedaría un **import circular** —Admin importa
+> el modal, el modal importa Admin—. Rollup hoy lo resuelve, pero sólo mientras
+> nadie use esos valores durante la evaluación del módulo, y eso es una promesa
+> que nadie puede sostener.
+
+> **Falta el ABONO**, igual que antes: un pase para toda la fiesta no tiene
+> dónde vivir en un modelo donde cada día se compra por separado.
+
 ### Dos asperezas del formulario de compra y del de evento
 
 **El bloque de la transferencia saltaba 337 px bajo el dedo.** Estaba

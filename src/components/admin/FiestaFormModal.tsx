@@ -1,0 +1,448 @@
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { Loader2, Plus, Trash2, Upload } from "lucide-react";
+import ModalAdmin from "@/components/admin/ModalAdmin";
+import { FormField, TicketsEditor } from "@/components/admin/CamposEvento";
+import { useAuth, DEFAULT_IMAGE_TRANSFORM, NewEventInput } from "@/contexts/AuthContext";
+import { PaymentAccount } from "@/lib/paymentAccounts";
+import { EventTicket, TicketType, saveEventTickets } from "@/lib/ticketTypes";
+import { claveDeGrupo, etiquetaDeDia } from "@/lib/grupos";
+
+/**
+ * Crear una fiesta de varios días **de una sola vez**.
+ *
+ * ─── Por qué existe ─────────────────────────────────────────────────────────
+ *
+ * v26 modeló una fiesta de tres días como tres eventos unidos por un campo, y
+ * eso está bien **en la base**: cada día tiene su fecha, sus entradas, su venta
+ * y su URL de verdad. Lo que no está bien es obligar a quien carga la fiesta a
+ * entender ese modelo: el autor abrió "Nuevo evento", vio "Fiesta de varios
+ * días" y escribió ahí el día, dos veces, porque desde el formulario de UN
+ * evento no hay forma de adivinar que hay que crear tres.
+ *
+ * Esta pantalla invierte el orden: se describe **la fiesta** una vez y se
+ * agregan **los días**. Por abajo sigue creando N eventos agrupados — el
+ * modelo no cambia, cambia quién tiene que saberlo.
+ *
+ * ─── Lo que NO hace, a propósito ────────────────────────────────────────────
+ *
+ * - **Promos.** Se cargan después, editando cada día. Meterlas acá multiplica
+ *   el formulario por N y las promos casi nunca se definen al crear.
+ * - **Reposicionar el flyer.** Queda centrado; si hay que ajustarlo se hace
+ *   editando el día. Acá el flyer es uno solo para toda la fiesta.
+ *
+ * ─── El riesgo real: una creación a medias ──────────────────────────────────
+ *
+ * Son N inserts, no una transacción. Si el tercero falla, los dos primeros ya
+ * existen — y dejar a alguien sin saber qué quedó creado es peor que el error
+ * en sí. Por eso se crean **en orden**, se corta en el primer fallo y el
+ * mensaje dice exactamente cuáles quedaron y qué hacer con ellos.
+ */
+
+interface DiaBorrador {
+  /** Sólo para React. No viaja a la base. */
+  id: string;
+  date: string;
+  /** Vacío = se arma solo con el nombre de la fiesta y la fecha. */
+  nombre: string;
+  description: string;
+  tickets: EventTicket[];
+}
+
+const nuevoDia = (): DiaBorrador => ({
+  id: Math.random().toString(36).slice(2),
+  date: "",
+  nombre: "",
+  description: "",
+  tickets: [],
+});
+
+/** El nombre que se le pone al evento de un día si no escribieron uno. */
+const nombreDeDia = (fiesta: string, date: string) => {
+  if (!date) return fiesta;
+  const { dia, fecha } = etiquetaDeDia(date);
+  return `${fiesta} — ${dia} ${fecha}`.trim();
+};
+
+const FiestaFormModal = ({
+  accounts,
+  ticketTypes,
+  onClose,
+  onSaved,
+}: {
+  accounts: PaymentAccount[];
+  ticketTypes: TicketType[];
+  onClose: () => void;
+  onSaved: () => void;
+}) => {
+  const { uploadEventImage, createEvent } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [nombre, setNombre] = useState("");
+  const [location, setLocation] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("https://www.instagram.com/odisea.uy/");
+  const [paymentAccountId, setPaymentAccountId] = useState(
+    accounts.find((a) => a.isDefault)?.id ?? ""
+  );
+  const [image, setImage] = useState("");
+  const [subiendo, setSubiendo] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+
+  // Dos días de arranque: una fiesta de un solo día se carga con "Nuevo
+  // evento", así que acá el mínimo real es dos.
+  const [dias, setDias] = useState<DiaBorrador[]>(() => [nuevoDia(), nuevoDia()]);
+
+  const cuentasOfrecidas = accounts.filter((a) => a.active || a.id === paymentAccountId);
+
+  const setDia = (id: string, cambio: Partial<DiaBorrador>) =>
+    setDias((prev) => prev.map((d) => (d.id === id ? { ...d, ...cambio } : d)));
+
+  const subirFlyer = async (file: File) => {
+    setSubiendo(true);
+    try {
+      const r = await uploadEventImage(file);
+      if (!r.ok || !r.url) throw new Error(r.error ?? "No se pudo subir");
+      setImage(r.url);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSubiendo(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  /** Copia las entradas del primer día a los demás. En la práctica los precios
+   *  suelen repetirse, y cargar lo mismo tres veces es donde la gente abandona. */
+  const copiarEntradas = () => {
+    const base = dias[0]?.tickets ?? [];
+    if (base.length === 0) {
+      toast.error("Cargá primero las entradas del primer día");
+      return;
+    }
+    setDias((prev) =>
+      prev.map((d, i) => (i === 0 ? d : { ...d, tickets: base.map((t) => ({ ...t })) }))
+    );
+    toast.success("Entradas copiadas a todos los días");
+  };
+
+  const validar = (): string | null => {
+    if (!nombre.trim()) return "Poné el nombre de la fiesta";
+    if (!location.trim()) return "Poné el lugar";
+    if (!paymentAccountId) return "Elegí la cuenta de cobro";
+    if (!image) return "Subí el flyer";
+    if (dias.length < 2) return "Una fiesta de varios días necesita al menos dos días";
+
+    for (const [i, d] of dias.entries()) {
+      if (!d.date) return `Falta la fecha del día ${i + 1}`;
+      if (d.tickets.length === 0) return `El día ${i + 1} no tiene ninguna entrada a la venta`;
+    }
+
+    const fechas = dias.map((d) => d.date);
+    if (new Set(fechas).size !== fechas.length) return "Hay dos días con la misma fecha";
+
+    return null;
+  };
+
+  const guardar = async () => {
+    const error = validar();
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    setGuardando(true);
+    const groupKey = claveDeGrupo(nombre);
+    const creados: string[] = [];
+
+    // En orden y de a uno: si el tercero falla hay que poder decir cuáles
+    // quedaron. En paralelo el mensaje de error no podría nombrarlos.
+    for (const [i, d] of [...dias].sort((a, b) => a.date.localeCompare(b.date)).entries()) {
+      const data: NewEventInput = {
+        name: d.nombre.trim() || nombreDeDia(nombre.trim(), d.date),
+        date: d.date,
+        location: location.trim(),
+        description: d.description.trim(),
+        price: 0, // lo deriva la DB del tipo más barato (v15)
+        capacity: 0,
+        status: "activo",
+        paymentAccountId,
+        tickets: d.tickets,
+        image,
+        imagePosition: { ...DEFAULT_IMAGE_TRANSFORM },
+        instagramUrl: instagramUrl.trim(),
+        groupKey,
+        groupName: nombre.trim(),
+      };
+
+      const r = await createEvent(data);
+      if (!r.ok || !r.id) {
+        setGuardando(false);
+        toast.error(
+          creados.length === 0
+            ? `No se pudo crear el día ${i + 1}: ${r.error ?? "error desconocido"}`
+            : `Se crearon ${creados.length} día(s) y falló el ${i + 1}: ${
+                r.error ?? "error desconocido"
+              }. Los que quedaron están en la lista de eventos; agregá el resto desde "Nuevo evento" eligiendo la fiesta "${nombre.trim()}".`
+        );
+        onSaved();
+        return;
+      }
+
+      const t = await saveEventTickets(r.id, d.tickets);
+      if (!t.ok) {
+        setGuardando(false);
+        toast.error(
+          `El día ${i + 1} se creó pero sus entradas no: ${
+            t.error ?? "error desconocido"
+          }. Editalo desde la lista para cargarlas.`
+        );
+        onSaved();
+        return;
+      }
+
+      creados.push(r.id);
+    }
+
+    setGuardando(false);
+    toast.success(
+      `Fiesta creada con ${creados.length} días. En la home va a verse como una sola tarjeta.`
+    );
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <ModalAdmin
+      titulo="Nueva fiesta de varios días"
+      subtitulo="Se crea un evento por día, todos juntos bajo la misma fiesta"
+      onClose={onClose}
+      ancho="3xl"
+      pie={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-techno-outline flex-1"
+            disabled={guardando}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando || subiendo}
+            className="btn-techno flex-1 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {guardando ? "Creando…" : `Crear la fiesta (${dias.length} días)`}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        {/* ─── Lo que es igual para todos los días ───────────────────────── */}
+        <section>
+          <h3 className="font-sport text-lg font-black tracking-wide text-tinta mb-1">
+            LA FIESTA
+          </h3>
+          <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+            Esto es lo que comparten todos los días: es lo que se va a ver en la tarjeta de
+            la home.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Nombre de la fiesta">
+              <input
+                type="text"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                className="input-techno"
+                placeholder="EXPO FIESTA OCTUBRE - PAYSANDU"
+                autoFocus
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                El de toda la fiesta, no el de un día.
+              </p>
+            </FormField>
+
+            <FormField label="Lugar">
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="input-techno"
+                placeholder="Ruta 90 km 6"
+              />
+            </FormField>
+
+            <FormField label="Cuenta de cobro">
+              <select
+                value={paymentAccountId}
+                onChange={(e) => setPaymentAccountId(e.target.value)}
+                className="input-techno"
+              >
+                <option value="">Elegí una…</option>
+                {cuentasOfrecidas.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label} · {a.bank} · {a.accountNumber}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Instagram (opcional)">
+              <input
+                type="url"
+                value={instagramUrl}
+                onChange={(e) => setInstagramUrl(e.target.value)}
+                className="input-techno"
+              />
+            </FormField>
+          </div>
+
+          <div className="mt-4">
+            <label className="label-techno">Flyer</label>
+            {image ? (
+              <div className="flex items-start gap-3 mt-1">
+                <img
+                  src={image}
+                  alt=""
+                  className="h-28 w-28 object-cover rounded-lg border border-border"
+                />
+                <div className="text-xs text-muted-foreground leading-relaxed">
+                  <p>Se usa el mismo en los tres días.</p>
+                  <button
+                    type="button"
+                    onClick={() => setImage("")}
+                    className="mt-1 underline hover:text-foreground"
+                  >
+                    Cambiarlo
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className="mt-1 flex cursor-pointer flex-col items-center justify-center gap-1 border border-dashed border-border rounded-lg py-8 hover:border-tinta/40 transition-colors">
+                {subiendo ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                ) : (
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                )}
+                <span className="text-sm">{subiendo ? "Subiendo…" : "Subir el flyer"}</span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={subiendo}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void subirFlyer(f);
+                  }}
+                />
+              </label>
+            )}
+          </div>
+        </section>
+
+        {/* ─── Los días ──────────────────────────────────────────────────── */}
+        <section className="border-t border-border pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+            <h3 className="font-sport text-lg font-black tracking-wide text-tinta">
+              LOS DÍAS
+            </h3>
+            {dias.length > 1 && (
+              <button
+                type="button"
+                onClick={copiarEntradas}
+                className="text-xs font-semibold text-celeste-deep underline"
+              >
+                Copiar las entradas del primer día a todos
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+            Cada día se vende por separado, con sus propias entradas y precios. El cliente
+            elige el día dentro de la página de la fiesta.
+          </p>
+
+          <div className="space-y-4">
+            {dias.map((d, i) => (
+              <div key={d.id} className="border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className="font-sport font-black tracking-wide text-tinta">
+                    DÍA {i + 1}
+                    {d.date && (
+                      <span className="ml-2 text-xs font-semibold text-muted-foreground">
+                        {etiquetaDeDia(d.date).dia} {etiquetaDeDia(d.date).fecha}
+                      </span>
+                    )}
+                  </span>
+                  {dias.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setDias((prev) => prev.filter((x) => x.id !== d.id))}
+                      aria-label={`Quitar el día ${i + 1}`}
+                      className="flex h-11 w-11 items-center justify-center rounded-lg border border-charrua/40 text-charrua hover:bg-charrua/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField label="Fecha">
+                    <input
+                      type="date"
+                      value={d.date}
+                      onChange={(e) => setDia(d.id, { date: e.target.value })}
+                      className="input-techno"
+                    />
+                  </FormField>
+
+                  <FormField label="Nombre del día (opcional)">
+                    <input
+                      type="text"
+                      value={d.nombre}
+                      onChange={(e) => setDia(d.id, { nombre: e.target.value })}
+                      className="input-techno"
+                      placeholder={nombreDeDia(nombre || "La fiesta", d.date)}
+                    />
+                  </FormField>
+                </div>
+
+                <div className="mt-3">
+                  <label className="label-techno">Line-up / descripción de esa noche</label>
+                  <textarea
+                    value={d.description}
+                    onChange={(e) => setDia(d.id, { description: e.target.value })}
+                    className="input-techno min-h-[60px]"
+                    placeholder="Sonido Caracol + DJ Eddy y Facu Sánchez"
+                  />
+                </div>
+
+                <div className="mt-3">
+                  <label className="label-techno">Entradas de este día</label>
+                  <TicketsEditor
+                    catalog={ticketTypes}
+                    value={d.tickets}
+                    onChange={(tickets) => setDia(d.id, { tickets })}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setDias((prev) => [...prev, nuevoDia()])}
+            className="btn-techno-outline mt-4 w-full py-3 text-xs"
+          >
+            <Plus className="h-4 w-4" />
+            Agregar otro día
+          </button>
+        </section>
+      </div>
+    </ModalAdmin>
+  );
+};
+
+export default FiestaFormModal;
