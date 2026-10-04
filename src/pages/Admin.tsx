@@ -101,6 +101,7 @@ import {
 } from "@/lib/birthdays";
 import { birthdayMessageFor, buildBirthdayWhatsAppUrl } from "@/lib/birthdayMessage";
 import PromosAdmin from "@/components/admin/PromosAdmin";
+import BannersAdmin from "@/components/admin/BannersAdmin";
 import EventPromosEditor, {
   EventPromoSelection,
   problemasPromos,
@@ -194,6 +195,7 @@ const Admin = () => {
       {activeTab === "promos" && <PromosAdmin />}
       {activeTab === "accounts" && <AccountsAdmin />}
       {activeTab === "users" && <UsersAdmin />}
+      {activeTab === "banners" && <BannersAdmin />}
       {activeTab === "appearance" && <AppearanceAdmin />}
       {activeTab === "deliveries" && <DeliveriesAdmin />}
       {activeTab === "birthdays" && <BirthdaysAdmin />}

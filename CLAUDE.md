@@ -98,7 +98,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
-`v26_event_groups.sql`.
+`v26_event_groups.sql` → `v27_site_banners.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -950,6 +950,93 @@ todavía hay margen; con 5 días en una fila angosta vuelve a scrollear.
 > por promo y por día**. Es discutible, pero es lo correcto hoy: cada día tiene
 > su propia ventana, su cupo y su precio, así que colapsarlas escondería que
 > vencen en momentos distintos.
+
+**v27 — Banners del hero (slider de la home).** El hero pasa a poder ser un
+slider de banners que carga el staff. Hoy son 3, de **1920×600**.
+
+**Sí una tabla, cuando el cartel de §6.0 fue una clave suelta.** Un banner no
+es un valor: son varias filas, con orden entre ellas, cada una con su imagen,
+su texto alternativo y su link. La regla que viene siguiendo el proyecto se
+mantiene — **un valor global va a `site_settings` (v19), una lista ordenada va
+a su tabla**.
+
+**El interruptor sí va a `site_settings`** (clave `hero` = `clasico` |
+`banners`), y no es "¿hay banners activos?", por el mismo motivo operativo de
+v19: se cargan los tres, se miran, y recién ahí se prende; y si a las 3 de la
+mañana se ve mal se apaga en 5 segundos sin borrar nada. **Sin la fila cae en
+`clasico`**, así que correr la migración no cambia la home por sí sola.
+
+**Escritura sólo admin**, con el criterio de v22: el operador gestiona el
+contenido (eventos, entradas, promos) pero no la cara pública. El hero es LO
+PRIMERO que ve cualquiera. Para abrirlo al operador se cambia la política a
+`is_manager()` y la línea del permiso en `adminPermisos.ts`; no hay nada más.
+
+**Las imágenes van al bucket que ya existe** (`event-images`, bajo `banners/`):
+un bucket nuevo son políticas nuevas de `storage.objects` para ganar nada, que
+un banner es tan público como un flyer.
+
+### El problema del 1920×600 en un celular
+
+**3,2:1 en un teléfono de 375 px son 117 px de alto.** Donde había un hero de
+pantalla completa queda una franja fina, y el 99% del tráfico entra desde el
+teléfono. No se resuelve recortando a ciegas —eso corta justo lo que el
+diseñador puso en los costados— así que cada banner acepta una **versión
+vertical opcional** (1080×1350). El panel avisa cuántos banners activos no la
+tienen, con la medida exacta para pedírsela al diseñador.
+
+> **La proporción es UNA para todo el carrusel**, decidida por el conjunto:
+> vertical sólo si **todos** los banners tienen versión vertical. Mezclar no es
+> una opción y no por prolijidad: las diapositivas son items de un flex, así
+> que **se estiran a la más alta** — medido, con un 4:5 al lado de dos 16:5 los
+> tres quedaban en 469 px y a los apaisados les entraba `object-cover` y se
+> les comía los costados. En silencio, que es exactamente lo que se quería
+> evitar.
+
+> **El header fijo tapaba el 59% del banner.** `<Header>` es `fixed top-0` y
+> mide 69/85 px: medido, de los 117 px de la franja tapaba 69, y el click de
+> arriba se lo comía (`elementFromPoint` devolvía un div suyo). El hero
+> clásico no lo sufre porque está hecho para pasarle por debajo. **Van tres
+> veces en el proyecto** —la página del evento en v25 fue la anterior—, así
+> que: contenido nuevo arriba de todo = acordarse del `pt`.
+
+### Sin librería de carrusel
+
+`manualChunks` manda cualquier dependencia nueva al chunk `vendor`, que **sí
+se precarga en la landing** (§6.9): serían 40-200 KB que baja todo el que entra
+a mirar una fiesta, para algo que el navegador ya trae. El deslizar con el dedo
+lo hace `scroll-snap` nativo, igual que el carrusel de eventos. Verificado:
+`vendor` quedó en 137,19 KB, sin moverse.
+
+- **La primera imagen va `eager` + `fetchpriority="high"`**: con el slider
+  prendido el banner ES el LCP de la home. Las demás van `lazy`.
+- **El avance automático se detiene** con la pestaña en segundo plano o el hero
+  fuera de pantalla (misma lección que los Lottie de §6.4), y **no corre con
+  `prefers-reduced-motion`**.
+- **La proporción la fija el contenedor, no la imagen**, para que el navegador
+  reserve el espacio antes de que la foto llegue — el mismo salto de layout que
+  §6.4 arregló en las tarjetas.
+
+> **`fetchpriority` va en MINÚSCULAS y por spread.** React 18.3.1 —el que usa
+> el proyecto— **no conoce la prop camelCase `fetchPriority`**: avisa por
+> consola y **no la escribe en el DOM**, o sea que la prioridad del LCP se
+> perdía en silencio. Lo cazó leer la consola, no el typecheck. Con React 19
+> puede volver a ser una prop normal.
+
+> **El puntito se marca al hacer click, sin esperar al evento de scroll.** El
+> click se siente inmediato y el estado no queda colgado de un evento que el
+> navegador puede no despachar.
+
+> **Lo que NO se pudo verificar acá:** el avance automático y la sincronía de
+> los puntitos al deslizar. El panel del navegador reporta `document.hidden =
+> true`, y con el documento oculto Chrome **no despacha eventos de scroll** ni
+> anima `scrollTo({behavior:"smooth"})` — comprobado: con `behavior:"auto"` el
+> scroll salta a 1425 px y con `"smooth"` se queda en 0. Es la misma familia
+> que la trampa del `requestAnimationFrame` de §6.6. El código está bien; el
+> entorno no puede ejercitarlo.
+
+> **El slider viaja en el bundle de la landing aunque esté apagado** (~6 KB,
+> ~2 KB en brotli). Diferirlo sería peor: es el LCP, y un `lazy` ahí mete un
+> salto justo en la métrica que §6.6 se dedicó a arreglar.
 
 ## 6.0 El cartel de las tarjetas (sin migración)
 

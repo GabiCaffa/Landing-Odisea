@@ -1,5 +1,5 @@
 import Header from "@/components/Header";
-import Hero from "@/components/Hero";
+import HeroDelSitio from "@/components/HeroDelSitio";
 import PromosActivasSection from "@/components/PromosActivasSection";
 import EventsSection from "@/components/EventsSection";
 import PromosSection from "@/components/PromosSection";
@@ -24,7 +24,9 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main>
-        <Hero />
+        {/* El de siempre o el slider de banners, según el interruptor del
+            panel (v27). La decisión vive en la base, no acá. */}
+        <HeroDelSitio />
         {/* Entre el hero y los eventos: una promo que vence en horas es lo más
             urgente de la página. Si no hay ninguna vigente, no se renderiza. */}
         <PromosActivasSection />
