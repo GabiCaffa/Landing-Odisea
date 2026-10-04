@@ -145,7 +145,17 @@ const Nav = ({
   activeTab: AdminTab;
   onSelect: (t: AdminTab) => void;
 }) => (
-  <nav className="flex flex-1 flex-col gap-1 p-3 md:p-4">
+  /*
+   * `min-h-0` no es decoración: sin eso, un hijo `flex-1` NO se encoge por
+   * debajo de su contenido (su `min-height` es `auto`), así que con el sidebar
+   * en `h-screen` la lista empujaba al bloque de sesión fuera de la pantalla y
+   * el botón de cerrar sesión quedaba cortado. Medido a 1280×800: el bloque
+   * terminaba en 818 px con 800 de alto.
+   *
+   * Con `min-h-0` se encoge, y `overflow-y-auto` le da scroll propio: en una
+   * pantalla baja se scrollean las pestañas, no se pierde el pie.
+   */
+  <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3 md:p-4">
     {tabs.map((t) => (
       <NavLink key={t} tab={t} active={activeTab === t} onClick={() => onSelect(t)} />
     ))}
@@ -170,7 +180,9 @@ const Sesion = ({
   rotulo: string;
   onLogout: () => void;
 }) => (
-  <div className="border-t border-background/10 p-4">
+  // `flex-shrink-0`: el pie no se achica aunque falte lugar — el que cede es
+  // la lista, que tiene scroll.
+  <div className="flex-shrink-0 border-t border-background/10 p-4">
     <p className="mb-1 text-xs text-background/60">{rotulo} · conectado como</p>
     <p className="truncate text-sm font-semibold">{nombre}</p>
     <p className="mb-3 truncate text-xs text-background/60">{email}</p>
@@ -214,7 +226,7 @@ const AdminShell = ({
     <div className="flex min-h-screen flex-col bg-secondary/20 md:flex-row">
       {/* ── Sidebar fijo (md en adelante) ─────────────────────────────── */}
       <aside className="hidden w-64 flex-col bg-foreground text-background md:sticky md:top-0 md:flex md:h-screen">
-        <div className="border-b border-background/10 p-6">
+        <div className="flex-shrink-0 border-b border-background/10 p-6">
           <img src={odiseaLogo} alt="Odísea" className="h-10 w-auto object-contain invert" />
           <p className="mt-3 text-xs uppercase tracking-[0.3em] text-background/60">{rotulo}</p>
         </div>
