@@ -2,7 +2,12 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Upload } from "lucide-react";
 import ModalAdmin from "@/components/admin/ModalAdmin";
-import { FormField, TicketsEditor } from "@/components/admin/CamposEvento";
+import {
+  FormField,
+  PistaTab,
+  TicketsEditor,
+  useAceptarConTab,
+} from "@/components/admin/CamposEvento";
 import { useAuth, DEFAULT_IMAGE_TRANSFORM, NewEventInput } from "@/contexts/AuthContext";
 import { PaymentAccount } from "@/lib/paymentAccounts";
 import { EventTicket, TicketType, saveEventTickets } from "@/lib/ticketTypes";
@@ -398,15 +403,11 @@ const FiestaFormModal = ({
                     />
                   </FormField>
 
-                  <FormField label="Nombre del día (opcional)">
-                    <input
-                      type="text"
-                      value={d.nombre}
-                      onChange={(e) => setDia(d.id, { nombre: e.target.value })}
-                      className="input-techno"
-                      placeholder={nombreDeDia(nombre || "La fiesta", d.date)}
-                    />
-                  </FormField>
+                  <CampoNombreDia
+                    value={d.nombre}
+                    sugerencia={nombreDeDia(nombre || "La fiesta", d.date)}
+                    onChange={(v) => setDia(d.id, { nombre: v })}
+                  />
                 </div>
 
                 <div className="mt-3">
@@ -442,6 +443,39 @@ const FiestaFormModal = ({
         </section>
       </div>
     </ModalAdmin>
+  );
+};
+
+/**
+ * El nombre del día, con la sugerencia aceptable con Tab.
+ *
+ * Es un componente aparte y no JSX suelto adentro del `.map()` por la regla
+ * de los hooks: `useAceptarConTab` no puede llamarse dentro de un bucle de
+ * render. Es la tercera vez en el proyecto que una regla de hooks empuja a
+ * separar un pedazo de formulario.
+ */
+const CampoNombreDia = ({
+  value,
+  sugerencia,
+  onChange,
+}: {
+  value: string;
+  sugerencia: string;
+  onChange: (v: string) => void;
+}) => {
+  const alTeclear = useAceptarConTab(value, sugerencia, onChange);
+  return (
+    <FormField label="Nombre del día (opcional)">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={alTeclear}
+        className="input-techno"
+        placeholder={sugerencia}
+      />
+      <PistaTab visible={!value.trim() && !!sugerencia.trim()} />
+    </FormField>
   );
 };
 

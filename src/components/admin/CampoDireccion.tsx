@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Check, Copy, Link2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { RUTA_EVENTO, urlAbsolutaDeEvento } from "@/lib/rutas";
+import { claveDeGrupo } from "@/lib/grupos";
+import { PistaTab, useAceptarConTab } from "@/components/admin/CamposEvento";
 
 /**
  * La dirección pública del evento, dentro del form (v25).
@@ -22,14 +24,28 @@ import { RUTA_EVENTO, urlAbsolutaDeEvento } from "@/lib/rutas";
 const CampoDireccion = ({
   slug,
   esNuevo,
+  nombreEvento = "",
   onChange,
 }: {
   slug: string;
   esNuevo: boolean;
+  /** Para proponer la dirección y poder aceptarla con Tab. */
+  nombreEvento?: string;
   onChange: (v: string) => void;
 }) => {
   const [copiado, setCopiado] = useState(false);
   const limpio = slug.trim();
+
+  /**
+   * La dirección que la base va a armar sola si esto queda vacío.
+   *
+   * Se calcula con `claveDeGrupo`, que es el espejo en JS de `slugify()`
+   * (v25) — el mismo que usa el trigger. **La corrección no depende de que
+   * coincidan**: si no se acepta la sugerencia, la base la arma igual. Esto es
+   * para poder mostrarla y aceptarla con Tab.
+   */
+  const sugerida = esNuevo ? claveDeGrupo(nombreEvento) : "";
+  const alTeclear = useAceptarConTab(slug, sugerida, onChange);
 
   const copiar = async () => {
     try {
@@ -56,8 +72,14 @@ const CampoDireccion = ({
           type="text"
           value={slug}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={alTeclear}
           // Sin `required`: vacío significa "derivala del nombre".
-          placeholder={esNuevo ? "se arma sola con el nombre" : "halloween-colonia"}
+          // Con nombre cargado el placeholder muestra la dirección REAL que va
+          // a quedar, en vez de describirla: así se ve antes de guardar y se
+          // acepta con Tab.
+          placeholder={
+            esNuevo ? sugerida || "se arma sola con el nombre" : "halloween-colonia"
+          }
           // text-base en celular, o Safari de iOS hace zoom al enfocar.
           className="min-w-0 flex-1 bg-background px-2 py-2.5 text-base outline-none sm:text-sm"
         />
@@ -84,11 +106,14 @@ const CampoDireccion = ({
           <span className="break-all">{urlAbsolutaDeEvento(limpio)}</span>
         </p>
       ) : (
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {esNuevo
-            ? "Si lo dejás vacío se arma sola con el nombre del evento."
-            : "Vacío: se vuelve a armar con el nombre al guardar."}
-        </p>
+        <>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {esNuevo
+              ? "Si lo dejás vacío se arma sola con el nombre del evento."
+              : "Vacío: se vuelve a armar con el nombre al guardar."}
+          </p>
+          <PistaTab visible={!!sugerida} />
+        </>
       )}
 
       {!esNuevo && (

@@ -1084,6 +1084,40 @@ fecha, su line-up y sus entradas. Por abajo sigue creando N eventos agrupados �
 > **Falta el ABONO**, igual que antes: un pase para toda la fiesta no tiene
 > dónde vivir en un modelo donde cada día se compra por separado.
 
+### Las sugerencias se aceptan con Tab
+
+Varios campos del panel proponen un valor y lo muestran en gris —el nombre de
+cada día de una fiesta, la dirección de la página del evento—. Eso era
+**decorativo**: para usarlo había que retipearlo entero. Pedido del autor: que
+se complete con **Tab**, como en una terminal.
+
+`useAceptarConTab` (en `components/admin/CamposEvento.tsx`) **sólo secuestra
+Tab cuando hay algo que completar**: campo vacío y sugerencia disponible. En
+cualquier otro caso Tab navega como siempre, que es lo que espera quien se
+mueve por el formulario con el teclado, y **`Shift+Tab` nunca se toca** —va
+hacia atrás, ahí completar no tiene sentido—.
+
+Después de aceptar **el foco se queda en el campo**: lo normal es querer
+ajustar lo que acaba de entrar, y un segundo Tab ya navega porque el campo dejó
+de estar vacío. Verificado con teclas reales: primer Tab completa y retiene el
+foco, segundo Tab pasa al campo siguiente con el valor intacto, `Shift+Tab`
+navega sin completar.
+
+> **La pista ("apretá Tab para completar") aparece sólo donde aplica.** Una
+> leyenda permanente al lado de un campo ya lleno es ruido; con tres días en
+> pantalla serían tres.
+
+> **En la dirección de la página el placeholder pasó a mostrar la dirección
+> REAL** que va a quedar (`expo-fiesta-octubre-vie-16`) en vez de describirla
+> ("se arma sola con el nombre"). Se calcula con `claveDeGrupo`, el espejo en
+> JS de `slugify()` (v25). **La corrección no depende de que coincidan**: si no
+> se acepta la sugerencia, el trigger la arma igual.
+
+> **El campo del nombre del día tuvo que salir a su propio componente**, porque
+> `useAceptarConTab` es un hook y no se puede llamar dentro del `.map()` de los
+> días. Es la tercera vez en el proyecto que la regla de los hooks empuja a
+> separar un pedazo de formulario.
+
 ### Dos asperezas del formulario de compra y del de evento
 
 **El bloque de la transferencia saltaba 337 px bajo el dedo.** Estaba

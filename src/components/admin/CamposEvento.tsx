@@ -150,3 +150,48 @@ export const TicketsEditor = ({
     </div>
   );
 };
+
+// ─── Sugerencias que se aceptan con Tab ─────────────────────────────────────
+
+/**
+ * Hace que un campo vacío acepte con **Tab** lo que muestra su placeholder.
+ *
+ * Varios campos del panel proponen un valor y lo muestran en gris —el nombre
+ * de cada día de una fiesta, la dirección de la página—. Hasta ahora eso era
+ * decorativo: había que retipearlo entero. Pedido del autor: que se complete
+ * con Tab, como en una terminal.
+ *
+ * **Sólo secuestra Tab cuando hay algo que completar**, o sea con el campo
+ * vacío y una sugerencia disponible. En cualquier otro caso Tab navega como
+ * siempre, que es lo que espera quien usa el teclado para moverse por el
+ * formulario. `Shift+Tab` nunca se toca: va hacia atrás y ahí completar no
+ * tiene sentido.
+ *
+ * Después de aceptar, el foco **se queda en el campo**: lo normal es querer
+ * ajustar lo que acaba de entrar. Un segundo Tab ya navega, porque el campo
+ * dejó de estar vacío.
+ */
+export const useAceptarConTab = (
+  value: string,
+  sugerencia: string,
+  onChange: (v: string) => void
+) => {
+  const hayQueCompletar = !value.trim() && !!sugerencia.trim();
+
+  return (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Tab" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (!hayQueCompletar) return;
+    e.preventDefault();
+    onChange(sugerencia);
+  };
+};
+
+/** El aviso de que se puede completar con Tab. Se muestra sólo cuando aplica:
+ *  una pista permanente al lado de un campo ya lleno es ruido. */
+export const PistaTab = ({ visible }: { visible: boolean }) =>
+  visible ? (
+    <p className="mt-1 text-[11px] text-muted-foreground">
+      Apretá <kbd className="rounded border border-border px-1 font-sans">Tab</kbd> para
+      completar con lo que dice en gris.
+    </p>
+  ) : null;

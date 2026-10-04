@@ -1679,6 +1679,7 @@ const EventFormModal = ({
             <CampoDireccion
               slug={form.slug ?? ""}
               esNuevo={!initial}
+              nombreEvento={form.name}
               onChange={(v) => setForm({ ...form, slug: v })}
             />
 
