@@ -6,6 +6,7 @@ import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext"
 import { EventTicket } from "@/lib/ticketTypes";
 import { EventPromo, promoVigente } from "@/lib/ticketPromos";
 import { urlDeEvento } from "@/lib/rutas";
+import { useCartelEventos } from "@/contexts/ThemeContext";
 
 /**
  * Tarjeta de evento del carrusel de la home.
@@ -38,6 +39,13 @@ interface EventCardProps {
   soldOut?: boolean;
   /** ISO datetime; pasado este momento la venta se cierra sola */
   saleEndsAt?: string;
+  /**
+   * Cuántos días tiene la fiesta (v26). 1 o ausente = evento suelto.
+   *
+   * Cambia sólo la pista de abajo: con varios días lo que se elige adentro no
+   * es cuántas entradas sino **qué día**, y conviene decirlo antes de entrar.
+   */
+  dias?: number;
 }
 
 const EventCard = ({
@@ -53,9 +61,11 @@ const EventCard = ({
   promos = [],
   soldOut,
   saleEndsAt,
+  dias = 1,
 }: EventCardProps) => {
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
   const destino = slug ? urlDeEvento(slug) : null;
+  const cartel = useCartelEventos();
 
   // Agotado si el admin lo marcó así, si ya pasó la fecha/hora de cierre de
   // venta, o si el evento no tiene ningún tipo de entrada a la venta.
@@ -109,19 +119,30 @@ const EventCard = ({
         </div>
 
         {/*
-          Promos vigentes del evento, arriba a la derecha (la fecha ocupa la
-          izquierda). Se muestran acá y no sólo dentro del modal porque es lo
-          que hace que alguien entre: una promo escondida detrás de un click
-          no vende nada.
+          Carteles de arriba a la derecha (la fecha ocupa la izquierda). Se
+          muestran acá y no sólo dentro de la página porque es lo que hace que
+          alguien entre: una oferta escondida detrás de un click no vende nada.
+          Con el evento agotado no va ninguno, que ahí el velo tapa todo igual.
 
-          Se deduplican por nombre: si el mismo "2x1" está cargado sobre
-          General y sobre VIP, en la card es un cartel solo — el detalle de
-          sobre qué entrada aplica se ve al comprar. Y no se muestran si está
-          agotado, que ahí el velo tapa todo igual.
+          Son DOS cosas distintas que se ven igual, y la diferencia importa:
+
+          - El **cartel del sitio** (`cartel`, v19/site_settings) va primero y
+            es puro texto: NO descuenta. Lo que se vende ya tiene el descuento
+            metido en el precio que se carga en el evento. Si esto fuera una
+            promo de verdad, el sitio restaría el porcentaje otra vez.
+          - Las **promos** (v21) sí calculan, y por eso salen de los datos del
+            evento. Se deduplican por nombre: si el mismo "2x1" está cargado
+            sobre General y sobre VIP, acá es uno solo — sobre qué entrada
+            aplica se ve al comprar.
+
+          Tres como mucho: a partir de ahí la pila tapa el flyer.
         */}
         {!isSoldOut &&
-          [...new Set(promos.filter((p) => promoVigente(p)).map((p) => p.name))]
-            .slice(0, 2)
+          [
+            ...(cartel ? [cartel] : []),
+            ...new Set(promos.filter((p) => promoVigente(p)).map((p) => p.name)),
+          ]
+            .slice(0, 3)
             .map((nombre, i) => (
               <div
                 key={nombre}
@@ -183,7 +204,7 @@ const EventCard = ({
         */}
         <div className="mt-auto flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-celeste-deep">
-            {isSoldOut ? "Ver la fecha" : "Ver y comprar"}
+            {isSoldOut ? "Ver la fecha" : dias > 1 ? `Elegí tu día (${dias})` : "Ver y comprar"}
             <ArrowRight className="h-3.5 w-3.5" />
           </span>
 

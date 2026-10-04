@@ -97,7 +97,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v16_birthday_self_service.sql` → `v17_purge_rejected_birthdays.sql` →
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
-`v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql`.
+`v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
+`v26_event_groups.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -873,6 +874,123 @@ eso sigue siendo un botón de verdad.
 > servidor y no mandan cabeceras CORS: el navegador deja salir el POST pero no
 > deja leer la respuesta. Por eso el cartel dice "pedido enviado" y no "listo" —
 > confirmarlo pedía un proxy, o sea el primer pedazo de backend del proyecto.
+
+**v26 — Fiestas de varios días (selector de día).** Una fecha que dura tres
+días son **tres eventos separados**: cada día tiene sus entradas, sus precios,
+su venta y su URL, y **se compra por separado** (decisión del autor: quien va
+viernes y domingo hace dos compras). Lo único que faltaba era que el sitio
+supiera que van juntos.
+
+**Dos columnas en `events` (`group_key`, `group_name`), no una tabla
+`event_groups`.** El proyecto viene eligiendo tablas de catálogo (v13 cuentas,
+v15 tipos, v21 promos) y acá **no corresponde**, porque el motivo de aquéllas no
+se cumple: una cuenta o un tipo de entrada **se reusan entre eventos distintos**
+y por eso conviene tenerlos una sola vez. Un grupo lo usan exactamente sus
+propios días. Sería una fila con un solo campo útil, más su CRUD, más una
+pestaña, para algo que el autor avisó que "seguramente no usemos más allá de
+esto".
+
+> **Lo que se paga:** `group_name` queda repetido en los días. Si no coinciden
+> gana el del día más temprano. Renombrar un grupo es editar sus eventos de a
+> uno.
+
+> **El grupo NO tiene slug propio**, y es a propósito: sería un segundo espacio
+> de nombres que podría chocar con `events.slug` (v25) sin que ningún índice lo
+> impida. No hace falta — **cada día ya tiene su URL**, y la página de cualquier
+> día muestra el selector con todo el grupo. Un anuncio apunta al día que se
+> quiera.
+
+> **El `group_key` se normaliza con un trigger** (`slugify()` de v25). Es lo
+> que une a los días: sin eso, "Halloween XXL" y "halloween-xxl" serían dos
+> fiestas de un día cada una. El panel igual ofrece los grupos que ya existen en
+> un desplegable —armado **con los datos que hay**, como los filtros de §6.9—
+> así que esto es el cinturón para lo que se cargue a mano por SQL.
+
+**Front.** Todo es derivación en memoria (`src/lib/grupos.ts`): no hay ninguna
+consulta nueva, los eventos ya venían todos.
+
+- **La home colapsa el grupo en UNA tarjeta** (`agruparEventos`), ubicada donde
+  está su primer día. Muestra el nombre de la fiesta, el rango de fechas y la
+  pista "Elegí tu día (3)". **Sin ningún evento agrupado la función es la
+  identidad**, así que no cambia nada de lo que ya existe.
+- **Agotado sólo si lo están TODOS los días**, y la tarjeta entra por el primer
+  día que todavía venda: mandar a alguien a un día agotado cuando los otros dos
+  tienen entradas es perder la venta. Por eso `soldOut` y `tickets` se le dan
+  resueltos a `EventCard` y **no** se le pasa `saleEndsAt` — el cierre de un
+  día no cierra la fiesta.
+- **El lugar se omite si los días no coinciden.** Decir "Ruta 90 km 6" cuando
+  dos de los tres días son en otro lado es peor que no decir dónde: el que lee
+  no vuelve a mirar.
+- **El selector son `<Link>`, no botones con estado.** Cada día es una página
+  propia (v25), así que elegir un día es navegar — y por eso el día elegido se
+  puede compartir, abrir en otra pestaña y deshacer con el botón de atrás. Va
+  **arriba** de las promos y las entradas porque lo que se elija ahí cambia los
+  precios, las promos y el cupo de todo lo que está debajo.
+- **El H1 es el nombre de la FIESTA**, que es el que dice el anuncio por el que
+  llegó la persona; el nombre propio del día va debajo del selector si difiere
+  (tres días pueden tener line-ups distintos y ese dato no está en ningún otro
+  lado). **El día agotado se muestra igual, apagado**: sacarlo deja a alguien
+  buscando una fecha que vio en el anuncio.
+
+> **Las fechas se arman cortando el string ISO**, y el día de la semana sale de
+> `Date.UTC` + `getUTCDay`. Con `new Date(iso)` + `getDay()` en Uruguay
+> (UTC−3) un evento del sábado se anuncia como viernes. Es la misma trampa de
+> `formatEventDate` y de §6.9.
+
+> **Un solo día sigue saliendo con `formatEventDate` ("31 OCTUBRE 2026").** El
+> rango abrevia los meses ("31 OCT – 1 NOV 2026") porque el nombre completo dos
+> veces no entra en la píldora, pero cambiar el formato de lo que ya existía
+> habría sido un cambio visual que nadie pidió.
+
+**Medido con dos días agrupados: la página sigue entrando sin scroll** en
+375×812 y en 1440×900, que es el techo que fijó v25. El selector cuesta ~56 px y
+todavía hay margen; con 5 días en una fila angosta vuelve a scrollear.
+
+> **Lo que NO se tocó:** `PromosActivasSection` sigue mostrando **una tarjeta
+> por promo y por día**. Es discutible, pero es lo correcto hoy: cada día tiene
+> su propia ventana, su cupo y su precio, así que colapsarlas escondería que
+> vencen en momentos distintos.
+
+## 6.0 El cartel de las tarjetas (sin migración)
+
+"15% OFF en todas las tarjetas de eventos activos". Lo primero que hay que
+entender es lo que **no** es:
+
+> **Es una ETIQUETA, no un descuento.** El precio que se carga en el evento ya
+> viene con el 15% aplicado. Si esto se cargara como una promo de verdad (v21),
+> el sitio restaría el porcentaje **otra vez** sobre un precio que ya lo tiene:
+> una entrada de $1.000 se vendería a $850. El autor lo aclaró justo a tiempo;
+> la primera lectura fue tratarlo como una promo, que era el camino equivocado.
+
+Por eso vive en `site_settings` (v19) y no en `ticket_promos`: son dos cosas
+que se parecen en la pantalla y no tienen nada que ver abajo — **una pinta, la
+otra cobra**. Y por eso no hizo falta ninguna migración, que es exactamente lo
+que v19 anticipó ("la próxima bandera global no va a necesitar otra
+migración").
+
+- Clave `cartel_eventos`, texto libre de hasta 24 caracteres. Vacío = sin
+  cartel. **Es texto y no un booleano de "15%"**: mañana es "2x1",
+  "ÚLTIMAS ENTRADAS" o "PREVENTA" sin tocar una línea.
+- Se muestra en la **misma pila** que las promos, arriba de todo y hasta tres
+  carteles. Para el comprador son lo mismo —una oferta— y distinguirlos
+  visualmente sería resolver en la cara pública un problema que es interno.
+  Donde sí se dice fuerte es en el panel.
+- Sólo en eventos **a la venta**: con el evento agotado el velo tapa todo igual.
+- **Lectura pública y escritura sólo admin**, como todo `site_settings`: el
+  operador no toca la cara pública del sitio (v22).
+
+**`ThemeContext` pasó a ser el lector de `site_settings`**, no sólo del tema.
+El archivo se sigue llamando así porque el tema sigue siendo su trabajo
+principal y renombrarlo tocaba siete imports sin cambiar nada. Dos detalles:
+
+1. **Una sola suscripción de realtime para toda la tabla**, repartida por clave.
+   El filtro era `key=eq.theme`; con dos claves, un segundo canal sobre la misma
+   tabla sería gastar una conexión por cada bandera que se agregue.
+2. **El `DELETE` deja `new` vacío y la clave viene en `old`.** Sin mirar los
+   dos, borrar la fila del cartel lo dejaría puesto en las pestañas abiertas
+   hasta que alguien recargue.
+3. **`loading` es del TEMA y no espera al cartel.** Una tarjeta sin su etiqueta
+   medio segundo no se nota; el sitio entero sin color, sí.
 
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 

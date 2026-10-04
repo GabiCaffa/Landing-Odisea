@@ -9,19 +9,31 @@ import {
 import { useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import {
+  CARTEL_KEY,
   DEFAULT_THEME,
   SiteTheme,
+  fetchCartel,
   fetchTheme,
   isSiteTheme,
+  limpiarCartel,
+  saveCartel,
   saveTheme,
 } from "@/lib/siteSettings";
 
 /**
- * Tema estacional del sitio (ver supabase/v19_site_settings.sql).
+ * Ajustes globales del sitio (ver supabase/v19_site_settings.sql).
  *
- * El valor vive en la DB y se prende desde el panel. Este provider lo lee, lo
- * escucha por realtime y lo escribe como `data-theme` en <html>, que es donde
- * los bloques de src/index.css redefinen los tokens de color.
+ * Nació para el tema estacional —que sigue siendo su trabajo principal, y por
+ * eso el archivo se sigue llamando así— y hoy lee también el **cartel de las
+ * tarjetas de evento**. Los valores viven en la DB y se prenden desde el
+ * panel; este provider los lee, los escucha por realtime y, en el caso del
+ * tema, lo escribe como `data-theme` en <html>, que es donde los bloques de
+ * src/index.css redefinen los tokens de color.
+ *
+ * **Una sola suscripción de realtime para toda la tabla**, repartida por
+ * clave. Antes el filtro era `key=eq.theme`; con dos claves, un segundo canal
+ * sobre la misma tabla sería gastar una conexión por cada bandera que se
+ * agregue.
  */
 
 /** Debe coincidir con la clave que usa el script anti-flash de index.html. */
@@ -93,16 +105,26 @@ interface ThemeContextValue {
   theme: SiteTheme;
   /** Tema realmente guardado en el sitio. Es el que muestra el panel. */
   siteTheme: SiteTheme;
-  /** Todavía no llegó el valor de la DB. */
+  /**
+   * Cartel de las tarjetas de evento. Vacío = sin cartel.
+   *
+   * **Es texto y nada más: no descuenta.** El precio del evento ya viene con
+   * el descuento puesto. Ver `CARTEL_KEY` en src/lib/siteSettings.ts.
+   */
+  cartel: string;
+  /** Todavía no llegó el TEMA de la DB (el cartel no lo bloquea). */
   loading: boolean;
   /** Guarda el tema. Sólo el admin pasa el RLS. */
   setTheme: (theme: SiteTheme) => Promise<void>;
+  /** Guarda el cartel. Sólo el admin pasa el RLS. */
+  setCartel: (texto: string) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<SiteTheme>(DEFAULT_THEME);
+  const [cartel, setCartelState] = useState("");
   const [loading, setLoading] = useState(true);
   const { pathname } = useLocation();
   const [params] = useSearchParams();
@@ -115,11 +137,18 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   // Carga inicial.
   useEffect(() => {
     let cancelled = false;
+    // En paralelo: son dos filas de la misma tabla y ninguna depende de la
+    // otra. `loading` es del TEMA —es lo que decide si se puede pintar la
+    // pantalla— así que no espera al cartel: una tarjeta sin su etiqueta medio
+    // segundo no se nota; el sitio entero sin color, sí.
     fetchTheme().then((value) => {
       if (cancelled) return;
       setThemeState(value);
       rememberTheme(value);
       setLoading(false);
+    });
+    fetchCartel().then((value) => {
+      if (!cancelled) setCartelState(value);
     });
     return () => {
       cancelled = true;
@@ -132,12 +161,22 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       .channel("site-settings-changes")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "site_settings", filter: "key=eq.theme" },
+        { event: "*", schema: "public", table: "site_settings" },
         (payload) => {
-          const value = (payload.new as { value?: unknown } | null)?.value;
-          const next = isSiteTheme(value) ? value : DEFAULT_THEME;
-          setThemeState(next);
-          rememberTheme(next);
+          const fila = payload.new as { key?: unknown; value?: unknown } | null;
+          // Un DELETE deja `new` vacío y la clave viene en `old`. Sin mirar
+          // los dos, borrar la fila del cartel lo dejaría puesto en las
+          // pestañas abiertas hasta que alguien recargue.
+          const vieja = payload.old as { key?: unknown } | null;
+          const key = fila?.key ?? vieja?.key;
+
+          if (key === "theme") {
+            const next = isSiteTheme(fila?.value) ? fila.value : DEFAULT_THEME;
+            setThemeState(next);
+            rememberTheme(next);
+          } else if (key === CARTEL_KEY) {
+            setCartelState(limpiarCartel(fila?.value));
+          }
         }
       )
       .subscribe();
@@ -151,6 +190,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     applyTheme(isThemedPath(pathname) ? effective : DEFAULT_THEME, isShowcasePath(pathname));
   }, [effective, pathname]);
 
+  const setCartel = useCallback(async (next: string) => {
+    await saveCartel(next);
+    // No esperamos al realtime para reflejarlo en quien lo cambió.
+    setCartelState(limpiarCartel(next));
+  }, []);
+
   const setTheme = useCallback(async (next: SiteTheme) => {
     await saveTheme(next);
     // No esperamos al realtime para reflejarlo en quien lo cambió.
@@ -159,11 +204,17 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme: effective, siteTheme: theme, loading, setTheme }}>
+    <ThemeContext.Provider value={{ theme: effective, siteTheme: theme, cartel, loading, setTheme, setCartel }}>
       {children}
     </ThemeContext.Provider>
   );
 };
+
+/**
+ * El cartel, sin tener que nombrar al tema. Es azúcar: evita que cada tarjeta
+ * tenga que explicar por qué le pide a `useTheme` algo que no es un tema.
+ */
+export const useCartelEventos = () => useTheme().cartel;
 
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);

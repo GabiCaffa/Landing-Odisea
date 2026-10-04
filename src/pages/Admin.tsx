@@ -137,7 +137,8 @@ import {
 } from "@/lib/ticketTypes";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/contexts/ThemeContext";
-import { SITE_THEMES, SiteTheme, THEME_LABELS } from "@/lib/siteSettings";
+import { CARTEL_MAX, SITE_THEMES, SiteTheme, THEME_LABELS } from "@/lib/siteSettings";
+import { claveDeGrupo, gruposExistentes } from "@/lib/grupos";
 import { toast } from "sonner";
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -1395,7 +1396,7 @@ const EventFormModal = ({
   onClose: () => void;
   onSave: (data: NewEventInput, promos: EventPromoSelection[]) => void | Promise<void>;
 }) => {
-  const { uploadEventImage } = useAuth();
+  const { uploadEventImage, events } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1441,6 +1442,20 @@ const EventFormModal = ({
     image: initial?.image ?? "",
     imagePosition: initial?.imagePosition ?? { ...DEFAULT_IMAGE_TRANSFORM },
     instagramUrl: initial?.instagramUrl ?? "https://www.instagram.com/odisea.uy/",
+    groupKey: initial?.groupKey ?? "",
+    groupName: initial?.groupName ?? "",
+  });
+
+  /**
+   * Fiestas de varios días (v26). Los grupos que ya existen salen de los
+   * eventos cargados, igual que los desplegables de ubicación de la pestaña
+   * Usuarios (§6.9): un catálogo aparte sería una tabla y su CRUD para algo
+   * que se usa una vez al año.
+   */
+  const grupos = useMemo(() => gruposExistentes(events), [events]);
+  const [modoGrupo, setModoGrupo] = useState<"no" | "existente" | "nuevo">(() => {
+    if (!initial?.groupKey) return "no";
+    return grupos.some((g) => g.key === initial.groupKey) ? "existente" : "nuevo";
   });
 
   // Sólo se ofrecen cuentas activas, pero si el evento ya usaba una que se
@@ -1735,6 +1750,76 @@ const EventFormModal = ({
                 className="input-techno"
                 placeholder="https://instagram.com/..."
               />
+            </FormField>
+
+            {/* ── Fiesta de varios días (v26) ──────────────────────────────
+              Esto NO convierte el evento en varios días: cada día se carga
+              como un evento aparte, con su fecha, sus entradas y su precio.
+              Lo único que hace es decirle al sitio que van juntos, para que
+              la home muestre una tarjeta y la página tenga el selector.
+            */}
+            <FormField label="Fiesta de varios días (opcional)">
+              <select
+                value={modoGrupo === "nuevo" ? "__nuevo__" : form.groupKey || ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "") {
+                    setModoGrupo("no");
+                    setForm({ ...form, groupKey: "", groupName: "" });
+                  } else if (v === "__nuevo__") {
+                    setModoGrupo("nuevo");
+                    setForm({ ...form, groupKey: "", groupName: "" });
+                  } else {
+                    const g = grupos.find((x) => x.key === v);
+                    setModoGrupo("existente");
+                    setForm({ ...form, groupKey: v, groupName: g?.nombre ?? "" });
+                  }
+                }}
+                className="input-techno"
+              >
+                <option value="">Evento de un solo día</option>
+                {grupos.map((g) => (
+                  <option key={g.key} value={g.key}>
+                    {g.nombre} ({g.dias} {g.dias === 1 ? "día" : "días"})
+                  </option>
+                ))}
+                <option value="__nuevo__">+ Crear una fiesta nueva…</option>
+              </select>
+
+              {modoGrupo === "nuevo" && (
+                <input
+                  type="text"
+                  value={form.groupName ?? ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      groupName: e.target.value,
+                      // La clave sale del nombre. La DB la normaliza igual al
+                      // guardar (trigger de v26); hacerlo acá es para que el
+                      // desplegable reconozca el grupo sin recargar.
+                      groupKey: claveDeGrupo(e.target.value),
+                    })
+                  }
+                  className="input-techno mt-2"
+                  placeholder="HALLOWEEN XXL"
+                  autoFocus
+                />
+              )}
+
+              <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                {modoGrupo === "no" ? (
+                  <>
+                    Si la fiesta dura varios días, cargá <strong>un evento por día</strong> y
+                    poné a todos la misma fiesta acá. En la home van a aparecer como una sola
+                    tarjeta, y el cliente elige el día adentro.
+                  </>
+                ) : (
+                  <>
+                    Este evento es <strong>un día</strong> de esa fiesta. Sus entradas, precios
+                    y promos son sólo de este día: cada día se compra por separado.
+                  </>
+                )}
+              </p>
             </FormField>
 
             <div className="flex gap-3 pt-2">
@@ -5251,6 +5336,134 @@ const AppearanceAdmin = () => {
         </Link>{" "}
         en otra pestaña.
       </p>
+
+      <CartelEventosPanel />
+    </div>
+  );
+};
+
+/**
+ * El cartel que llevan las tarjetas de los eventos activos en la home.
+ *
+ * Vive en `site_settings` (v19), que es exactamente lo que esa migración
+ * anticipó: "la próxima bandera global no va a necesitar otra migración".
+ *
+ * **La advertencia de que no descuenta no es decoración.** Es el error que
+ * este campo existe para evitar: cargar el "15% OFF" como una promo de verdad
+ * (v21) hace que el sitio reste el porcentaje OTRA VEZ sobre un precio que ya
+ * lo tiene. Si alguna vez hay que descontar de verdad, se hace en Promos.
+ */
+const CartelEventosPanel = () => {
+  const { cartel, setCartel } = useTheme();
+  const [texto, setTexto] = useState(cartel);
+  const [saving, setSaving] = useState(false);
+
+  // El valor llega por red (y puede cambiarlo otro admin por realtime), así
+  // que el campo se sincroniza cuando cambia afuera. Mientras se está
+  // guardando no, o se pisaría lo que la persona está tipeando.
+  useEffect(() => {
+    if (!saving) setTexto(cartel);
+  }, [cartel, saving]);
+
+  const limpio = texto.trim().slice(0, CARTEL_MAX);
+  const cambio = limpio !== cartel;
+
+  const guardar = async () => {
+    setSaving(true);
+    try {
+      await setCartel(limpio);
+      toast.success(limpio ? "Cartel actualizado" : "Cartel quitado");
+    } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      toast.error(
+        code === "PGRST205" || code === "42P01"
+          ? "Falta correr la migración v19_site_settings.sql en Supabase."
+          : "No se pudo guardar el cartel. ¿Seguís con sesión de admin?"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-10 border-t border-border pt-8">
+      <h3 className="font-sport text-xl font-black tracking-wide text-tinta">
+        CARTEL EN LAS TARJETAS
+      </h3>
+      <p className="text-sm text-muted-foreground mt-2 mb-5 leading-relaxed">
+        Se muestra arriba a la derecha en la tarjeta de cada evento que esté a la venta.
+        Dejalo vacío para sacarlo. El cambio es inmediato para todos.
+      </p>
+
+      <div className="border border-charrua/30 bg-charrua/[0.06] rounded-xl p-4 mb-5">
+        <p className="text-xs leading-relaxed text-tinta">
+          <strong>Es sólo un cartel: no descuenta nada.</strong> El precio que cargás en el
+          evento tiene que ser el precio final, con el descuento ya aplicado. Si lo que
+          querés es que el sitio calcule el descuento, va en la pestaña{" "}
+          <strong>Promos</strong> — pero ojo, si cargás las dos cosas se descuenta dos veces.
+        </p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+        <div className="flex-1">
+          <label htmlFor="cartel-eventos" className="label-techno">
+            Texto del cartel
+          </label>
+          <input
+            id="cartel-eventos"
+            type="text"
+            value={texto}
+            maxLength={CARTEL_MAX}
+            onChange={(e) => setTexto(e.target.value)}
+            placeholder="15% OFF"
+            className="input-techno w-full"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            {limpio.length}/{CARTEL_MAX} caracteres
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={guardar}
+          disabled={saving || !cambio}
+          className="btn-celeste px-6 py-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mt-3">
+        {["15% OFF", "2x1", "ÚLTIMAS ENTRADAS", "PREVENTA"].map((sugerencia) => (
+          <button
+            key={sugerencia}
+            type="button"
+            onClick={() => setTexto(sugerencia)}
+            className="text-[11px] font-semibold uppercase tracking-wide border border-border rounded-full px-3 py-1.5 hover:border-tinta/40 transition-colors"
+          >
+            {sugerencia}
+          </button>
+        ))}
+      </div>
+
+      {/* Cómo se va a ver. Las muestras de esta pestaña están escritas a mano
+          y no salen de los tokens (el panel no se tematiza), así que el color
+          es el naranja de siempre aunque el sitio esté en otro tema. */}
+      <div className="mt-6">
+        <p className="label-techno mb-2">Así se ve en la tarjeta</p>
+        <div className="relative w-56 h-40 rounded-lg bg-tinta/90 overflow-hidden">
+          <div className="absolute left-3 top-3 rounded-full bg-celeste px-3 py-1.5">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-white">
+              12 OCT
+            </span>
+          </div>
+          {limpio && (
+            <div className="absolute right-3 top-3 rounded-full bg-celeste px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">
+              {limpio}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
