@@ -1037,6 +1037,42 @@ lo hace `scroll-snap` nativo, igual que el carrusel de eventos. Verificado:
 > **El slider viaja en el bundle de la landing aunque esté apagado** (~6 KB,
 > ~2 KB en brotli). Diferirlo sería peor: es el LCP, y un `lazy` ahí mete un
 > salto justo en la métrica que §6.6 se dedicó a arreglar.
+### Dos asperezas del formulario de compra y del de evento
+
+**El bloque de la transferencia saltaba 337 px bajo el dedo.** Estaba
+condicionado a `isFormValid` y además abierto en el modal, así que para quien
+NO tiene cuenta aparecía justo al escribir el **primer dígito del teléfono**
+—el último campo que le queda—: medido, el cuerpo del modal pasaba de 576 a
+913 px de golpe. En un celular, con el teclado abierto y el navegador
+reacomodando el scroll, eso se siente como que el campo "te cortó", que fue
+exactamente como lo reportó el autor. Ahora va **siempre presente y plegado**:
+medido después, 0 px de crecimiento. De yapa, el comprador puede ver a dónde
+transfiere antes de cargar sus datos.
+
+> **No se pudo reproducir la pérdida de foco en sí.** Se probó en la página y
+> en el modal, con eventos sintéticos y con teclado real, midiendo
+> `document.activeElement` y la identidad del nodo tecla por tecla: el foco
+> nunca se perdió y el input nunca se remontó. Lo que sí se midió es el salto
+> de 337 px. Si con esto sigue pasando, el siguiente sospechoso es el teclado
+> del teléfono real, que no se puede emular acá.
+
+**El campo "Fiesta de varios días" no explicaba el modelo.** El autor cargó un
+evento y escribió **"16 de Octubre"** como nombre de la fiesta, esperando
+agregar los otros días desde ahí. Es un error razonable: el campo está al lado
+de la fecha y la pantalla habla de días. Tres cambios:
+
+- **La explicación va ARRIBA del campo**, no debajo. Debajo no se leyó.
+- El nombre pide ser **"el de la fiesta, no el del día"**, con
+  `EXPO FIESTA OCTUBRE` de ejemplo en vez de un placeholder genérico.
+- **Si lo que se escribe parece una fecha, avisa** ("16 de Octubre", "17/10",
+  "24 de Agosto"). Avisa y no bloquea: un nombre es libre.
+
+> **Falta el ABONO.** RedTickets, que es el modelo que pidió el autor, ofrece
+> además de los días sueltos un pase para toda la fiesta. En este modelo —cada
+> día es un evento y se compra por separado— un pase de 3 días no tiene dónde
+> vivir. Se puede resolver sin código cargándolo como un **tipo de entrada
+> "ABONO" en uno de los días**; si alguna vez tiene que ser de verdad, hay que
+> decidir a qué evento pertenece la venta.
 
 ## 6.0 El cartel de las tarjetas (sin migración)
 
