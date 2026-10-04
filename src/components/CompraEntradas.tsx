@@ -17,6 +17,8 @@ import {
   promoVigente,
   textoVencimiento,
 } from "@/lib/ticketPromos";
+import { useComisionTicketera } from "@/contexts/ThemeContext";
+import { precioConComision } from "@/lib/siteSettings";
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
 import { toast } from "sonner";
 
@@ -63,6 +65,9 @@ const CompraEntradas = ({
   promos = [],
 }: CompraEntradasProps) => {
   const { currentUser } = useAuth();
+  // Arriba del "if (!isOpen) return null" de abajo, como el resto de los
+  // hooks: puesto donde se usa cambiaria el orden de los hooks entre renders.
+  const comisionTicketera = useComisionTicketera();
 
   /**
    * En la página se entra derecho al formulario.
@@ -179,11 +184,40 @@ const CompraEntradas = ({
     const qty = quantities[t.name] ?? 0;
     const bruto = t.price * qty;
     const d = qty > 0 ? mejorDescuento(promos, t.ticketTypeId, t.price, qty, ahora) : null;
-    return { ticket: t, qty, bruto, descuento: d, subtotal: bruto - (d?.monto ?? 0) };
+    return {
+      ticket: t,
+      qty,
+      bruto,
+      descuento: d,
+      subtotal: bruto - (d?.monto ?? 0),
+      // Lo que costaría en una ticketera: el número tachado. Es COSMÉTICO
+      // —no entra en el total ni en el mensaje de WhatsApp, que siguen
+      // saliendo de `subtotal`— y se calcula por unidad y se multiplica (y no
+      // al revés) para que la cuenta del total coincida exactamente con lo que
+      // dice cada fila: redondear la suma puede dar un peso de diferencia con
+      // la suma de los redondeos.
+      conComision: precioConComision(t.price, comisionTicketera) * qty,
+    };
   });
 
   const total = lineas.reduce((acc, l) => acc + l.subtotal, 0);
   const ahorro = lineas.reduce((acc, l) => acc + (l.descuento?.monto ?? 0), 0);
+  /** Lo que esta misma compra costaría en una ticketera. 0 si no hay
+   *  comisión configurada, o sea si no hay que tachar nada. */
+  const totalConComision =
+    comisionTicketera > 0 ? lineas.reduce((acc, l) => acc + l.conComision, 0) : 0;
+
+  /**
+   * El número que va tachado al lado del total, y el ahorro que se muestra.
+   *
+   * `totalConComision` sale del BRUTO con la comisión encima, así que cubre
+   * las dos cosas de una: la comisión que acá no se cobra y las promos de v21.
+   * Sin comisión configurada se cae al comportamiento de siempre —tachar sólo
+   * cuando hay promo— y entonces no cambia nada de lo que ya existía.
+   */
+  const totalTachado =
+    totalConComision > 0 ? totalConComision : ahorro > 0 ? total + ahorro : 0;
+  const ahorroMostrado = totalTachado > 0 ? totalTachado - total : 0;
 
   /** Promos vigentes de un tipo, para mostrarlas aunque todavía no se apliquen. */
   const promosDe = (ticketTypeId: string) =>
@@ -395,7 +429,12 @@ const CompraEntradas = ({
                 {compacto ? "Entradas" : "Seleccionar entradas"}
               </h3>
               <div className={compacto ? "space-y-2" : "space-y-3"}>
-                {tickets.map((ticket) => (
+                {tickets.map((ticket) => {
+                  // Lo que costaría en una ticketera, por UNIDAD. El del
+                  // total se arma sumando `l.conComision` de cada línea, así
+                  // los dos números cierran.
+                  const conComision = precioConComision(ticket.price, comisionTicketera);
+                  return (
                   <div
                     key={ticket.name}
                     // En celular el nombre va arriba y el contador abajo: con
@@ -412,17 +451,41 @@ const CompraEntradas = ({
                     }
                   >
                     <div className="min-w-0 flex-1">
+                      {/*
+                        El número tachado es lo que esa entrada costaría en
+                        una TICKETERA, que le suma su comisión por servicio.
+                        Acá no se cobra, y eso es lo que dice el cartel
+                        "15% OFF". Es cosmético —no entra en el total ni en el
+                        mensaje— pero tiene que estar: el precio de comparación
+                        es lo que hace entendible el porcentaje que se anuncia.
+
+                        Va ANTES del precio real y más chico, que es el orden
+                        en que se lee: primero lo que se tacha, después lo que
+                        se paga.
+                      */}
                       {compacto ? (
                         <p className="flex items-baseline gap-2 leading-tight">
                           <span className="truncate font-medium">{ticket.name}</span>
-                          <span className="flex-shrink-0 text-sm text-muted-foreground">
-                            ${ticket.price}
+                          <span className="flex flex-shrink-0 items-baseline gap-1.5 text-sm">
+                            {conComision > 0 && (
+                              <span className="text-xs text-muted-foreground line-through tabular-nums">
+                                ${conComision}
+                              </span>
+                            )}
+                            <span className="text-muted-foreground">${ticket.price}</span>
                           </span>
                         </p>
                       ) : (
                         <>
                           <p className="font-medium leading-tight">{ticket.name}</p>
-                          <p className="text-sm text-muted-foreground">${ticket.price}</p>
+                          <p className="flex items-baseline gap-1.5 text-sm text-muted-foreground">
+                            {conComision > 0 && (
+                              <span className="text-xs line-through tabular-nums">
+                                ${conComision}
+                              </span>
+                            )}
+                            <span>${ticket.price}</span>
+                          </p>
                         </>
                       )}
                       {/* La descripción del tipo de entrada se cae en compacto:
@@ -512,7 +575,8 @@ const CompraEntradas = ({
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -679,20 +743,28 @@ const CompraEntradas = ({
           >
             {hasSelectedTickets && (
               <div className="flex items-center justify-between">
-                <div>
+                {/* El ahorro va junto al total y no arriba: es el número que
+                    convence, y arriba se lo come el scroll del cuerpo.
+                    En la PÁGINA va en la misma línea y no debajo: apilado son
+                    16 px, y ahí el presupuesto es la pantalla entera (v25). En
+                    el modal el cuerpo scrollea, así que sigue apilado. */}
+                <div className={compacto ? "flex items-baseline gap-2" : undefined}>
                   <span className="text-sm font-medium text-muted-foreground">Total</span>
-                  {/* El ahorro va junto al total y no arriba: es el número que
-                      convence, y arriba se lo come el scroll del cuerpo. */}
-                  {ahorro > 0 && (
-                    <p className="text-xs font-semibold text-celeste-deep">
-                      Ahorrás ${ahorro}
-                    </p>
-                  )}
+                  {ahorroMostrado > 0 &&
+                    (compacto ? (
+                      <span className="text-xs font-semibold text-celeste-deep">
+                        Ahorrás ${ahorroMostrado}
+                      </span>
+                    ) : (
+                      <p className="text-xs font-semibold text-celeste-deep">
+                        Ahorrás ${ahorroMostrado}
+                      </p>
+                    ))}
                 </div>
                 <div className="text-right">
-                  {ahorro > 0 && (
+                  {totalTachado > 0 && (
                     <span className="mr-2 text-sm text-muted-foreground line-through tabular-nums">
-                      ${total + ahorro}
+                      ${totalTachado}
                     </span>
                   )}
                   <span className="text-2xl font-semibold tabular-nums">${total}</span>

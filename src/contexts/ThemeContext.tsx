@@ -14,9 +14,13 @@ import {
   SiteTheme,
   fetchCartel,
   fetchTheme,
+  COMISION_KEY,
+  fetchComision,
   isSiteTheme,
   limpiarCartel,
+  limpiarComision,
   saveCartel,
+  saveComision,
   saveTheme,
 } from "@/lib/siteSettings";
 
@@ -112,12 +116,20 @@ interface ThemeContextValue {
    * el descuento puesto. Ver `CARTEL_KEY` en src/lib/siteSettings.ts.
    */
   cartel: string;
+  /**
+   * Cuánto por ciento se le suma al precio para mostrarlo tachado al lado.
+   * 0 = no se tacha nada. Ver `COMISION_KEY` en src/lib/siteSettings.ts, que
+   * explica por qué se guarda el recargo y no el descuento.
+   */
+  comisionTicketera: number;
   /** Todavía no llegó el TEMA de la DB (el cartel no lo bloquea). */
   loading: boolean;
   /** Guarda el tema. Sólo el admin pasa el RLS. */
   setTheme: (theme: SiteTheme) => Promise<void>;
   /** Guarda el cartel. Sólo el admin pasa el RLS. */
   setCartel: (texto: string) => Promise<void>;
+  /** Guarda el recargo del precio tachado. Sólo el admin pasa el RLS. */
+  setComisionTicketera: (recargo: number) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -125,6 +137,7 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<SiteTheme>(DEFAULT_THEME);
   const [cartel, setCartelState] = useState("");
+  const [comisionTicketera, setComisionState] = useState(0);
   const [loading, setLoading] = useState(true);
   const { pathname } = useLocation();
   const [params] = useSearchParams();
@@ -149,6 +162,9 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     });
     fetchCartel().then((value) => {
       if (!cancelled) setCartelState(value);
+    });
+    fetchComision().then((value) => {
+      if (!cancelled) setComisionState(value);
     });
     return () => {
       cancelled = true;
@@ -176,6 +192,8 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
             rememberTheme(next);
           } else if (key === CARTEL_KEY) {
             setCartelState(limpiarCartel(fila?.value));
+          } else if (key === COMISION_KEY) {
+            setComisionState(limpiarComision(fila?.value));
           }
         }
       )
@@ -196,6 +214,11 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     setCartelState(limpiarCartel(next));
   }, []);
 
+  const setComisionTicketera = useCallback(async (next: number) => {
+    await saveComision(next);
+    setComisionState(limpiarComision(next));
+  }, []);
+
   const setTheme = useCallback(async (next: SiteTheme) => {
     await saveTheme(next);
     // No esperamos al realtime para reflejarlo en quien lo cambió.
@@ -204,7 +227,16 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme: effective, siteTheme: theme, cartel, loading, setTheme, setCartel }}>
+    <ThemeContext.Provider value={{
+        theme: effective,
+        siteTheme: theme,
+        cartel,
+        comisionTicketera,
+        loading,
+        setTheme,
+        setCartel,
+        setComisionTicketera,
+      }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -215,6 +247,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
  * tenga que explicar por qué le pide a `useTheme` algo que no es un tema.
  */
 export const useCartelEventos = () => useTheme().cartel;
+
+/**
+ * El recargo del precio tachado, para los componentes que muestran plata.
+ * 0 = no se tacha nada.
+ */
+export const useComisionTicketera = () => useTheme().comisionTicketera;
 
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);

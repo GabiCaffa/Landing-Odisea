@@ -992,6 +992,63 @@ principal y renombrarlo tocaba siete imports sin cambiar nada. Dos detalles:
 3. **`loading` es del TEMA y no espera al cartel.** Una tarjeta sin su etiqueta
    medio segundo no se nota; el sitio entero sin color, sí.
 
+### El precio tachado = la comisión de ticketera
+
+Al lado de cada precio va tachado **lo que esa entrada costaría en una
+ticketera**. Clave `comision_ticketera` en `site_settings`, un solo número
+para todo el sitio.
+
+> **Qué es el 15%, porque el nombre decide el diseño.** No es un descuento que
+> ODÍSEA hace: es el **cargo por servicio que cobran las plataformas de venta**
+> (MiEntrada, RedTickets). Una entrada de $600 allá sale $690 porque le suman
+> su 15%; acá sale $600 porque se vende directo. Eso es lo que dice "15% OFF",
+> y por eso **es el mismo porcentaje en todos los eventos**: la comisión no
+> depende de la fecha.
+
+De ahí salen tres cosas que de otro modo parecen arbitrarias:
+
+- **La cuenta es `precio × 1,15`**, no `precio ÷ 0,85`. No es la fórmula de un
+  descuento mal aplicada: es literalmente cómo la ticketera calcula lo que
+  cobra.
+- **El número tachado es un precio REAL**, el de la competencia, no un "precio
+  de lista" inflado para que la rebaja parezca más grande. Esa distinción es
+  justo la que mira la ley de relaciones de consumo.
+- **Vive en los ajustes del sitio y no en cada evento**, porque es uno solo
+  para todos.
+
+> **Esto se entendió mal la primera vez y conviene dejarlo escrito.** Leí el
+> "15% OFF" como un descuento nuestro, calculé que de $690 a $600 el cliente
+> "sólo" lee 13% y llegué a poner en el panel un botón que ofrecía subir el
+> recargo a 18% para que el 15% fuera "verdadero". **Eso habría inflado el
+> precio de comparación por encima de lo que una ticketera cobra**, que es
+> exactamente el problema legal que se quería evitar. El botón se sacó. La
+> lección: cuando un número de la cara pública no cierra, la explicación puede
+> estar en el negocio y no en la aritmética.
+
+**Es COSMÉTICO y eso es una invariante, no un detalle.** `conComision` y
+`totalConComision` existen sólo para pintar: el TOTAL, el bloque de la
+transferencia y el mensaje de WhatsApp siguen saliendo de `subtotal` y
+`total`, que no se tocaron. Si alguna vez el tachado se cuela en el mensaje,
+el vendedor cobra de más.
+
+- **Por unidad y después multiplicado** (y no al revés): redondear la suma
+  puede dar un peso de diferencia con la suma de los redondeos, y entonces el
+  total no coincidiría con lo que dice cada fila.
+- **El tachado del total ya cubre las dos cosas**, porque sale del bruto con
+  la comisión encima: la comisión que acá no se cobra y las promos de v21. Sin
+  comisión configurada se cae al comportamiento anterior —tachar sólo cuando
+  hay promo— así que no cambia nada de lo que ya existía.
+- Va en **los cuatro lugares donde se muestra un precio**: las filas de
+  entrada, el total, el "Desde $X" de la página del evento y el selector de
+  "Compra Directa". Ese último se había pasado por alto en la primera vuelta y
+  apareció probando el flujo entero en el navegador.
+
+> **"Ahorrás $X" pasó a la misma línea que "Total" en la página.** Apilado
+> costaba 16 px, y medido, eso era exactamente lo que había agregado de scroll
+> a una pantalla que v25 dejó justa. En el modal sigue apilado: ahí el cuerpo
+> scrollea y los 16 px no se pagan. Medido antes y después: 22 px de scroll
+> con el tachado apagado, 22 con el tachado prendido.
+
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
 La card 02 de `PromosSection` era un link fijo a WhatsApp ("Quiero info"). Ahora abre
