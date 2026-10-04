@@ -1118,6 +1118,37 @@ pase. Por abajo el guardado se los suma a los tres días igual.
 > **El rótulo no aparece con un solo día.** Ahí "abono" no significa nada
 > distinto de una entrada, y un cartel que dice "vale para 1 día" es ruido.
 
+### El sidebar del panel cortaba el botón de cerrar sesión
+
+Reportado con una captura: el bloque de sesión quedaba partido contra el borde
+de abajo. **No era un tema de alturas sino la trampa clásica de flexbox**: un
+hijo con `flex-1` **no se encoge por debajo de su contenido**, porque su
+`min-height` es `auto`. Con el sidebar en `h-screen`, la lista de pestañas se
+quedaba con su alto natural y empujaba al pie fuera de la pantalla.
+
+Medido antes, en 1280×800: el bloque de sesión terminaba en **818 px** con 800
+de alto. La lista pedía 556 y no cedía los 18 que faltaban.
+
+`min-h-0` la deja encogerse y `overflow-y-auto` le da scroll propio, así en una
+pantalla baja **se scrollean las pestañas y no se pierde el pie**. El pie y el
+logo van `flex-shrink-0`: el que cede tiene que ser la lista, que es la única
+que puede scrollear.
+
+| viewport | lista con scroll | ¿se corta? |
+|---:|---|---|
+| 600 | sí | no (584) |
+| 800 | sí | no (784) |
+| 1200 | no | no (1184) |
+
+> **Apareció recién ahora porque la lista creció.** Con 2 pestañas (el operador
+> antes de v22) sobraba lugar; con 9 y el bloque de sesión abajo, 800 px de
+> alto ya no alcanzan. Cualquier pestaña nueva lo habría destapado igual.
+
+> **Se midió montando `AdminShell` suelto**, que es puramente presentacional
+> —recibe todo por props— así que se puede renderizar fuera de `/admin` sin
+> sesión. Vale la pena recordarlo: es la única parte del panel que se puede
+> verificar sin credenciales.
+
 ### La fiesta también se EDITA como una sola cosa
 
 La primera versión de `FiestaFormModal` sólo creaba, y el agujero se vio en el
