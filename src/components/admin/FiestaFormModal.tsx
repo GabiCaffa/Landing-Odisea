@@ -8,13 +8,18 @@ import {
   TicketsEditor,
   useAceptarConTab,
 } from "@/components/admin/CamposEvento";
-import { useAuth, DEFAULT_IMAGE_TRANSFORM, NewEventInput } from "@/contexts/AuthContext";
+import {
+  useAuth,
+  AdminEvent,
+  DEFAULT_IMAGE_TRANSFORM,
+  NewEventInput,
+} from "@/contexts/AuthContext";
 import { PaymentAccount } from "@/lib/paymentAccounts";
 import { EventTicket, TicketType, saveEventTickets } from "@/lib/ticketTypes";
 import { claveDeGrupo, etiquetaDeDia } from "@/lib/grupos";
 
 /**
- * Crear una fiesta de varios días **de una sola vez**.
+ * Crear **o editar** una fiesta de varios días, tratándola como una sola cosa.
  *
  * ─── Por qué existe ─────────────────────────────────────────────────────────
  *
@@ -28,6 +33,24 @@ import { claveDeGrupo, etiquetaDeDia } from "@/lib/grupos";
  * Esta pantalla invierte el orden: se describe **la fiesta** una vez y se
  * agregan **los días**. Por abajo sigue creando N eventos agrupados — el
  * modelo no cambia, cambia quién tiene que saberlo.
+ *
+ * ─── Editar también, y por el mismo motivo ──────────────────────────────────
+ *
+ * La primera versión sólo creaba, y el agujero se vio enseguida: el autor
+ * cargó los tres días y después quiso sumarles el ABONO. Con la fiesta ya
+ * creada eso era editar tres eventos a mano, tildando el mismo tipo y
+ * escribiendo el mismo precio tres veces — sin nada que garantice que quedan
+ * iguales. **Una pantalla que sólo sirve para crear deja el problema
+ * exactamente donde estaba.**
+ *
+ * En edición, lo compartido (nombre, lugar, flyer, cuenta, Instagram y el
+ * abono) se escribe en TODOS los días de una. Lo de cada día —fecha, line-up,
+ * sus entradas— sigue siendo de cada día.
+ *
+ * **No se pueden quitar días desde acá**: borrar un día es borrar un evento, y
+ * eso puede tener entregas cargadas (FK `restrict`) y es sólo del admin. Se
+ * hace desde la lista, donde el borrado ya avisa lo que corresponde. Agregar
+ * días sí.
  *
  * ─── Lo que NO hace, a propósito ────────────────────────────────────────────
  *
@@ -47,6 +70,8 @@ import { claveDeGrupo, etiquetaDeDia } from "@/lib/grupos";
 interface DiaBorrador {
   /** Sólo para React. No viaja a la base. */
   id: string;
+  /** El evento que ya existe. Ausente = día nuevo, hay que crearlo. */
+  eventId?: string;
   date: string;
   /** Vacío = se arma solo con el nombre de la fiesta y la fecha. */
   nombre: string;
@@ -72,30 +97,50 @@ const nombreDeDia = (fiesta: string, date: string) => {
 const FiestaFormModal = ({
   accounts,
   ticketTypes,
+  grupo,
   onClose,
   onSaved,
 }: {
   accounts: PaymentAccount[];
   ticketTypes: TicketType[];
+  /** Los días de una fiesta que ya existe, ordenados. Ausente = crear una. */
+  grupo?: AdminEvent[];
   onClose: () => void;
   onSaved: () => void;
 }) => {
-  const { uploadEventImage, createEvent } = useAuth();
+  const { uploadEventImage, createEvent, updateEvent } = useAuth();
+  const esEdicion = !!grupo?.length;
+  const base = grupo?.[0];
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [nombre, setNombre] = useState("");
-  const [location, setLocation] = useState("");
-  const [instagramUrl, setInstagramUrl] = useState("https://www.instagram.com/odisea.uy/");
-  const [paymentAccountId, setPaymentAccountId] = useState(
-    accounts.find((a) => a.isDefault)?.id ?? ""
+  const [nombre, setNombre] = useState(base?.groupName ?? "");
+  const [location, setLocation] = useState(base?.location ?? "");
+  const [instagramUrl, setInstagramUrl] = useState(
+    base?.instagramUrl ?? "https://www.instagram.com/odisea.uy/"
   );
-  const [image, setImage] = useState("");
+  const [paymentAccountId, setPaymentAccountId] = useState(
+    base?.paymentAccountId ?? accounts.find((a) => a.isDefault)?.id ?? ""
+  );
+  const [image, setImage] = useState(base?.image ?? "");
   const [subiendo, setSubiendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   // Dos días de arranque: una fiesta de un solo día se carga con "Nuevo
   // evento", así que acá el mínimo real es dos.
-  const [dias, setDias] = useState<DiaBorrador[]>(() => [nuevoDia(), nuevoDia()]);
+  const [dias, setDias] = useState<DiaBorrador[]>(() =>
+    grupo?.length
+      ? grupo.map((e) => ({
+          id: e.id,
+          eventId: e.id,
+          date: e.date,
+          nombre: e.name,
+          description: e.description,
+          // Los abonos se manejan arriba, en su sección: si quedaran también
+          // acá, se verían dos veces y se podrían editar por dos lados.
+          tickets: e.tickets.filter((t) => !t.isAbono),
+        }))
+      : [nuevoDia(), nuevoDia()]
+  );
 
   /**
    * El ABONO (v28): una entrada que vale para todos los días.
@@ -110,8 +155,13 @@ const FiestaFormModal = ({
    * eso es una decisión del guardado, no algo que haya que cargar a mano.
    */
   const tiposAbono = ticketTypes.filter((t) => t.isAbono && t.active);
-  const [abonoTipoId, setAbonoTipoId] = useState("");
-  const [abonoPrecio, setAbonoPrecio] = useState("");
+  // En edición se busca el abono que ya tenga cualquiera de los días: está en
+  // los tres con el mismo precio, así que alcanza con el primero que aparezca.
+  const abonoExistente = grupo?.flatMap((e) => e.tickets).find((t) => t.isAbono);
+  const [abonoTipoId, setAbonoTipoId] = useState(abonoExistente?.ticketTypeId ?? "");
+  const [abonoPrecio, setAbonoPrecio] = useState(
+    abonoExistente ? String(abonoExistente.price) : ""
+  );
 
   const cuentasOfrecidas = accounts.filter((a) => a.active || a.id === paymentAccountId);
 
@@ -217,25 +267,42 @@ const FiestaFormModal = ({
         groupName: nombre.trim(),
       };
 
-      const r = await createEvent(data);
-      if (!r.ok || !r.id) {
-        setGuardando(false);
-        toast.error(
-          creados.length === 0
-            ? `No se pudo crear el día ${i + 1}: ${r.error ?? "error desconocido"}`
-            : `Se crearon ${creados.length} día(s) y falló el ${i + 1}: ${
-                r.error ?? "error desconocido"
-              }. Los que quedaron están en la lista de eventos; agregá el resto desde "Nuevo evento" eligiendo la fiesta "${nombre.trim()}".`
-        );
-        onSaved();
-        return;
+      // Día que ya existe → update. Día nuevo → create. Así la misma pantalla
+      // sirve para las dos cosas sin que haya que elegir antes cuál es.
+      let eventId = d.eventId;
+      if (eventId) {
+        const r = await updateEvent(eventId, data);
+        if (!r.ok) {
+          setGuardando(false);
+          toast.error(
+            `Falló al guardar el día ${i + 1}: ${r.error ?? "error desconocido"}` +
+              (creados.length ? ` (los ${creados.length} anteriores sí se guardaron)` : "")
+          );
+          onSaved();
+          return;
+        }
+      } else {
+        const r = await createEvent(data);
+        if (!r.ok || !r.id) {
+          setGuardando(false);
+          toast.error(
+            creados.length === 0
+              ? `No se pudo crear el día ${i + 1}: ${r.error ?? "error desconocido"}`
+              : `Se guardaron ${creados.length} día(s) y falló el ${i + 1}: ${
+                  r.error ?? "error desconocido"
+                }. Los que quedaron están en la lista de eventos.`
+          );
+          onSaved();
+          return;
+        }
+        eventId = r.id;
       }
 
-      const t = await saveEventTickets(r.id, entradasDe(d));
+      const t = await saveEventTickets(eventId, entradasDe(d));
       if (!t.ok) {
         setGuardando(false);
         toast.error(
-          `El día ${i + 1} se creó pero sus entradas no: ${
+          `El día ${i + 1} se guardó pero sus entradas no: ${
             t.error ?? "error desconocido"
           }. Editalo desde la lista para cargarlas.`
         );
@@ -243,12 +310,14 @@ const FiestaFormModal = ({
         return;
       }
 
-      creados.push(r.id);
+      creados.push(eventId);
     }
 
     setGuardando(false);
     toast.success(
-      `Fiesta creada con ${creados.length} días. En la home va a verse como una sola tarjeta.`
+      esEdicion
+        ? `Fiesta guardada: ${creados.length} días actualizados.`
+        : `Fiesta creada con ${creados.length} días. En la home va a verse como una sola tarjeta.`
     );
     onSaved();
     onClose();
@@ -256,8 +325,12 @@ const FiestaFormModal = ({
 
   return (
     <ModalAdmin
-      titulo="Nueva fiesta de varios días"
-      subtitulo="Se crea un evento por día, todos juntos bajo la misma fiesta"
+      titulo={esEdicion ? "Editar la fiesta" : "Nueva fiesta de varios días"}
+      subtitulo={
+        esEdicion
+          ? "Lo que cambies acá arriba se aplica a todos los días"
+          : "Se crea un evento por día, todos juntos bajo la misma fiesta"
+      }
       onClose={onClose}
       ancho="3xl"
       pie={
@@ -276,7 +349,11 @@ const FiestaFormModal = ({
             disabled={guardando || subiendo}
             className="btn-techno flex-1 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {guardando ? "Creando…" : `Crear la fiesta (${dias.length} días)`}
+            {guardando
+              ? "Guardando…"
+              : esEdicion
+                ? `Guardar los ${dias.length} días`
+                : `Crear la fiesta (${dias.length} días)`}
           </button>
         </>
       }
@@ -473,7 +550,10 @@ const FiestaFormModal = ({
                       </span>
                     )}
                   </span>
-                  {dias.length > 2 && (
+                  {/* Un día que ya existe no se quita desde acá: borrarlo es
+                      borrar un evento, que puede tener entregas cargadas y es
+                      sólo del admin. Eso se hace desde la lista. */}
+                  {!d.eventId && dias.length > 2 && (
                     <button
                       type="button"
                       onClick={() => setDias((prev) => prev.filter((x) => x.id !== d.id))}

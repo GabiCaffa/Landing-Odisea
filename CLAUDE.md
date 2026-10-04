@@ -1118,6 +1118,41 @@ pase. Por abajo el guardado se los suma a los tres días igual.
 > **El rótulo no aparece con un solo día.** Ahí "abono" no significa nada
 > distinto de una entrada, y un cartel que dice "vale para 1 día" es ruido.
 
+### La fiesta también se EDITA como una sola cosa
+
+La primera versión de `FiestaFormModal` sólo creaba, y el agujero se vio en el
+mismo día: el autor cargó los tres días de la Expo y después quiso sumarles el
+ABONO. Con la fiesta ya creada eso era **editar tres eventos a mano**, tildando
+el mismo tipo y escribiendo el mismo precio tres veces, sin nada que garantice
+que quedaran iguales. Terminó borrando los tres para rehacerlos.
+
+> **Una pantalla que sólo sirve para crear deja el problema donde estaba.**
+> Todo lo que es "de la fiesta" —el nombre, el flyer, el lugar, la cuenta, el
+> abono— nace compartido y se mantiene compartido; que se pueda definir de una
+> vez pero no corregir de una vez es una asimetría que no tiene defensa.
+
+La misma pantalla toma ahora un grupo opcional y, si viene, **actualiza** en
+vez de crear. Lo compartido se escribe en todos los días; lo de cada día
+—fecha, line-up, entradas— sigue siendo suyo.
+
+- **Un solo estado (`fiesta`) para las dos cosas**: `true` = crear, un array =
+  editar ese grupo. Con dos banderas sueltas queda la puerta abierta a que las
+  dos estén prendidas y no se sepa cuál gana.
+- **Día existente → `updateEvent`; día nuevo → `createEvent`.** Así se le
+  pueden agregar días a una fiesta que ya existe sin elegir antes qué se va a
+  hacer.
+- **Los abonos se filtran de la lista de entradas de cada día también al
+  editar**: si quedaran ahí se verían dos veces y se podrían cambiar por dos
+  lados.
+- **No se pueden quitar días desde acá.** Borrar un día es borrar un evento,
+  que puede tener entregas cargadas (FK `restrict`) y es sólo del admin. Se
+  hace desde la lista, donde el borrado ya avisa lo que corresponde. Agregar
+  días sí.
+
+**En la lista de eventos, un día agrupado tiene dos botones**: "Editar" (ese
+día) y "Editar fiesta" (los N días). Sin esa distinción a la vista, cualquiera
+entra por el primero y vuelve a hacer el trabajo tres veces.
+
 ### Las sugerencias se aceptan con Tab
 
 Varios campos del panel proponen un valor y lo muestran en gris —el nombre de
