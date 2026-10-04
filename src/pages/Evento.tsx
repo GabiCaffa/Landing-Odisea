@@ -7,6 +7,8 @@ import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
 import { promoVigente, textoVencimiento } from "@/lib/ticketPromos";
 import { diasDelGrupo, etiquetaDeDia, eventoAgotado } from "@/lib/grupos";
+import { useComisionTicketera } from "@/contexts/ThemeContext";
+import { precioConComision } from "@/lib/siteSettings";
 import { urlDeEvento } from "@/lib/rutas";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
@@ -50,6 +52,7 @@ const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
 const Evento = () => {
   const { slug } = useParams<{ slug: string }>();
   const { events, eventsLoaded } = useAuth();
+  const comisionTicketera = useComisionTicketera();
 
   const evento = useMemo(() => events.find((e) => e.slug === slug), [events, slug]);
 
@@ -106,6 +109,7 @@ const Evento = () => {
 
   // El tipo activo más barato, para el "desde $X" de arriba.
   const desde = entradas.length ? Math.min(...entradas.map((t) => t.price)) : 0;
+  const desdeConComision = precioConComision(desde, comisionTicketera);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -177,8 +181,16 @@ const Evento = () => {
                   // estaba a una pantalla de scroll de distancia.
                   <p className="flex items-center gap-2 text-sm">
                     <Ticket className="h-4 w-4 flex-shrink-0 text-celeste-deep" />
-                    <span className="font-semibold uppercase tracking-wide">
-                      Desde ${desde.toLocaleString("es-UY")}
+                    <span className="flex items-baseline gap-1.5 font-semibold uppercase tracking-wide">
+                      {/* Tachado: lo que costaría en una ticketera, que le
+                          suma su comisión. Ver COMISION_KEY en
+                          src/lib/siteSettings.ts. */}
+                      {desdeConComision > 0 && (
+                        <span className="text-xs font-normal text-muted-foreground line-through tabular-nums">
+                          ${desdeConComision.toLocaleString("es-UY")}
+                        </span>
+                      )}
+                      <span>Desde ${desde.toLocaleString("es-UY")}</span>
                     </span>
                   </p>
                 )}

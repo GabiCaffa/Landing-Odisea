@@ -99,3 +99,61 @@ export async function fetchCartel(): Promise<string> {
 export async function saveCartel(texto: string): Promise<void> {
   await saveSetting(CARTEL_KEY, limpiarCartel(texto));
 }
+
+// ─── Comisión de ticketera (el precio tachado) ──────────────────────────────
+
+/**
+ * Comisión que las ticketeras le suman al precio de la entrada, en por ciento.
+ * 0 o ausente = no se tacha ningún precio.
+ *
+ * **Qué es esto, porque el nombre importa.** NO es un descuento que ODÍSEA
+ * hace: es el cargo por servicio que cobran las plataformas de venta. Una
+ * entrada de $600 en una ticketera sale $690, porque le suman su 15%. Acá sale
+ * $600, porque se vende directo y ese cargo no existe. Eso es lo que el cartel
+ * "15% OFF" quiere decir.
+ *
+ * Por eso:
+ *
+ * - **La cuenta es `precio × (1 + comisión/100)`** y no `precio ÷ (1 −
+ *   d/100)`. No es la fórmula de un descuento aproximada: es literalmente cómo
+ *   la ticketera calcula lo que cobra.
+ * - **El número tachado es un precio REAL**, el de la competencia, no un
+ *   "precio de lista" inventado para que el descuento parezca más grande. Esa
+ *   distinción es justamente la que mira la ley de relaciones de consumo
+ *   cuando se anuncia una rebaja.
+ * - **Es el mismo para todos los eventos**, porque la comisión no depende de
+ *   la fecha. Por eso vive acá, en los ajustes del sitio, y no en cada evento.
+ *
+ * > No confundir con las promos de v21, que sí descuentan de verdad sobre el
+ * > precio. Esto no toca el total ni el mensaje de WhatsApp: sólo se pinta.
+ */
+export const COMISION_KEY = "comision_ticketera";
+
+/** Ninguna ticketera cobra más que esto; arriba es un error de tipeo. */
+export const COMISION_MAX = 50;
+
+export const limpiarComision = (value: unknown): number => {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(Math.round(n), COMISION_MAX);
+};
+
+/**
+ * Lo que esa entrada costaría en una ticketera: el número que va tachado.
+ * Devuelve 0 si no hay comisión configurada, o sea si no hay que tachar nada.
+ */
+export const precioConComision = (precio: number, comision: number): number =>
+  comision > 0 ? Math.round(precio * (1 + comision / 100)) : 0;
+
+/** No tira: un precio tachado que no se puede leer no rompe la venta. */
+export async function fetchComision(): Promise<number> {
+  try {
+    return limpiarComision(await fetchSetting(COMISION_KEY));
+  } catch {
+    return 0;
+  }
+}
+
+export async function saveComision(comision: number): Promise<void> {
+  await saveSetting(COMISION_KEY, String(limpiarComision(comision)));
+}

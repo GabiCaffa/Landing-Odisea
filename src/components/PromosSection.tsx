@@ -11,6 +11,8 @@ const BirthdayPromoModal = lazy(() => import("./BirthdayPromoModal"));
 import { EventTicket } from "@/lib/ticketTypes";
 import { EventPromo } from "@/lib/ticketPromos";
 import { playThud } from "@/lib/spookySound";
+import { useComisionTicketera } from "@/contexts/ThemeContext";
+import { precioConComision } from "@/lib/siteSettings";
 import ModalShell from "./ModalShell";
 
 // Evento que consume el selector / modal de compra (derivado de los eventos reales).
@@ -180,7 +182,10 @@ const EventPickerOverlay = ({
   events: PickerEvent[];
   onSelect: (e: PickerEvent) => void;
   onClose: () => void;
-}) => (
+}) => {
+  const comisionTicketera = useComisionTicketera();
+
+  return (
   <ModalShell onClose={onClose} ancho="md" etiqueta="Elegir el evento">
     {/* Encabezado fijo */}
     <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-border p-4 sm:p-6">
@@ -224,7 +229,17 @@ const EventPickerOverlay = ({
               </p>
             </div>
             <div className="flex items-baseline gap-1.5 sm:block sm:flex-shrink-0 sm:text-right">
-              <p className="font-semibold">${event.tickets[0].price}</p>
+              {/* Tachado, igual que en la compra: lo que costaría en una
+                  ticketera. Donde se muestre un precio se muestra el de
+                  comparación. Ver COMISION_KEY en src/lib/siteSettings.ts. */}
+              <p className="flex items-baseline justify-end gap-1.5">
+                {precioConComision(event.tickets[0].price, comisionTicketera) > 0 && (
+                  <span className="text-xs text-muted-foreground line-through tabular-nums group-hover:text-background/60">
+                    ${precioConComision(event.tickets[0].price, comisionTicketera)}
+                  </span>
+                )}
+                <span className="font-semibold">${event.tickets[0].price}</span>
+              </p>
               <p className="text-xs text-muted-foreground group-hover:text-background/60">
                 por entrada
               </p>
@@ -241,7 +256,8 @@ const EventPickerOverlay = ({
       Precio sin comisión de ticketera · Pago por transferencia
     </p>
   </ModalShell>
-);
+  );
+};
 
 // ── Card individual ───────────────────────────────────────────────────────────
 const PromoCard = ({

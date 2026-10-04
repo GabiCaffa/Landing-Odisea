@@ -137,7 +137,14 @@ import {
 } from "@/lib/ticketTypes";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/contexts/ThemeContext";
-import { CARTEL_MAX, SITE_THEMES, SiteTheme, THEME_LABELS } from "@/lib/siteSettings";
+import {
+  CARTEL_MAX,
+  SITE_THEMES,
+  SiteTheme,
+  COMISION_MAX,
+  THEME_LABELS,
+  precioConComision,
+} from "@/lib/siteSettings";
 import { claveDeGrupo, gruposExistentes } from "@/lib/grupos";
 import { toast } from "sonner";
 
@@ -5354,8 +5361,9 @@ const AppearanceAdmin = () => {
  * lo tiene. Si alguna vez hay que descontar de verdad, se hace en Promos.
  */
 const CartelEventosPanel = () => {
-  const { cartel, setCartel } = useTheme();
+  const { cartel, setCartel, comisionTicketera, setComisionTicketera } = useTheme();
   const [texto, setTexto] = useState(cartel);
+  const [recargo, setRecargo] = useState(String(comisionTicketera));
   const [saving, setSaving] = useState(false);
 
   // El valor llega por red (y puede cambiarlo otro admin por realtime), así
@@ -5365,20 +5373,34 @@ const CartelEventosPanel = () => {
     if (!saving) setTexto(cartel);
   }, [cartel, saving]);
 
+  useEffect(() => {
+    if (!saving) setRecargo(String(comisionTicketera));
+  }, [comisionTicketera, saving]);
+
   const limpio = texto.trim().slice(0, CARTEL_MAX);
-  const cambio = limpio !== cartel;
+  const comisionNum = Math.min(Math.max(Math.round(Number(recargo) || 0), 0), COMISION_MAX);
+  const cambio = limpio !== cartel || comisionNum !== comisionTicketera;
+
+  // El ejemplo se calcula con la MISMA función que el sitio, no con una cuenta
+  // escrita acá: si alguna vez cambia el redondeo, el panel no puede quedar
+  // mostrando otro número que la página de compra.
+  const EJEMPLO = 600;
+  const ejemploConComision = precioConComision(EJEMPLO, comisionNum);
 
   const guardar = async () => {
     setSaving(true);
     try {
-      await setCartel(limpio);
-      toast.success(limpio ? "Cartel actualizado" : "Cartel quitado");
+      // En serie y no en paralelo: son dos upserts a la misma tabla y si el
+      // segundo falla por RLS conviene que el error hable de uno solo.
+      if (limpio !== cartel) await setCartel(limpio);
+      if (comisionNum !== comisionTicketera) await setComisionTicketera(comisionNum);
+      toast.success("Listo");
     } catch (err) {
       const code = (err as { code?: string } | null)?.code;
       toast.error(
         code === "PGRST205" || code === "42P01"
           ? "Falta correr la migración v19_site_settings.sql en Supabase."
-          : "No se pudo guardar el cartel. ¿Seguís con sesión de admin?"
+          : "No se pudo guardar. ¿Seguís con sesión de admin?"
       );
     } finally {
       setSaving(false);
@@ -5444,6 +5466,48 @@ const CartelEventosPanel = () => {
             {sugerencia}
           </button>
         ))}
+      </div>
+
+      <div className="mt-6 border-t border-border pt-6">
+        <label htmlFor="cartel-comision" className="label-techno">
+          Comisión de ticketera
+        </label>
+        <p className="text-xs text-muted-foreground mt-1 mb-2 leading-relaxed">
+          Lo que las ticketeras le <strong>suman</strong> al precio de la entrada. El sitio lo
+          usa para mostrar tachado lo que esa entrada costaría en una de ellas, al lado de lo
+          que sale acá. En 0 no se tacha ningún precio.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            id="cartel-comision"
+            type="number"
+            min={0}
+            max={COMISION_MAX}
+            step={1}
+            value={recargo}
+            onChange={(e) => setRecargo(e.target.value)}
+            className="input-techno w-28"
+          />
+          <span className="text-sm text-muted-foreground">%</span>
+        </div>
+
+        {/* El ejemplo en vivo, con la misma función que usa el sitio. */}
+        {comisionNum > 0 && (
+          <div className="mt-3 border border-border rounded-xl p-4 bg-secondary/30">
+            <p className="text-sm">
+              Una entrada de <strong>${EJEMPLO}</strong> se va a mostrar así:{" "}
+              <span className="text-muted-foreground line-through">
+                ${ejemploConComision}
+              </span>{" "}
+              <strong>${EJEMPLO}</strong>
+            </p>
+            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+              O sea: <strong>${ejemploConComision}</strong> es lo que costaría en una
+              ticketera con {comisionNum}% de comisión, y <strong>${EJEMPLO}</strong> lo que
+              sale acá. El precio que cargás en el evento es siempre el de acá.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Cómo se va a ver. Las muestras de esta pestaña están escritas a mano
