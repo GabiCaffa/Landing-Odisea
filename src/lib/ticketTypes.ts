@@ -17,6 +17,12 @@ export interface TicketType {
   description?: string;
   sortOrder: number;
   active: boolean;
+  /**
+   * v28: vale para **todos los días** de una fiesta de varios días, no para
+   * una fecha. El precio sigue viviendo en `event_ticket_types` como el de
+   * cualquier otro tipo: esto sólo dice qué significa.
+   */
+  isAbono: boolean;
   createdAt: string;
 }
 
@@ -25,6 +31,8 @@ export interface TicketTypeInput {
   description?: string | null;
   sortOrder?: number;
   active?: boolean;
+  /** v28: vale para todos los días de la fiesta. */
+  isAbono?: boolean;
 }
 
 /** Un tipo de entrada tal como lo vende un evento (con su precio). */
@@ -35,6 +43,8 @@ export interface EventTicket {
   price: number;
   active: boolean;
   sortOrder: number;
+  /** v28: viene del catálogo, no de la relación. Vale para todos los días. */
+  isAbono?: boolean;
 }
 
 function typeFromDb(row: any): TicketType {
@@ -44,6 +54,7 @@ function typeFromDb(row: any): TicketType {
     description: row.description ?? undefined,
     sortOrder: row.sort_order ?? 0,
     active: row.active,
+    isAbono: row.is_abono ?? false,
     createdAt: row.created_at,
   };
 }
@@ -53,6 +64,7 @@ function typeToDb(input: Partial<TicketTypeInput>): Record<string, any> {
   if (input.name !== undefined) out.name = input.name;
   if (input.description !== undefined) out.description = input.description || null;
   if (input.sortOrder !== undefined) out.sort_order = input.sortOrder;
+  if (input.isAbono !== undefined) out.is_abono = input.isAbono;
   if (input.active !== undefined) out.active = input.active;
   return out;
 }
@@ -67,6 +79,7 @@ export function eventTicketFromDb(row: any): EventTicket {
     ticketTypeId: row.ticket_type_id,
     name: type?.name ?? "Entrada",
     description: type?.description ?? undefined,
+    isAbono: type?.is_abono ?? false,
     price: Number(row.price),
     active: row.active,
     sortOrder: row.sort_order ?? 0,

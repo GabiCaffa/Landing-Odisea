@@ -98,7 +98,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
-`v26_event_groups.sql` → `v27_site_banners.sql`.
+`v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1037,6 +1037,121 @@ lo hace `scroll-snap` nativo, igual que el carrusel de eventos. Verificado:
 > **El slider viaja en el bundle de la landing aunque esté apagado** (~6 KB,
 > ~2 KB en brotli). Diferirlo sería peor: es el LCP, y un `lazy` ahí mete un
 > salto justo en la métrica que §6.6 se dedicó a arreglar.
+### Crear una fiesta de varios días en una sola pantalla
+
+v26 modeló la fiesta de tres días como **tres eventos unidos por un campo**, y
+eso está bien **en la base**: cada día tiene su fecha, sus entradas, su venta y
+su URL de verdad. Lo que estaba mal era **obligar a quien carga la fiesta a
+entender ese modelo**.
+
+> **Cómo se vio que estaba mal.** El autor abrió "Nuevo evento", vio el campo
+> "Fiesta de varios días" y escribió ahí **el día** —`16 de Octubre` primero,
+> `OCTUBRE 16` después—, esperando agregar los otros dos desde esa misma
+> pantalla. No es que no leyera: desde el formulario de UN evento **no hay
+> forma de adivinar** que la respuesta es crear tres. Dos intentos fallidos y
+> un "NO ENTIENDO" son suficiente evidencia de que el problema era la pantalla.
+
+**`FiestaFormModal` invierte el orden**: se describe la fiesta una vez (nombre,
+lugar, flyer, cuenta, Instagram) y después se agregan los días, cada uno con su
+fecha, su line-up y sus entradas. Por abajo sigue creando N eventos agrupados —
+**el modelo no cambió, cambió quién tiene que conocerlo**.
+
+- **Dos botones y no un paso previo que pregunte "¿uno o varios?".** Casi todas
+  las fechas son de un día: cobrarle un click extra a todas para el caso raro
+  es al revés de lo que conviene.
+- **Arranca con dos días**, porque una fiesta de uno se carga con "Nuevo
+  evento".
+- **"Copiar las entradas del primer día a todos"**: en la práctica los precios
+  se repiten, y cargar lo mismo tres veces es donde la gente abandona.
+- **El nombre de cada día se arma solo** (`EXPO FIESTA OCTUBRE — VIE 16`) y se
+  puede pisar.
+
+> **El riesgo real son N inserts sin transacción.** Si el tercer día falla, los
+> dos primeros ya existen, y dejar a alguien sin saber qué quedó creado es peor
+> que el error. Se crean **en orden**, se corta en el primer fallo, y el
+> mensaje dice cuántos quedaron y cómo completar el resto.
+
+> **Quedan afuera a propósito** las promos (se cargan editando cada día:
+> meterlas acá multiplica el formulario por N) y reposicionar el flyer.
+
+> **`TicketsEditor` y `FormField` salieron de `Admin.tsx` a
+> `components/admin/CamposEvento.tsx`.** No es prolijidad: si el modal nuevo
+> las importara de `Admin.tsx` quedaría un **import circular** —Admin importa
+> el modal, el modal importa Admin—. Rollup hoy lo resuelve, pero sólo mientras
+> nadie use esos valores durante la evaluación del módulo, y eso es una promesa
+> que nadie puede sostener.
+
+> **Falta el ABONO**, igual que antes: un pase para toda la fiesta no tiene
+> dónde vivir en un modelo donde cada día se compra por separado.
+
+**v28 — El ABONO: una entrada que vale para todos los días.** Lo que faltaba
+de la fiesta de varios días (v26): un pase para toda la fiesta, como el que
+ofrece cualquier ticketera.
+
+**Es una BANDERA en el catálogo, no una tabla.** El abono no necesita
+estructura nueva: es un tipo de entrada más, con su precio en
+`event_ticket_types` como todos. Lo único que le faltaba al modelo es **saber
+que vale para todos los días**, y eso es un booleano (`ticket_types.is_abono`).
+
+> **Por qué una bandera y no una convención de nombres.** Buscar "ABONO" en el
+> nombre es exactamente la clase de regla que se rompe el día que alguien lo
+> escribe "Abono 3 días". Con la bandera: el comprador ve **"Vale para los 3
+> días"** al lado del precio, el formulario de fiesta lo ofrece en su propia
+> sección, y el panel puede distinguir una venta de abono de tres sueltas.
+
+**Se asigna a TODOS los días, no a uno.** Se podría haber colgado del primer
+día y mostrarlo en los otros, pero eso obliga a que cada página vaya a buscar
+entradas de OTRO evento y rompe la regla de que lo que se vende en una página
+sale de su propio evento. Puesto en los tres, cada página lo ofrece con su
+propia relación y **el camino de la compra no cambia en nada** — que es lo que
+no se quiere tocar.
+
+> **Lo que se paga:** la venta queda registrada en el día desde el que se
+> compró. Para el staff no cambia nada, porque el mensaje de WhatsApp dice
+> ABONO.
+
+**En el formulario de fiesta va en su propia sección**, y los abonos **se
+sacan de la lista de entradas de cada día**: si estuvieran ahí, invitarían a
+cargarlos tres veces y nada impediría ponerle tres precios distintos al mismo
+pase. Por abajo el guardado se los suma a los tres días igual.
+
+> **El rótulo no aparece con un solo día.** Ahí "abono" no significa nada
+> distinto de una entrada, y un cartel que dice "vale para 1 día" es ruido.
+
+### Las sugerencias se aceptan con Tab
+
+Varios campos del panel proponen un valor y lo muestran en gris —el nombre de
+cada día de una fiesta, la dirección de la página del evento—. Eso era
+**decorativo**: para usarlo había que retipearlo entero. Pedido del autor: que
+se complete con **Tab**, como en una terminal.
+
+`useAceptarConTab` (en `components/admin/CamposEvento.tsx`) **sólo secuestra
+Tab cuando hay algo que completar**: campo vacío y sugerencia disponible. En
+cualquier otro caso Tab navega como siempre, que es lo que espera quien se
+mueve por el formulario con el teclado, y **`Shift+Tab` nunca se toca** —va
+hacia atrás, ahí completar no tiene sentido—.
+
+Después de aceptar **el foco se queda en el campo**: lo normal es querer
+ajustar lo que acaba de entrar, y un segundo Tab ya navega porque el campo dejó
+de estar vacío. Verificado con teclas reales: primer Tab completa y retiene el
+foco, segundo Tab pasa al campo siguiente con el valor intacto, `Shift+Tab`
+navega sin completar.
+
+> **La pista ("apretá Tab para completar") aparece sólo donde aplica.** Una
+> leyenda permanente al lado de un campo ya lleno es ruido; con tres días en
+> pantalla serían tres.
+
+> **En la dirección de la página el placeholder pasó a mostrar la dirección
+> REAL** que va a quedar (`expo-fiesta-octubre-vie-16`) en vez de describirla
+> ("se arma sola con el nombre"). Se calcula con `claveDeGrupo`, el espejo en
+> JS de `slugify()` (v25). **La corrección no depende de que coincidan**: si no
+> se acepta la sugerencia, el trigger la arma igual.
+
+> **El campo del nombre del día tuvo que salir a su propio componente**, porque
+> `useAceptarConTab` es un hook y no se puede llamar dentro del `.map()` de los
+> días. Es la tercera vez en el proyecto que la regla de los hooks empuja a
+> separar un pedazo de formulario.
+
 ### Dos asperezas del formulario de compra y del de evento
 
 **El bloque de la transferencia saltaba 337 px bajo el dedo.** Estaba
