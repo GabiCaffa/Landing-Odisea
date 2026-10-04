@@ -3,7 +3,9 @@ import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Upload } from "lucide-react";
 import ModalAdmin from "@/components/admin/ModalAdmin";
 import {
+  EventCardPreview,
   FormField,
+  ImageEditorControls,
   PistaTab,
   TicketsEditor,
   useAceptarConTab,
@@ -12,11 +14,12 @@ import {
   useAuth,
   AdminEvent,
   DEFAULT_IMAGE_TRANSFORM,
+  ImageTransform,
   NewEventInput,
 } from "@/contexts/AuthContext";
 import { PaymentAccount } from "@/lib/paymentAccounts";
 import { EventTicket, TicketType, saveEventTickets } from "@/lib/ticketTypes";
-import { claveDeGrupo, etiquetaDeDia } from "@/lib/grupos";
+import { claveDeGrupo, etiquetaDeDia, rangoDeFechas } from "@/lib/grupos";
 
 /**
  * Crear **o editar** una fiesta de varios días, tratándola como una sola cosa.
@@ -122,6 +125,22 @@ const FiestaFormModal = ({
     base?.paymentAccountId ?? accounts.find((a) => a.isDefault)?.id ?? ""
   );
   const [image, setImage] = useState(base?.image ?? "");
+  /**
+   * El encuadre, COMPARTIDO por los tres días.
+   *
+   * Si el flyer es uno solo para toda la fiesta, el recorte también tiene que
+   * serlo. La primera versión no lo ofrecía y el resultado fue concreto: el
+   * autor acomodó a mano el del primer día y los otros dos quedaron centrados
+   * — y como la tarjeta de la home usa el flyer del **primer día que todavía
+   * venda**, el encuadre iba a saltar solo el día que ese día se agotara.
+   *
+   * Se toma del primer día al editar: es el que la tarjeta está usando.
+   */
+  const [imagePosition, setImagePosition] = useState<ImageTransform>(
+    () => base?.imagePosition ?? { ...DEFAULT_IMAGE_TRANSFORM }
+  );
+  const actualizarEncuadre = (updater: (p: ImageTransform) => ImageTransform) =>
+    setImagePosition((prev) => updater(prev));
   const [subiendo, setSubiendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
@@ -261,7 +280,8 @@ const FiestaFormModal = ({
         paymentAccountId,
         tickets: entradasDe(d),
         image,
-        imagePosition: { ...DEFAULT_IMAGE_TRANSFORM },
+        // El mismo para los tres: ver el comentario de `imagePosition`.
+        imagePosition,
         instagramUrl: instagramUrl.trim(),
         groupKey,
         groupName: nombre.trim(),
@@ -422,21 +442,54 @@ const FiestaFormModal = ({
           <div className="mt-4">
             <label className="label-techno">Flyer</label>
             {image ? (
-              <div className="flex items-start gap-3 mt-1">
-                <img
-                  src={image}
-                  alt=""
-                  className="h-28 w-28 object-cover rounded-lg border border-border"
+              <div className="mt-1 grid gap-4 sm:grid-cols-2">
+                {/*
+                  La misma vista previa que el formulario de un evento: se
+                  arrastra para reencuadrar y la rueda hace zoom. Es
+                  importante que sea LA MISMA y no una copia — dos editores
+                  de encuadre terminan comportándose distinto.
+
+                  Muestra el nombre y el rango de fechas de la FIESTA, que es
+                  lo que va a decir la tarjeta de la home.
+                */}
+                <EventCardPreview
+                  image={image}
+                  imagePosition={imagePosition}
+                  setImagePosition={actualizarEncuadre}
+                  name={nombre || "Nombre de la fiesta"}
+                  date={
+                    dias.some((d) => d.date)
+                      ? rangoDeFechas(dias.filter((d) => d.date).map((d) => d.date))
+                      : "Fechas de la fiesta"
+                  }
+                  location={location || "Lugar del evento"}
+                  description={dias[0]?.description || "Descripción del primer día..."}
+                  price={0}
+                  status="activo"
                 />
-                <div className="text-xs text-muted-foreground leading-relaxed">
-                  <p>Se usa el mismo en los tres días.</p>
-                  <button
-                    type="button"
-                    onClick={() => setImage("")}
-                    className="mt-1 underline hover:text-foreground"
-                  >
-                    Cambiarlo
-                  </button>
+                <div className="space-y-3">
+                  <ImageEditorControls
+                    transform={imagePosition}
+                    setTransform={actualizarEncuadre}
+                    onChangeImage={() => fileRef.current?.click()}
+                    uploading={subiendo}
+                  />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    El flyer y su encuadre son los mismos para{" "}
+                    <strong>todos los días</strong>: así la tarjeta de la home se ve igual
+                    aunque alguno se agote.
+                  </p>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={subiendo}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void subirFlyer(file);
+                    }}
+                  />
                 </div>
               </div>
             ) : (

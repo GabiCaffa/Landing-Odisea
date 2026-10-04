@@ -1149,6 +1149,35 @@ que puede scrollear.
 > sesión. Vale la pena recordarlo: es la única parte del panel que se puede
 > verificar sin credenciales.
 
+### El encuadre del flyer también es de la fiesta
+
+La pantalla de fiesta dejaba afuera el reposicionamiento de la imagen, y el
+agujero se midió solo. El flyer de la Expo es **800×1000** y la tarjeta de la
+home es 4:3: se recorta el **40 % del alto**. El autor acomodó a mano el del
+primer día (`x: 27, y: 100`, para que se viera el line-up) y los otros dos
+quedaron centrados.
+
+> **Por qué eso iba a romperse solo.** La tarjeta de la home usa el flyer del
+> **primer día que todavía venda** (`agruparEventos`). Mientras el viernes
+> tuviera entradas se veía bien; el día que se agotara, la tarjeta pasaba al
+> sábado y **el encuadre saltaba al centro** sin que nadie tocara nada. Un bug
+> con fecha de aparición, que es la peor clase.
+
+Si el flyer es uno solo para toda la fiesta, **el recorte también tiene que
+serlo**: pasó a la sección compartida, al lado de la imagen, y se escribe en
+todos los días. Al editar se toma del primer día, que es el que la tarjeta está
+usando.
+
+> **`EventCardPreview` e `ImageEditorControls` salieron de `Admin.tsx` a
+> `CamposEvento.tsx`** (~300 líneas). Duplicar la lógica de arrastre y zoom era
+> garantizar que algún día las dos se comportaran distinto, e importarlas de
+> `Admin.tsx` habría vuelto a armar el import circular que ese archivo existe
+> para evitar. Es el mismo movimiento que ya se había hecho con `TicketsEditor`.
+
+> **La vista previa muestra los datos de la FIESTA** —su nombre y el rango de
+> fechas— y no los del primer día: es lo que va a decir la tarjeta de la home,
+> y mostrar otra cosa sería encuadrar contra una referencia que no existe.
+
 ### La fiesta también se EDITA como una sola cosa
 
 La primera versión de `FiestaFormModal` sólo creaba, y el agujero se vio en el
