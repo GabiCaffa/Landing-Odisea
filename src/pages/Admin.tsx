@@ -148,7 +148,7 @@ import {
   THEME_LABELS,
   precioConComision,
 } from "@/lib/siteSettings";
-import { claveDeGrupo, gruposExistentes } from "@/lib/grupos";
+import { claveDeGrupo, diasDelGrupo, gruposExistentes } from "@/lib/grupos";
 import { toast } from "sonner";
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -410,7 +410,14 @@ const EventsAdmin = () => {
   const confirm = useConfirm();
   const [editing, setEditing] = useState<AdminEvent | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [showFiesta, setShowFiesta] = useState(false);
+  /**
+   * `true` = crear una fiesta nueva. Un array = editar esa fiesta (sus días).
+   *
+   * Un solo estado para las dos cosas, porque son la misma pantalla: tener
+   * `showFiesta` + `editandoFiesta` abre la puerta a que queden los dos
+   * prendidos y no se sepa cuál gana.
+   */
+  const [fiesta, setFiesta] = useState<true | AdminEvent[] | null>(null);
   const [search, setSearch] = useState("");
   // Cuentas de cobro: para el selector del form y la columna "Cuenta".
   const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
@@ -534,7 +541,7 @@ const EventsAdmin = () => {
             camino de varios días está a la vista y no cuesta nada al otro.
           */}
           <button
-            onClick={() => setShowFiesta(true)}
+            onClick={() => setFiesta(true)}
             className="btn-techno-outline text-xs py-3 px-5"
           >
             <CalendarDays className="w-4 h-4" />
@@ -601,6 +608,24 @@ const EventsAdmin = () => {
                           </span>
                         ))}
                       </div>
+                    )}
+
+                    {/*
+                      Para un día de una fiesta, "Editar" edita ESE día. Lo que
+                      vale para los tres —el nombre, el flyer, el abono— se
+                      cambia desde "Editar fiesta", que los escribe todos de
+                      una. Sin este botón, agregarle un abono a una fiesta ya
+                      creada es repetir el mismo trabajo tres veces y confiar
+                      en que quede igual.
+                    */}
+                    {e.groupKey && (
+                      <button
+                        onClick={() => setFiesta(diasDelGrupo(events, e))}
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 border border-celeste text-celeste-deep px-3 text-xs uppercase tracking-wide transition-colors hover:bg-celeste hover:text-accent-foreground"
+                      >
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        Editar fiesta ({diasDelGrupo(events, e).length} días)
+                      </button>
                     )}
 
                     <div className="flex gap-2">
@@ -697,13 +722,26 @@ const EventsAdmin = () => {
                         </Td>
                         <Td>
                           <div className="flex gap-1">
+                            {/* Para un día de una fiesta: lo que vale para
+                                todos los días se cambia acá, de una. */}
+                            {e.groupKey && (
+                              <button
+                                onClick={() => setFiesta(diasDelGrupo(events, e))}
+                                className="p-2 text-celeste-deep transition-colors hover:bg-celeste hover:text-accent-foreground"
+                                aria-label="Editar la fiesta entera"
+                                title="Editar la fiesta entera"
+                              >
+                                <CalendarDays className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setEditing(e);
                                 setShowForm(true);
                               }}
                               className="p-2 transition-colors hover:bg-foreground hover:text-background"
-                              aria-label="Editar"
+                              aria-label="Editar sólo este día"
+                              title="Editar sólo este día"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
@@ -728,11 +766,12 @@ const EventsAdmin = () => {
         )}
       </div>
 
-      {showFiesta && (
+      {fiesta && (
         <FiestaFormModal
           accounts={accounts}
           ticketTypes={ticketTypes}
-          onClose={() => setShowFiesta(false)}
+          grupo={fiesta === true ? undefined : fiesta}
+          onClose={() => setFiesta(null)}
           onSaved={refreshEvents}
         />
       )}
