@@ -16,6 +16,7 @@ import { useAuth, type UserRole } from "@/contexts/AuthContext";
  *   cuentas          → payment_accounts_*_admin            (v13)
  *   usuarios:editar  → profiles_update/delete_admin        (schema)
  *   apariencia       → site_settings_*_admin               (v19)
+ *   banners          → site_banners_write_admin            (v27)
  *   entregas         → is_staff()                          (v11)
  *   cumples          → is_birthday_staff()                 (v20)
  *   evento:cuenta    → trigger events_payment_account_lock (v22)
@@ -32,6 +33,7 @@ export type AdminTab =
   | "accounts"
   | "users"
   | "appearance"
+  | "banners"
   | "deliveries"
   | "birthdays";
 
@@ -60,6 +62,16 @@ export type Permiso =
   | "usuarios:editar"
   /** Cambiar el tema del sitio público. */
   | "apariencia"
+  /**
+   * Banners del hero (v27).
+   *
+   * Es un permiso APARTE de "apariencia" aunque hoy los dos sean sólo del
+   * admin: el tema es una paleta de colores y esto es el contenido que ve
+   * primero cualquiera que entra. El día que se quiera que el operador suba
+   * un banner sin poder cambiarle los colores al sitio, se mueve una línea
+   * acá y se cambia la política de v27 a `is_manager()`.
+   */
+  | "banners"
   /** Entregas de entradas (incluye ver la recaudación). */
   | "entregas"
   /** Promo de cumpleaños. */
@@ -78,6 +90,7 @@ const TODOS: readonly Permiso[] = [
   "usuarios",
   "usuarios:editar",
   "apariencia",
+  "banners",
   "entregas",
   "cumples",
 ];
@@ -135,6 +148,7 @@ export const PERMISO_DE_TAB: Record<AdminTab, Permiso> = {
   accounts: "cuentas",
   users: "usuarios",
   appearance: "apariencia",
+  banners: "banners",
   deliveries: "entregas",
   birthdays: "cumples",
 };
@@ -149,6 +163,7 @@ export const ORDEN_TABS: readonly AdminTab[] = [
   "birthdays",
   "accounts",
   "users",
+  "banners",
   "appearance",
 ];
 

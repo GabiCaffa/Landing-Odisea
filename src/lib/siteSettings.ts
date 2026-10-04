@@ -157,3 +157,46 @@ export async function fetchComision(): Promise<number> {
 export async function saveComision(comision: number): Promise<void> {
   await saveSetting(COMISION_KEY, String(limpiarComision(comision)));
 }
+
+// ─── Qué hero muestra la home ───────────────────────────────────────────────
+
+/**
+ * `clasico` = el hero de siempre (logo, tagline y botones).
+ * `banners` = el slider de `site_banners` (v27).
+ *
+ * **El interruptor va aparte de la tabla**, y no es "¿hay banners activos?",
+ * por el mismo motivo operativo que el tema de v19: se cargan los tres, se
+ * miran, y recién ahí se prende. Y si a las 3 de la mañana se ve mal en un
+ * celular se apaga en 5 segundos sin borrar nada.
+ *
+ * Sin fila en la base cae en `clasico`, así que correr la migración no cambia
+ * la home por sí solo.
+ */
+export const HERO_KEY = "hero";
+
+export const HERO_MODOS = ["clasico", "banners"] as const;
+export type HeroModo = (typeof HERO_MODOS)[number];
+
+export const DEFAULT_HERO: HeroModo = "clasico";
+
+export const esHeroModo = (value: unknown): value is HeroModo =>
+  typeof value === "string" && (HERO_MODOS as readonly string[]).includes(value);
+
+export const HERO_LABELS: Record<HeroModo, string> = {
+  clasico: "Hero de siempre",
+  banners: "Slider de banners",
+};
+
+/** No tira: un hero es lo primero que se ve, no puede depender de una consulta. */
+export async function fetchHero(): Promise<HeroModo> {
+  try {
+    const value = await fetchSetting(HERO_KEY);
+    return esHeroModo(value) ? value : DEFAULT_HERO;
+  } catch {
+    return DEFAULT_HERO;
+  }
+}
+
+export async function saveHero(modo: HeroModo): Promise<void> {
+  await saveSetting(HERO_KEY, modo);
+}
