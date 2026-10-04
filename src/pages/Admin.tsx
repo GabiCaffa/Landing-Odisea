@@ -1473,8 +1473,17 @@ const EventFormModal = ({
    * Se avisa en vez de bloquear: un nombre es libre y puede haber una fiesta
    * que de verdad se llame así.
    */
-  const pareceFecha = (txt: string) =>
-    /^\s*\d{1,2}\s*(de\s+)?([/-]|ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)/i.test(txt);
+  const pareceFecha = (txt: string) => {
+    const t = txt.trim();
+    // "16 de Octubre", "17/10", "18-10", "16 Oct"
+    const diaPrimero =
+      /^\d{1,2}\s*(de\s+)?([/-]|ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)/i;
+    // "OCTUBRE 16", "OCT 16" — así lo escribió el autor en el segundo intento,
+    // o sea que la primera versión del aviso no lo habría agarrado.
+    const mesPrimero =
+      /^(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-záéíóú]*\s+\d{1,2}\s*$/i;
+    return diaPrimero.test(t) || mesPrimero.test(t);
+  };
   const [modoGrupo, setModoGrupo] = useState<"no" | "existente" | "nuevo">(() => {
     if (!initial?.groupKey) return "no";
     return grupos.some((g) => g.key === initial.groupKey) ? "existente" : "nuevo";
