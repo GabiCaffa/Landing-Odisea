@@ -61,6 +61,9 @@ export const TicketsEditor = ({
           price: 0,
           active: true,
           sortOrder: type.sortOrder,
+          // Viene del catálogo (v28). Se copia acá para que el formulario y el
+          // modal de compra puedan rotularlo sin volver a consultar.
+          isAbono: type.isAbono,
         },
       ])
     );

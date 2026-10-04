@@ -98,7 +98,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
-`v26_event_groups.sql` → `v27_site_banners.sql`.
+`v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1083,6 +1083,40 @@ fecha, su line-up y sus entradas. Por abajo sigue creando N eventos agrupados �
 
 > **Falta el ABONO**, igual que antes: un pase para toda la fiesta no tiene
 > dónde vivir en un modelo donde cada día se compra por separado.
+
+**v28 — El ABONO: una entrada que vale para todos los días.** Lo que faltaba
+de la fiesta de varios días (v26): un pase para toda la fiesta, como el que
+ofrece cualquier ticketera.
+
+**Es una BANDERA en el catálogo, no una tabla.** El abono no necesita
+estructura nueva: es un tipo de entrada más, con su precio en
+`event_ticket_types` como todos. Lo único que le faltaba al modelo es **saber
+que vale para todos los días**, y eso es un booleano (`ticket_types.is_abono`).
+
+> **Por qué una bandera y no una convención de nombres.** Buscar "ABONO" en el
+> nombre es exactamente la clase de regla que se rompe el día que alguien lo
+> escribe "Abono 3 días". Con la bandera: el comprador ve **"Vale para los 3
+> días"** al lado del precio, el formulario de fiesta lo ofrece en su propia
+> sección, y el panel puede distinguir una venta de abono de tres sueltas.
+
+**Se asigna a TODOS los días, no a uno.** Se podría haber colgado del primer
+día y mostrarlo en los otros, pero eso obliga a que cada página vaya a buscar
+entradas de OTRO evento y rompe la regla de que lo que se vende en una página
+sale de su propio evento. Puesto en los tres, cada página lo ofrece con su
+propia relación y **el camino de la compra no cambia en nada** — que es lo que
+no se quiere tocar.
+
+> **Lo que se paga:** la venta queda registrada en el día desde el que se
+> compró. Para el staff no cambia nada, porque el mensaje de WhatsApp dice
+> ABONO.
+
+**En el formulario de fiesta va en su propia sección**, y los abonos **se
+sacan de la lista de entradas de cada día**: si estuvieran ahí, invitarían a
+cargarlos tres veces y nada impediría ponerle tres precios distintos al mismo
+pase. Por abajo el guardado se los suma a los tres días igual.
+
+> **El rótulo no aparece con un solo día.** Ahí "abono" no significa nada
+> distinto de una entrada, y un cartel que dice "vale para 1 día" es ruido.
 
 ### Las sugerencias se aceptan con Tab
 

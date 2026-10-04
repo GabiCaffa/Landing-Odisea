@@ -97,6 +97,22 @@ const FiestaFormModal = ({
   // evento", así que acá el mínimo real es dos.
   const [dias, setDias] = useState<DiaBorrador[]>(() => [nuevoDia(), nuevoDia()]);
 
+  /**
+   * El ABONO (v28): una entrada que vale para todos los días.
+   *
+   * Va en su propia sección y NO en la lista de cada día, por dos motivos.
+   * Uno: es de la fiesta, no de una fecha, y ponerlo entre las entradas de un
+   * día invita a cargarlo tres veces. Dos: si se cargara por día, nada
+   * impediría ponerle tres precios distintos al mismo pase.
+   *
+   * Por abajo termina igual asignado a los tres días —así cada página lo
+   * ofrece con su propia relación y el camino de la compra no cambia— pero
+   * eso es una decisión del guardado, no algo que haya que cargar a mano.
+   */
+  const tiposAbono = ticketTypes.filter((t) => t.isAbono && t.active);
+  const [abonoTipoId, setAbonoTipoId] = useState("");
+  const [abonoPrecio, setAbonoPrecio] = useState("");
+
   const cuentasOfrecidas = accounts.filter((a) => a.active || a.id === paymentAccountId);
 
   const setDia = (id: string, cambio: Partial<DiaBorrador>) =>
@@ -145,6 +161,8 @@ const FiestaFormModal = ({
     const fechas = dias.map((d) => d.date);
     if (new Set(fechas).size !== fechas.length) return "Hay dos días con la misma fecha";
 
+    if (abonoTipoId && Number(abonoPrecio) <= 0) return "Ponele precio al abono";
+
     return null;
   };
 
@@ -159,6 +177,26 @@ const FiestaFormModal = ({
     const groupKey = claveDeGrupo(nombre);
     const creados: string[] = [];
 
+    // El abono se le agrega a CADA día, con el mismo precio: es un solo pase,
+    // y que cada página lo venda con su propia relación es lo que evita que el
+    // modal de compra tenga que ir a buscar entradas de otro evento.
+    const tipoAbono = tiposAbono.find((t) => t.id === abonoTipoId);
+    const entradasDe = (d: DiaBorrador): EventTicket[] =>
+      tipoAbono
+        ? [
+            ...d.tickets,
+            {
+              ticketTypeId: tipoAbono.id,
+              name: tipoAbono.name,
+              description: tipoAbono.description,
+              price: Number(abonoPrecio),
+              active: true,
+              sortOrder: tipoAbono.sortOrder,
+              isAbono: true,
+            },
+          ]
+        : d.tickets;
+
     // En orden y de a uno: si el tercero falla hay que poder decir cuáles
     // quedaron. En paralelo el mensaje de error no podría nombrarlos.
     for (const [i, d] of [...dias].sort((a, b) => a.date.localeCompare(b.date)).entries()) {
@@ -171,7 +209,7 @@ const FiestaFormModal = ({
         capacity: 0,
         status: "activo",
         paymentAccountId,
-        tickets: d.tickets,
+        tickets: entradasDe(d),
         image,
         imagePosition: { ...DEFAULT_IMAGE_TRANSFORM },
         instagramUrl: instagramUrl.trim(),
@@ -193,7 +231,7 @@ const FiestaFormModal = ({
         return;
       }
 
-      const t = await saveEventTickets(r.id, d.tickets);
+      const t = await saveEventTickets(r.id, entradasDe(d));
       if (!t.ok) {
         setGuardando(false);
         toast.error(
@@ -348,6 +386,60 @@ const FiestaFormModal = ({
           </div>
         </section>
 
+        {/* ─── El abono ──────────────────────────────────────────────────── */}
+        <section className="border-t border-border pt-6">
+          <h3 className="font-sport text-lg font-black tracking-wide text-tinta mb-1">
+            ABONO (OPCIONAL)
+          </h3>
+          <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+            Una entrada que vale para <strong>todos los días</strong> de la fiesta. Se
+            ofrece en la página de cualquiera de los días, con el cartel “Vale para los{" "}
+            {dias.length} días”.
+          </p>
+
+          {tiposAbono.length === 0 ? (
+            <div className="border border-border bg-secondary/40 rounded-lg p-3">
+              <p className="text-xs leading-relaxed">
+                No hay ningún tipo de entrada marcado como abono. Creá uno en la pestaña{" "}
+                <strong>Entradas</strong> —por ejemplo “ABONO”— y tildá la casilla{" "}
+                <strong>“Es un abono”</strong>. Después volvé acá.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Tipo de abono">
+                <select
+                  value={abonoTipoId}
+                  onChange={(e) => setAbonoTipoId(e.target.value)}
+                  className="input-techno"
+                >
+                  <option value="">Sin abono</option>
+                  {tiposAbono.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Precio del abono">
+                <input
+                  type="number"
+                  min={0}
+                  value={abonoPrecio}
+                  onChange={(e) => setAbonoPrecio(e.target.value)}
+                  disabled={!abonoTipoId}
+                  className="input-techno disabled:opacity-50"
+                  placeholder="0"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Uno solo para toda la fiesta.
+                </p>
+              </FormField>
+            </div>
+          )}
+        </section>
+
         {/* ─── Los días ──────────────────────────────────────────────────── */}
         <section className="border-t border-border pt-6">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
@@ -422,8 +514,9 @@ const FiestaFormModal = ({
 
                 <div className="mt-3">
                   <label className="label-techno">Entradas de este día</label>
+                  {/* Sin los abonos: ésos se cargan una vez, arriba. */}
                   <TicketsEditor
-                    catalog={ticketTypes}
+                    catalog={ticketTypes.filter((t) => !t.isAbono)}
                     value={d.tickets}
                     onChange={(tickets) => setDia(d.id, { tickets })}
                   />

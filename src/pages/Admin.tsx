@@ -937,6 +937,7 @@ const TicketTypeFormModal = ({
     description: initial?.description ?? "",
     sortOrder: initial?.sortOrder ?? nextOrder,
     active: initial?.active ?? true,
+    isAbono: initial?.isAbono ?? false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1001,6 +1002,25 @@ const TicketTypeFormModal = ({
               De menor a mayor: define en qué orden se listan las entradas.
             </p>
           </FormField>
+
+          {/* v28. Es una propiedad del TIPO y no del evento porque un abono es
+              un abono siempre: lo que cambia por fecha es el precio, que vive
+              en la relación evento↔tipo como el de cualquier otro. */}
+          <label className="flex items-start gap-2 text-sm cursor-pointer border-t border-border pt-4">
+            <input
+              type="checkbox"
+              checked={form.isAbono ?? false}
+              onChange={(e) => setForm({ ...form, isAbono: e.target.checked })}
+              className="accent-foreground mt-0.5"
+            />
+            <span>
+              Es un <strong>abono</strong>
+              <span className="block text-[11px] text-muted-foreground leading-relaxed">
+                Vale para todos los días de una fiesta de varios días, no para una fecha.
+                Al comprador se le muestra “Vale para los N días”.
+              </span>
+            </span>
+          </label>
 
           <label className="flex items-center gap-2 text-sm cursor-pointer border-t border-border pt-4">
             <input

@@ -49,6 +49,13 @@ interface CompraEntradasProps {
   tickets: EventTicket[];
   /** Promos de entrada del evento (v21). Vacío = sin promos. */
   promos?: EventPromo[];
+  /**
+   * Cuántos días tiene la fiesta (v26). 1 o ausente = evento suelto.
+   *
+   * Sólo sirve para rotular el ABONO ("vale para los 3 días"). No toca precios
+   * ni cantidades: el abono se cobra como cualquier otra entrada.
+   */
+  diasDeLaFiesta?: number;
 }
 
 type Step = "auth-prompt" | "purchase";
@@ -63,6 +70,7 @@ const CompraEntradas = ({
   eventLocation,
   tickets,
   promos = [],
+  diasDeLaFiesta = 1,
 }: CompraEntradasProps) => {
   const { currentUser } = useAuth();
   // Arriba del "if (!isOpen) return null" de abajo, como el resto de los
@@ -434,6 +442,15 @@ const CompraEntradas = ({
                   // total se arma sumando `l.conComision` de cada línea, así
                   // los dos números cierran.
                   const conComision = precioConComision(ticket.price, comisionTicketera);
+                  // El ABONO (v28) vale para todos los días. Se dice acá y no
+                  // sólo en el nombre del tipo: el comprador está mirando la
+                  // página de UN día y tiene que entender que esto no es de
+                  // ese día. Con un solo día no se muestra nada: ahí "abono"
+                  // no significa nada distinto de una entrada.
+                  const rotuloAbono =
+                    ticket.isAbono && diasDeLaFiesta > 1
+                      ? `Vale para los ${diasDeLaFiesta} días`
+                      : null;
                   return (
                   <div
                     key={ticket.name}
@@ -487,6 +504,11 @@ const CompraEntradas = ({
                             <span>${ticket.price}</span>
                           </p>
                         </>
+                      )}
+                      {rotuloAbono && (
+                        <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-celeste-deep">
+                          {rotuloAbono}
+                        </p>
                       )}
                       {/* La descripción del tipo de entrada se cae en compacto:
                           son ~18 px por fila para un texto que casi siempre

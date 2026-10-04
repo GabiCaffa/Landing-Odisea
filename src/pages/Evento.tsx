@@ -327,6 +327,7 @@ const Evento = () => {
                       eventLocation={evento.location}
                       tickets={entradas}
                       promos={evento.promos}
+                      diasDeLaFiesta={dias.length}
                     />
                   </Suspense>
                 )}
