@@ -1462,6 +1462,19 @@ const EventFormModal = ({
    * que se usa una vez al año.
    */
   const grupos = useMemo(() => gruposExistentes(events), [events]);
+
+  /**
+   * ¿Lo que escribieron parece una FECHA y no el nombre de una fiesta?
+   *
+   * Es el error que cometió el autor la primera vez: en "crear una fiesta
+   * nueva" puso "16 de Octubre". Se entiende —el campo está al lado de la
+   * fecha y la pantalla habla de días— pero deja una fiesta llamada "16 de
+   * Octubre" con un solo día adentro, que es justo lo contrario de agrupar.
+   * Se avisa en vez de bloquear: un nombre es libre y puede haber una fiesta
+   * que de verdad se llame así.
+   */
+  const pareceFecha = (txt: string) =>
+    /^\s*\d{1,2}\s*(de\s+)?([/-]|ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)/i.test(txt);
   const [modoGrupo, setModoGrupo] = useState<"no" | "existente" | "nuevo">(() => {
     if (!initial?.groupKey) return "no";
     return grupos.some((g) => g.key === initial.groupKey) ? "existente" : "nuevo";
@@ -1768,6 +1781,24 @@ const EventFormModal = ({
               la home muestre una tarjeta y la página tenga el selector.
             */}
             <FormField label="Fiesta de varios días (opcional)">
+              {/*
+                La explicación va ARRIBA del campo, no debajo.
+                Debajo no se leyó: el autor cargó un evento, puso el día en el
+                nombre de la fiesta y pensó que desde ahí se agregaban los
+                otros días. El formulario tiene que decir ANTES de que se
+                toque nada que una fiesta de 3 días son 3 eventos.
+              */}
+              <div className="mb-2 border border-border bg-secondary/40 rounded-lg p-3">
+                <p className="text-xs leading-relaxed">
+                  ¿La fiesta dura varios días? <strong>Cargá un evento por día</strong> —cada
+                  uno con su fecha, sus entradas y sus precios— y asignalos todos a la misma
+                  fiesta acá.
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+                  En la home van a verse como <strong>una sola tarjeta</strong>, y adentro el
+                  cliente elige el día.
+                </p>
+              </div>
               <select
                 value={modoGrupo === "nuevo" ? "__nuevo__" : form.groupKey || ""}
                 onChange={(e) => {
@@ -1786,7 +1817,7 @@ const EventFormModal = ({
                 }}
                 className="input-techno"
               >
-                <option value="">Evento de un solo día</option>
+                <option value="">No, es de un solo día</option>
                 {grupos.map((g) => (
                   <option key={g.key} value={g.key}>
                     {g.nombre} ({g.dias} {g.dias === 1 ? "día" : "días"})
@@ -1796,39 +1827,45 @@ const EventFormModal = ({
               </select>
 
               {modoGrupo === "nuevo" && (
-                <input
-                  type="text"
-                  value={form.groupName ?? ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      groupName: e.target.value,
-                      // La clave sale del nombre. La DB la normaliza igual al
-                      // guardar (trigger de v26); hacerlo acá es para que el
-                      // desplegable reconozca el grupo sin recargar.
-                      groupKey: claveDeGrupo(e.target.value),
-                    })
-                  }
-                  className="input-techno mt-2"
-                  placeholder="HALLOWEEN XXL"
-                  autoFocus
-                />
+                <>
+                  <label className="label-techno mt-2 block" htmlFor="grupo-nombre">
+                    Nombre de la fiesta — <strong>no</strong> el del día
+                  </label>
+                  <input
+                    id="grupo-nombre"
+                    type="text"
+                    value={form.groupName ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        groupName: e.target.value,
+                        // La clave sale del nombre. La DB la normaliza igual al
+                        // guardar (trigger de v26); hacerlo acá es para que el
+                        // desplegable reconozca el grupo sin recargar.
+                        groupKey: claveDeGrupo(e.target.value),
+                      })
+                    }
+                    className="input-techno"
+                    placeholder="EXPO FIESTA OCTUBRE"
+                    autoFocus
+                  />
+                  {pareceFecha(form.groupName ?? "") && (
+                    <p className="mt-1.5 text-[11px] font-semibold text-charrua leading-relaxed">
+                      Eso parece una fecha. Acá va el nombre de la fiesta entera (el mismo
+                      para los tres días); la fecha de este día ya la pusiste arriba.
+                    </p>
+                  )}
+                </>
               )}
 
-              <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-                {modoGrupo === "no" ? (
-                  <>
-                    Si la fiesta dura varios días, cargá <strong>un evento por día</strong> y
-                    poné a todos la misma fiesta acá. En la home van a aparecer como una sola
-                    tarjeta, y el cliente elige el día adentro.
-                  </>
-                ) : (
-                  <>
-                    Este evento es <strong>un día</strong> de esa fiesta. Sus entradas, precios
-                    y promos son sólo de este día: cada día se compra por separado.
-                  </>
-                )}
-              </p>
+              {modoGrupo !== "no" && (form.groupName ?? "").trim() && (
+                <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">
+                  Este evento va a ser <strong>un día</strong> de{" "}
+                  <strong>{form.groupName}</strong>. Sus entradas, precios y promos son sólo
+                  de este día. Para los otros días, creá un evento nuevo y elegí{" "}
+                  <strong>{form.groupName}</strong> en esta lista.
+                </p>
+              )}
             </FormField>
 
             <div className="flex gap-3 pt-2">

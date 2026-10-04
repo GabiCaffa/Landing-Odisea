@@ -673,12 +673,24 @@ const CompraEntradas = ({
               </div>
             )}
 
-            {/* Bank Info */}
-            {hasSelectedTickets && isFormValid && (
-              <details
-                className="group space-y-3 border border-border bg-secondary/30 p-4"
-                open={!compacto}
-              >
+            {/*
+              Datos para transferencia.
+
+              **No depende de `isFormValid`, y va PLEGADO.** Antes aparecía —y
+              encima expandido en el modal— justo cuando se completaba el
+              último campo, que para alguien sin cuenta es el teléfono: medido,
+              al primer dígito el contenido crecía **337 px de golpe** (576 →
+              913) debajo del dedo. En un celular, con el teclado abierto y el
+              navegador reacomodando el scroll, eso se siente como que el campo
+              "te cortó" — fue lo que reportó el autor.
+
+              Plegado y siempre presente, el alto no cambia mientras se escribe
+              y además el comprador puede ver a dónde transfiere ANTES de
+              cargar sus datos, que es cuando quiere saberlo. El bloque entero
+              viaja igual en el mensaje de WhatsApp.
+            */}
+            {hasSelectedTickets && (
+              <details className="group space-y-3 border border-border bg-secondary/30 p-4">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-base font-medium">
                   Datos para transferencia
                   <ChevronDown className="h-4 w-4 flex-shrink-0 transition-transform group-open:rotate-180" />
