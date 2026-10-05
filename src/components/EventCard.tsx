@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Instagram } from "lucide-react";
+import { ArrowRight, Flame, Instagram } from "lucide-react";
 import { playHover, playThud } from "@/lib/spookySound";
 import { imagenRedimensionada, srcSetRedimensionado, PROPORCION_EVENTO } from "@/lib/imagenes";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
-import { EventTicket } from "@/lib/ticketTypes";
+import { EventTicket, stockDelLote, textoStockLote } from "@/lib/ticketTypes";
 import { EventPromo, promoVigente } from "@/lib/ticketPromos";
 import { urlDeEvento } from "@/lib/rutas";
 import { useCartelEventos } from "@/contexts/ThemeContext";
@@ -71,6 +71,8 @@ const EventCard = ({
   // venta, o si el evento no tiene ningún tipo de entrada a la venta.
   const isSoldOut =
     soldOut || tickets.length === 0 || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
+
+  const stock = isSoldOut ? undefined : stockDelLote(tickets);
 
   return (
     /*
@@ -208,6 +210,18 @@ const EventCard = ({
 
           Agotado: sin naranja y sin cartel; el botón pasa a contorno.
         */}
+        {/*
+          La urgencia REAL: cuántas entradas quedan antes del cambio de lote.
+          Es un dato que carga el staff (v29) y se muestra tal cual, así que
+          sólo aparece si hay un número cargado; sin él, no se inventa nada.
+        */}
+        {stock !== undefined && (
+          <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-celeste-deep">
+            <Flame className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            {textoStockLote(stock)}
+          </p>
+        )}
+
         <div className="mt-auto flex items-stretch gap-2">
           <span
             className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-bold uppercase tracking-wide transition-all ${

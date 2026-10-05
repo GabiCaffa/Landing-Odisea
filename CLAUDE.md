@@ -98,7 +98,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
-`v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql`.
+`v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
+`v29_ticket_stock.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1216,6 +1217,34 @@ pase. Por abajo el guardado se los suma a los tres días igual.
 
 > **El rótulo no aparece con un solo día.** Ahí "abono" no significa nada
 > distinto de una entrada, y un cartel que dice "vale para 1 día" es ruido.
+
+**v29 — Cuántas entradas quedan antes del cambio de lote.** Urgencia **real**
+para vender: "QUEDAN 50 ENTRADAS ANTES DEL CAMBIO DE LOTE", en la tarjeta de la
+home (arriba del botón) y en la página del evento. Una columna nueva,
+`event_ticket_types.stock_remaining` (entero, NULL = no informado), porque un lote
+es un tipo de entrada con su precio (v15) y el número vive donde vive el precio.
+
+> **Se pidió un contador falso en loop (72 hs que se reinician) y se rechazó**:
+> un reloj que llega a cero sin que cambie nada es urgencia inventada, publicidad
+> engañosa, y expone a ODÍSEA a un reclamo. La alternativa honesta es ésta: un
+> dato verdadero que carga el staff.
+
+- **Lo carga el staff** en el formulario del evento (`TicketsEditor`, campo
+  "Quedan N entradas antes del cambio de lote" bajo cada tipo vendido). Vacío =
+  no se muestra nada. **Se muestra tal cual**, así que hay que mantenerlo al día
+  con las ventas; el campo lo avisa. No hay descuento automático: las ventas
+  entran por WhatsApp y se cargan a mano en Entregas. Si algún día tiene que bajar
+  solo, el camino es un trigger sobre `delivery_ticket_types` (v18).
+- **`stockDelLote`** (en `ticketTypes.ts`) toma, de las entradas **a la venta**, la
+  que **menos queda** (lo urgente es lo que se acaba primero); un 0 no cuenta (un
+  lote sin entradas se apaga con "A la venta", no con un cartel). Para una fiesta
+  de varios días mira los tipos de todos los días.
+- **Tolera la columna sin migrar**: `saveEventTickets` sólo manda
+  `stock_remaining` si hay un valor, así que guardar eventos antes de correr v29
+  sigue funcionando; cargar un stock sin migrar da un error claro ("Falta correr
+  la migración v29").
+- Sin migrar, o con stock vacío, la tarjeta y la página quedan **exactamente como
+  antes**.
 
 ### El sidebar del panel cortaba el botón de cerrar sesión
 

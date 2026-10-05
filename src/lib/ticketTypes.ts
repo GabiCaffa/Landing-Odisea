@@ -45,7 +45,33 @@ export interface EventTicket {
   sortOrder: number;
   /** v28: viene del catálogo, no de la relación. Vale para todos los días. */
   isAbono?: boolean;
+  /**
+   * v29: cuántas entradas quedan de este lote antes del cambio. Lo carga el
+   * staff a mano y se muestra tal cual, así que tiene que ser verdadero.
+   * `undefined` = nunca informado o columna todavía sin migrar; `null` = el
+   * staff lo vació (se manda NULL a la base). Ninguno de los dos se muestra.
+   */
+  stockRemaining?: number | null;
 }
+
+/**
+ * Cuántas entradas quedan antes del cambio de lote, o `undefined` si no hay
+ * nada que mostrar.
+ *
+ * Mira sólo las entradas a la venta y toma **la que menos queda**: si hay dos
+ * tipos con stock cargado, lo urgente es el que se acaba primero. Un 0 no
+ * cuenta: un lote sin entradas se apaga con "A la venta", no con un cartel.
+ */
+export function stockDelLote(tickets: EventTicket[]): number | undefined {
+  const cantidades = tickets
+    .filter((t) => t.active && typeof t.stockRemaining === "number" && t.stockRemaining > 0)
+    .map((t) => t.stockRemaining as number);
+  return cantidades.length ? Math.min(...cantidades) : undefined;
+}
+
+/** "Quedan 50 entradas antes del cambio de lote" / "Queda 1 entrada…". */
+export const textoStockLote = (n: number): string =>
+  `${n === 1 ? "Queda 1 entrada" : `Quedan ${n} entradas`} antes del cambio de lote`;
 
 function typeFromDb(row: any): TicketType {
   return {
@@ -83,6 +109,7 @@ export function eventTicketFromDb(row: any): EventTicket {
     price: Number(row.price),
     active: row.active,
     sortOrder: row.sort_order ?? 0,
+    stockRemaining: row.stock_remaining ?? undefined,
   };
 }
 
@@ -97,6 +124,8 @@ function humanError(error: { code?: string; message: string }): string {
   if (error.code === "23505") return "Ya existe un tipo de entrada con ese nombre";
   if (error.code === "23503")
     return "No se puede borrar: hay eventos vendiendo este tipo. Desactivalo en vez de borrarlo.";
+  if (error.code === "42703" || error.code === "PGRST204")
+    return "Falta correr la migración v29_ticket_stock.sql en Supabase.";
   return error.message;
 }
 
@@ -167,6 +196,9 @@ export async function saveEventTickets(
       price: t.price,
       active: t.active,
       sort_order: t.sortOrder || i + 1,
+      // Sólo si hay algo que decir: con la columna todavía sin migrar (v29) un
+      // campo desconocido haría fallar el guardado de CUALQUIER evento.
+      ...(t.stockRemaining !== undefined ? { stock_remaining: t.stockRemaining } : {}),
     })),
     { onConflict: "event_id,ticket_type_id" }
   );
