@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { RUTA_APARTE } from "@/lib/fiestasAparte";
 import {
   CARTEL_KEY,
   DEFAULT_THEME,
@@ -64,7 +65,8 @@ const PREVIEW_PARAM = "tema";
  * modales y toasts salen por portal, fuera de ese wrapper, y quedarían con el
  * tema igual.)
  */
-const isThemedPath = (pathname: string) => !pathname.startsWith("/admin");
+const isThemedPath = (pathname: string) =>
+  !pathname.startsWith("/admin") && pathname !== RUTA_APARTE;
 
 /**
  * Dónde se usa la tipografía estacional. La home más las pantallas de entrada.
@@ -124,6 +126,13 @@ interface ThemeContextValue {
   comisionTicketera: number;
   /** Todavía no llegó el TEMA de la DB (el cartel no lo bloquea). */
   loading: boolean;
+  /**
+   * Una página puede pedir quedar SIN tema aunque su ruta lo lleve. Lo usa la
+   * página de un evento aparte (`useSinTema`). Va por contexto y no por la ruta
+   * porque saber si un evento es aparte requiere los datos, y el provider del
+   * tema está por encima del de sesión.
+   */
+  setPaginaSinTema: (sinTema: boolean) => void;
   /** Guarda el tema. Sólo el admin pasa el RLS. */
   setTheme: (theme: SiteTheme) => Promise<void>;
   /** Guarda el cartel. Sólo el admin pasa el RLS. */
@@ -139,6 +148,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [cartel, setCartelState] = useState("");
   const [comisionTicketera, setComisionState] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [paginaSinTema, setPaginaSinTema] = useState(false);
   const { pathname } = useLocation();
   const [params] = useSearchParams();
 
@@ -205,8 +215,9 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   // Pinta el atributo. Depende del tema Y de la ruta (el panel queda afuera).
   useEffect(() => {
-    applyTheme(isThemedPath(pathname) ? effective : DEFAULT_THEME, isShowcasePath(pathname));
-  }, [effective, pathname]);
+    const conTema = isThemedPath(pathname) && !paginaSinTema;
+    applyTheme(conTema ? effective : DEFAULT_THEME, isShowcasePath(pathname));
+  }, [effective, pathname, paginaSinTema]);
 
   const setCartel = useCallback(async (next: string) => {
     await saveCartel(next);
@@ -228,11 +239,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <ThemeContext.Provider value={{
-        theme: effective,
+        theme: isThemedPath(pathname) && !paginaSinTema ? effective : DEFAULT_THEME,
         siteTheme: theme,
         cartel,
         comisionTicketera,
         loading,
+        setPaginaSinTema,
         setTheme,
         setCartel,
         setComisionTicketera,
@@ -253,6 +265,25 @@ export const useCartelEventos = () => useTheme().cartel;
  * 0 = no se tacha nada.
  */
 export const useComisionTicketera = () => useTheme().comisionTicketera;
+
+/**
+ * Pide que la página que lo llama se vea SIN el tema estacional, mientras esté
+ * montada. Para las fiestas aparte (`src/lib/fiestasAparte.ts`).
+ *
+ * Al desmontarse devuelve el tema: si no, la home heredaría el modo claro.
+ * **Hay un parpadeo posible**: esto corre cuando llegaron los datos, así que
+ * quien entra directo a `/evento/<slug>` de una fiesta aparte puede ver el tema
+ * un instante antes. Por eso el anuncio y los banners tienen que usar
+ * `/expofiesta`, que se decide por la URL y no parpadea.
+ */
+export const useSinTema = (activo: boolean) => {
+  const { setPaginaSinTema } = useTheme();
+  useEffect(() => {
+    if (!activo) return;
+    setPaginaSinTema(true);
+    return () => setPaginaSinTema(false);
+  }, [activo, setPaginaSinTema]);
+};
 
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);

@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import HeroBanners from "./HeroBanners";
 import { SiteBanner, fetchBannersActivos } from "@/lib/banners";
 import { playThud } from "@/lib/spookySound";
+import { useAuth } from "@/contexts/AuthContext";
+import { RUTA_APARTE, fiestaAparte } from "@/lib/fiestasAparte";
 
 /**
  * El hero de la home: el slider de banners y, debajo, los dos accesos a
@@ -20,6 +24,10 @@ import { playThud } from "@/lib/spookySound";
 const HeroDelSitio = () => {
   const [banners, setBanners] = useState<SiteBanner[]>([]);
   const [cargado, setCargado] = useState(false);
+  const { events } = useAuth();
+  // Si hay una fiesta fuera de la temporada, se le da su acceso propio. Sin
+  // ninguna vigente no se renderiza nada.
+  const aparte = useMemo(() => fiestaAparte(events), [events]);
 
   useEffect(() => {
     let cancelado = false;
@@ -69,6 +77,20 @@ const HeroDelSitio = () => {
             Ver promociones
           </a>
         </div>
+
+        {/* Acceso a la fiesta aparte (Expo): una línea propia bajo los dos
+            atajos, en tinta para que no compita con el naranja de "Ver
+            eventos". Lleva a /expofiesta, que no lleva el tema estacional. */}
+        {aparte && (
+          <Link
+            to={RUTA_APARTE}
+            onClick={playThud}
+            className="btn-techno mx-auto mt-3 min-h-[44px] w-full max-w-md px-4 py-2.5 text-xs"
+          >
+            <span className="truncate">{aparte.groupName || aparte.name}</span>
+            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+          </Link>
+        )}
       </div>
     </>
   );

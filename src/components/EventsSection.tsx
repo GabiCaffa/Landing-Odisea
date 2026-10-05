@@ -4,6 +4,7 @@ import EventCard from "./EventCard";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth } from "@/contexts/AuthContext";
 import { agruparEventos } from "@/lib/grupos";
+import { esFiestaAparte } from "@/lib/fiestasAparte";
 import SpookySpiders from "./SpookySpiders";
 
 const EventsSection = () => {
@@ -26,7 +27,12 @@ const EventsSection = () => {
    * no cambia nada para lo que ya existe.
    */
   const visibleEvents = useMemo(
-    () => agruparEventos(events.filter((e) => e.status !== "finalizado")),
+    // Las fiestas aparte (Expo) no van acá: tienen su propia página y su acceso
+    // bajo el banner. Mezcladas con las de la temporada confunden.
+    () =>
+      agruparEventos(
+        events.filter((e) => e.status !== "finalizado" && !esFiestaAparte(e))
+      ),
     [events]
   );
 

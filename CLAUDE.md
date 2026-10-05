@@ -1017,6 +1017,40 @@ tienen, con la medida exacta para pedírsela al diseñador.
 > veces en el proyecto** —la página del evento en v25 fue la anterior—, así
 > que: contenido nuevo arriba de todo = acordarse del `pt`.
 
+### Fiestas aparte: Expo Fiesta fuera del tema y del carrusel
+
+ODÍSEA también hace fechas que no son de la temporada del sitio (la Expo Fiesta
+no tiene nada que ver con Halloween). Esas **no van en Próximos Eventos** y
+**no llevan el tema estacional**: tienen su propia página y su acceso bajo el
+banner. Todo vive en `src/lib/fiestasAparte.ts`.
+
+- **Cómo se reconoce una: por el NOMBRE.** Si el nombre del evento, de la fiesta
+  o su clave de grupo contiene una de `PALABRAS_APARTE` (hoy `"expo"`), es
+  aparte. **Sin migración**, a propósito: no hubo que correr nada en Supabase.
+  El costo: si una fiesta se carga con otro nombre no se detecta y queda en el
+  carrusel con el tema. Falla hacia el lado inofensivo. Si llegan a ser varias,
+  lo natural es una columna en `events` editable desde el panel; `esFiestaAparte`
+  es el único lugar que lo sabe.
+- **`/expofiesta`** es la URL para anuncios y banners. Renderiza la misma
+  `Evento` pero resolviendo la fiesta aparte vigente (`fiestaAparte`: la primera
+  por fecha que no esté finalizada), en vez del `:slug`. **No es un redirect**,
+  para que la URL no cambie y el tema se decida por la ruta.
+- **Sin tema, por dos vías.** (1) Por la URL: `/expofiesta` queda fuera de
+  `isThemedPath` (`ThemeContext`) y el script anti-flash de `index.html` quita el
+  atributo ahí, así que no parpadea. (2) Por los datos: `useSinTema` en `Evento`
+  la deja sin tema aunque se entre por `/evento/<slug>`, pero eso corre cuando
+  llegaron los eventos, así que **ese camino puede mostrar el tema un instante**.
+  Por eso los anuncios y banners deben usar `/expofiesta`.
+- **Acceso:** `HeroDelSitio` agrega una línea bajo "Ver eventos / Ver
+  promociones" con el nombre de la fiesta que lleva a `/expofiesta`. Sin fiesta
+  aparte vigente no se renderiza. Para ponerla también **como banner**: en el
+  panel (Banners) cargarlo con el link `/expofiesta`.
+- **El preview del link** (WhatsApp, etc.) de `/expofiesta` es el de la home: el
+  horneado de `paginasEvento` es por `/evento/<slug>`. Para compartir con el
+  flyer de la fiesta, usar `/evento/<slug>`.
+- **Lo que NO se tocó:** `PromosActivasSection` sigue listando las promos de la
+  fiesta aparte en la home (con el tema), y el sitemap no cambió.
+
 ### Aire entre secciones de la home
 
 `.section-padding` pasó de `py-16 md:py-28 lg:py-36` (64/112/144 px) a

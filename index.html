@@ -191,6 +191,8 @@
         // El panel no se tematiza (ver isThemedPath en ThemeContext). Se QUITA
         // y no se ignora, porque el atributo puede venir escrito en el HTML.
         if (location.pathname.indexOf('/admin') === 0) return quitar();
+        // La fiesta aparte tampoco (RUTA_APARTE en src/lib/fiestasAparte.ts).
+        if (location.pathname === '/expofiesta') return quitar();
 
         // Si el HTML ya viene horneado (ver bakeTheme en vite.config.ts), esto
         // reafirma el data-surface que el build no puede saber: index.html se
