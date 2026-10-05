@@ -32,7 +32,7 @@
  * llevar un código de sesión, y Meta recibe la URL de la página.
  */
 
-export const PIXEL_WEB = "1447683830328402";
+export const PIXEL_WEB = "1782457719620401";
 export const PIXEL_EXPO = "2313308699445374";
 
 /** Dónde se carga de verdad. Cualquier otro host: no se carga. */

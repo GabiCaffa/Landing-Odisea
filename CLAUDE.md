@@ -1248,7 +1248,7 @@ es un tipo de entrada con su precio (v15) y el número vive donde vive el precio
 
 ### Píxel de Meta (anuncios)
 
-Dos píxeles, en `src/lib/pixel.ts`: **`PIXEL_WEB` (1447683830328402)**, el de toda
+Dos píxeles, en `src/lib/pixel.ts`: **`PIXEL_WEB` (1782457719620401)**, el de toda
 la web, y **`PIXEL_EXPO` (2313308699445374)**, sólo para la sección de la Expo
 (la fiesta "aparte", `fiestasAparte.ts`). Lo de la Expo va a los dos; lo demás,
 sólo al de la web. Son ids públicos, no secretos.
