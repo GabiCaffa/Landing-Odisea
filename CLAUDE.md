@@ -1029,20 +1029,27 @@ y el estado de scroll de `EventsSection`.
 - **Los agotados van al final** (sort estable sobre `agruparEventos`: dentro de
   cada grupo se conserva el orden por fecha). Una tarjeta que no se puede comprar
   no tiene por qué ser lo primero que se ve.
-- **La tarjeta muestra el precio**: "Desde $X" con el tachado del precio de
-  ticketera al lado (`precioConComision`, mismo criterio que la página del
-  evento: es **cosmético**, lo que se cobra sale del modal). Antes la tarjeta no
-  decía cuánto costaba y había que entrar a la página para enterarse.
-- **El botón de compra es visible**: "Comprar entradas" (o "Elegí tu día (N)" /
-  "Ver la fecha" si está agotado), de 44 px, ancho completo. **No es un link
-  nuevo**: es un `<span>` con cara de botón y el click lo recibe el *stretched
-  link* del título, así que sigue habiendo UNA sola llamada a la acción (lo que
-  v25 quiso lograr al sacar el botón). Lo que se sacó fue la pista de texto chico,
-  que se leía como decoración.
-- El cartel (`cartel_eventos`, "15% OFF") se agrandó un escalón (`text-xs`,
-  `px-3 py-1.5`). Es texto editable desde el panel (hasta 24 caracteres): si se
-  quiere aclarar que es exclusivo de la web, se puede escribir ahí, por ejemplo
-  "15% OFF SOLO WEB".
+- **La tarjeta NO muestra el precio, a propósito** (decisión del autor). El
+  precio depende del lote vigente y cambia a mano en cada evento; mostrarlo en la
+  tarjeta sería un segundo lugar que mantener al día. Los precios y los lotes
+  viven **sólo en la página del evento**. (En un primer intento la tarjeta
+  mostraba "Desde $X" con el tachado; se sacó.)
+- **El botón de compra es el llamado a la acción** y lleva el cartel del sitio:
+  "COMPRAR · 15% OFF SOLO WEB" (el texto es `cartel_eventos`, editable desde el
+  panel, hasta 24 caracteres; sin cartel dice "Comprar entradas"; con varios días
+  "Elegí tu día (N)"; agotado, "Ver la fecha" en contorno). Es de 48 px, ancho
+  completo. **No es un link nuevo**: es un `<span>` con cara de botón y el click
+  lo recibe el *stretched link* del título, así que sigue habiendo UNA sola
+  llamada a la acción (lo que v25 quiso lograr al sacar el botón). Con el botón
+  de Instagram al lado y un cartel largo, el texto puede bajar a dos líneas.
+- **El cartel ya no es una pastilla sobre el flyer**: sólo quedan las pastillas de
+  las promos reales (2x1, etc.).
+- **Los lotes no existen como concepto en el código.** Un lote es un tipo de
+  entrada ("General – 1er lote") con su precio y su casilla de "a la venta" en el
+  formulario del evento; **cambiar de lote es editar el evento a mano**. No hay
+  stock automático: las ventas entran por WhatsApp y se cargan a mano en Entregas.
+  Lo único automático es el cierre por fecha (`sale_ends_at`), que es del evento
+  entero y no de un tipo de entrada.
 - **Objetivos táctiles de 44 px** en lo que se toca más desde un celular: los
   iconos del header (ingresar, WhatsApp, panel, cerrar sesión; eran 34) y los
   links legales del footer (eran 16 de alto).

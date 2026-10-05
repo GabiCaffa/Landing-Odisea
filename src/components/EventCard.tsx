@@ -6,8 +6,7 @@ import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext"
 import { EventTicket } from "@/lib/ticketTypes";
 import { EventPromo, promoVigente } from "@/lib/ticketPromos";
 import { urlDeEvento } from "@/lib/rutas";
-import { useCartelEventos, useComisionTicketera } from "@/contexts/ThemeContext";
-import { precioConComision } from "@/lib/siteSettings";
+import { useCartelEventos } from "@/contexts/ThemeContext";
 
 /**
  * Tarjeta de evento del carrusel de la home.
@@ -67,18 +66,11 @@ const EventCard = ({
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
   const destino = slug ? urlDeEvento(slug) : null;
   const cartel = useCartelEventos();
-  const comision = useComisionTicketera();
 
   // Agotado si el admin lo marcó así, si ya pasó la fecha/hora de cierre de
   // venta, o si el evento no tiene ningún tipo de entrada a la venta.
   const isSoldOut =
     soldOut || tickets.length === 0 || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
-
-  // El precio de la tarjeta: el tipo de entrada más barato a la venta, con el
-  // mismo tachado que la página del evento (lo que costaría en una ticketera,
-  // ver `precioConComision`). Es COSMÉTICO: lo que se cobra sale de la página.
-  const desde = tickets.length ? Math.min(...tickets.map((t) => t.price)) : 0;
-  const desdeConComision = precioConComision(desde, comision);
 
   return (
     /*
@@ -134,8 +126,8 @@ const EventCard = ({
 
           Son DOS cosas distintas que se ven igual, y la diferencia importa:
 
-          - El **cartel del sitio** (`cartel`, v19/site_settings) va primero y
-            es puro texto: NO descuenta. Lo que se vende ya tiene el descuento
+          - El **cartel del sitio** (`cartel`, v19/site_settings) ya no es una
+            pastilla: es el texto del botón de compra, de abajo. Es puro texto: NO descuenta. Lo que se vende ya tiene el descuento
             metido en el precio que se carga en el evento. Si esto fuera una
             promo de verdad, el sitio restaría el porcentaje otra vez.
           - Las **promos** (v21) sí calculan, y por eso salen de los datos del
@@ -146,10 +138,7 @@ const EventCard = ({
           Tres como mucho: a partir de ahí la pila tapa el flyer.
         */}
         {!isSoldOut &&
-          [
-            ...(cartel ? [cartel] : []),
-            ...new Set(promos.filter((p) => promoVigente(p)).map((p) => p.name)),
-          ]
+          [...new Set(promos.filter((p) => promoVigente(p)).map((p) => p.name))]
             .slice(0, 3)
             .map((nombre, i) => (
               <div
@@ -201,7 +190,14 @@ const EventCard = ({
         </p>
 
         {/*
-          El precio y UN botón, que es lo que decide la venta desde un celular.
+          UN botón grande, que es lo que decide la venta desde un celular.
+
+          **No lleva precio, a propósito**: el precio depende del lote vigente y
+          cambia a mano en cada evento; mostrarlo acá sería un segundo lugar que
+          mantener actualizado. Precios y lotes viven en la página del evento.
+          **El texto del botón es el cartel del sitio** (`cartel_eventos`, p. ej.
+          "15% OFF SOLO WEB"): se cambia desde el panel sin tocar código, y sin
+          cartel el botón dice "Comprar entradas".
 
           **El botón no es un link nuevo**: es un <span> con cara de botón, y el
           click lo recibe el link del título (el `::after` que cubre la tarjeta).
@@ -210,33 +206,23 @@ const EventCard = ({
           pista de texto chico ("VER Y COMPRAR →") que se confundía con
           decoración.
 
-          Agotado: sin precio y sin naranja; el botón pasa a contorno.
+          Agotado: sin naranja y sin cartel; el botón pasa a contorno.
         */}
-        {!isSoldOut && desde > 0 && (
-          <div className="mb-3 flex items-baseline gap-2 font-sport">
-            <span className="text-xs font-semibold uppercase tracking-wider text-tinta/60">
-              Desde
-            </span>
-            <span className="text-3xl font-black leading-none text-tinta tabular-nums">
-              ${desde.toLocaleString("es-UY")}
-            </span>
-            {desdeConComision > 0 && (
-              <span className="text-sm font-semibold text-tinta/50 line-through tabular-nums">
-                ${desdeConComision.toLocaleString("es-UY")}
-              </span>
-            )}
-          </div>
-        )}
-
         <div className="mt-auto flex items-stretch gap-2">
           <span
-            className={`group flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold tracking-wide transition-all ${
+            className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-bold uppercase tracking-wide transition-all ${
               isSoldOut
                 ? "border border-tinta/20 text-tinta"
                 : "bg-celeste text-accent-foreground"
             }`}
           >
-            {isSoldOut ? "Ver la fecha" : dias > 1 ? `Elegí tu día (${dias})` : "Comprar entradas"}
+            {isSoldOut
+              ? "Ver la fecha"
+              : dias > 1
+                ? `Elegí tu día (${dias})`
+                : cartel
+                  ? `Comprar · ${cartel}`
+                  : "Comprar entradas"}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
 
