@@ -951,20 +951,38 @@ todavía hay margen; con 5 días en una fila angosta vuelve a scrollear.
 > su propia ventana, su cupo y su precio, así que colapsarlas escondería que
 > vencen en momentos distintos.
 
-**v27 — Banners del hero (slider de la home).** El hero pasa a poder ser un
+**v27 — Banners del hero (slider de la home).** El hero de la home es un
 slider de banners que carga el staff. Hoy son 3, de **1920×600**.
 
-**Sí una tabla, cuando el cartel de §6.0 fue una clave suelta.** Un banner no
+> **Estado actual: el slider es el ÚNICO hero.** La v27 original convivía con un
+> hero clásico (logo + tagline + botones) y un interruptor en `site_settings`
+> (clave `hero` = `clasico` | `banners`) para elegir entre los dos. **Se sacó**
+> (rama `feat/banner-principal`): la web va enfocada a la venta y lo primero que
+> tiene que verse es la fecha que se está vendiendo, no la marca. Se borraron
+> `Hero.tsx`, el interruptor del panel y `heroModo`/`setHeroModo`/`HERO_KEY` de
+> `ThemeContext` y `siteSettings`. **La fila `hero` de `site_settings` queda
+> huérfana en la base**: nadie la lee y se puede borrar a mano.
+>
+> `HeroDelSitio.tsx` pide los banners activos y pinta `HeroBanners` y, **debajo**,
+> dos botones chicos (44 px de alto): "Ver eventos" (`#eventos`, con el acento) y
+> "Ver promociones" (`#promos`, en contorno). Son atajos: el contenido es el banner.
+> **Sin ningún banner activo no queda hueco**: se ve sólo el despeje del header
+> (`fixed`) y los botones. Mientras la consulta no contesta se reserva el alto del
+> banner para que lo de abajo no salte. Los murciélagos del tema Halloween vivían
+> sólo en el hero clásico y **ya no se montan en ningún lado** (`SpookyBats.tsx`
+> quedó sin uso): se probaron en la franja de los botones y, con ~70 px de alto,
+> quedaban cortados. Las arañas de Eventos no cambian.
+
+**Qué se necesita para cargar un banner:** 2 imágenes, escritorio **1920×600** y
+celular **1080×1350** (4:5). Se suben desde el panel (pestaña Banners), no al
+repo. **Con que a UN banner activo le falte la versión de celular, todo el slider
+va en 16:5** (ver más abajo): hay que cargar siempre las dos.
+
+**Una tabla, cuando el cartel de §6.0 fue una clave suelta.** Un banner no
 es un valor: son varias filas, con orden entre ellas, cada una con su imagen,
 su texto alternativo y su link. La regla que viene siguiendo el proyecto se
 mantiene — **un valor global va a `site_settings` (v19), una lista ordenada va
 a su tabla**.
-
-**El interruptor sí va a `site_settings`** (clave `hero` = `clasico` |
-`banners`), y no es "¿hay banners activos?", por el mismo motivo operativo de
-v19: se cargan los tres, se miran, y recién ahí se prende; y si a las 3 de la
-mañana se ve mal se apaga en 5 segundos sin borrar nada. **Sin la fila cae en
-`clasico`**, así que correr la migración no cambia la home por sí sola.
 
 **Escritura sólo admin**, con el criterio de v22: el operador gestiona el
 contenido (eventos, entradas, promos) pero no la cara pública. El hero es LO
@@ -998,6 +1016,16 @@ tienen, con la medida exacta para pedírsela al diseñador.
 > clásico no lo sufre porque está hecho para pasarle por debajo. **Van tres
 > veces en el proyecto** —la página del evento en v25 fue la anterior—, así
 > que: contenido nuevo arriba de todo = acordarse del `pt`.
+
+### Aire entre secciones de la home
+
+`.section-padding` pasó de `py-16 md:py-28 lg:py-36` (64/112/144 px) a
+`py-10 md:py-16 lg:py-20` (40/64/80), y los títulos de Eventos, Promos y Promos
+activas bajaron sus márgenes inferiores (`mb-10 md:mb-16` → `mb-8 md:mb-10`; el
+eyebrow y el `h2`, un escalón). Motivo: con tráfico de anuncios en celular, cada
+pantalla de aire entre el banner y las fechas es una pantalla más antes de poder
+comprar. **No se tocaron los tamaños de letra.** Sólo lo usan esas tres secciones;
+si se usa en una nueva, hereda esta medida.
 
 ### Sin librería de carrusel
 
@@ -1559,7 +1587,7 @@ animaciones exportadas de After Effects por ilustradores; el componente sólo la
 pantalla. Las dos las eligió el autor en LottieFiles (filtro **Free** = *Lottie Simple License*:
 uso comercial permitido, sin atribución obligatoria).
 
-**Bandada de murciélagos (`SpookyBats`, en el hero).** Cuatro, a distintas alturas, tamaños,
+**Bandada de murciélagos (`SpookyBats`) — HOY SIN USO, ver v27.** Estaba en el hero clásico, que se sacó. Cuatro, a distintas alturas, tamaños,
 velocidades y direcciones — uno solo y quieto en un rincón se lee como un sticker pegado, que
 fue el primer intento. **Van lentos**: el más rápido tarda ~38s en cruzar (la decoración vieja
 lo hacía en 7 y se sentía agresiva). Los **tres tonos** —negro, gris y blanco— salen de pisar
