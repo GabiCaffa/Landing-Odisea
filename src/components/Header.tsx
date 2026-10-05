@@ -172,7 +172,7 @@ const Header = () => {
                 {isStaffRole(currentUser.role) && (
                   <Link
                     to="/admin"
-                    className="p-2 rounded-full border border-border"
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-border"
                     aria-label={currentUser.role === "admin" ? "Panel admin" : "Entregas"}
                   >
                     <ShieldCheck className="w-4 h-4" />
@@ -180,7 +180,7 @@ const Header = () => {
                 )}
                 <button
                   onClick={handleLogout}
-                  className="p-2 rounded-full border border-border"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-border"
                   aria-label="Cerrar sesión"
                 >
                   <LogOut className="w-4 h-4" />
@@ -189,7 +189,7 @@ const Header = () => {
             ) : (
               <Link
                 to="/login"
-                className="p-2 rounded-full border border-border"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-border"
                 aria-label="Ingresar"
               >
                 <UserIcon className="w-4 h-4" />
@@ -200,7 +200,8 @@ const Header = () => {
               href="https://wa.me/59892592179"
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-techno-outline text-xs py-2 px-3"
+              className="btn-techno-outline h-11 min-w-[44px] text-xs px-3"
+              aria-label="WhatsApp"
             >
               <WhatsAppIcon className="w-4 h-4" />
             </a>
