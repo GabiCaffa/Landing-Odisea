@@ -20,6 +20,8 @@ import {
 import { useComisionTicketera } from "@/contexts/ThemeContext";
 import { precioConComision } from "@/lib/siteSettings";
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
+import { rastrear } from "@/lib/pixel";
+import { esFiestaAparte } from "@/lib/fiestasAparte";
 import { toast } from "sonner";
 
 interface CompraEntradasProps {
@@ -72,7 +74,7 @@ const CompraEntradas = ({
   promos = [],
   diasDeLaFiesta = 1,
 }: CompraEntradasProps) => {
-  const { currentUser } = useAuth();
+  const { currentUser, events } = useAuth();
   // Arriba del "if (!isOpen) return null" de abajo, como el resto de los
   // hooks: puesto donde se usa cambiaria el orden de los hooks entre renders.
   const comisionTicketera = useComisionTicketera();
@@ -280,6 +282,22 @@ const CompraEntradas = ({
     if (!message) return;
     const url = `https://wa.me/59892592179?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
+    // Píxel de Meta: la compra se cierra por WhatsApp, así que no hay un
+    // "Purchase" real que medir. Mandar el mensaje es el momento de mayor
+    // intención, y es lo que se le da a Meta para optimizar los anuncios.
+    // `total` ya viene con las promos aplicadas.
+    const evento = eventId ? events.find((e) => e.id === eventId) : undefined;
+    rastrear(
+      "Lead",
+      {
+        content_name: eventName,
+        ...(evento ? { content_ids: [evento.slug] } : {}),
+        content_type: "product",
+        value: total,
+        currency: "UYU",
+      },
+      evento && esFiestaAparte(evento) ? "web+expo" : "web"
+    );
     onClose();
   };
 

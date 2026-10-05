@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 import ScrollToTop from "@/components/ScrollToTop";
+import PixelPageView from "@/components/PixelPageView";
 import OcultarArranque from "@/components/OcultarArranque";
 import AvisoCiudad from "@/components/AvisoCiudad";
 import LoadingScreen from "@/components/LoadingScreen";
@@ -40,6 +41,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <ScrollToTop />
+        {/* Un PageView por pantalla para el píxel de Meta (ver src/lib/pixel.ts). */}
+        <PixelPageView />
         <ThemeProvider>
         <AuthProvider>
           <ConfirmProvider>
