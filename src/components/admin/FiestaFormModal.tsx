@@ -464,7 +464,6 @@ const FiestaFormModal = ({
                   }
                   location={location || "Lugar del evento"}
                   description={dias[0]?.description || "Descripción del primer día..."}
-                  price={0}
                   status="activo"
                 />
                 <div className="space-y-3">

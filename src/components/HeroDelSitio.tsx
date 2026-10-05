@@ -1,65 +1,35 @@
-import { useEffect, useState } from "react";
-import Hero from "./Hero";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import HeroBanners from "./HeroBanners";
-import { useHeroModo } from "@/contexts/ThemeContext";
 import { SiteBanner, fetchBannersActivos } from "@/lib/banners";
+import { playThud } from "@/lib/spookySound";
+import { useAuth } from "@/contexts/AuthContext";
+import { RUTA_APARTE, fiestaAparte } from "@/lib/fiestasAparte";
 
 /**
- * Elige qué hero pinta la home: el de siempre o el slider de banners (v27).
+ * El hero de la home: el slider de banners y, debajo, los dos accesos a
+ * eventos y promociones.
  *
- * Existe para que `Index.tsx` siga diciendo `<HeroDelSitio />` y nada más. El
- * interruptor vive en la base (`site_settings.hero`), así que esto es una
- * decisión de ejecución, no de build.
+ * Antes había además un hero clásico (logo + tagline) y un interruptor en la
+ * base (`site_settings.hero`) para elegir entre los dos. Se sacó: la web va
+ * enfocada a la venta y lo primero que se ve tiene que ser la fecha que se
+ * está vendiendo, no la marca. Para sumar o cambiar un banner no hay que
+ * tocar código: se carga desde el panel.
  *
- * ─── El parpadeo, y hasta dónde se puede evitar ───────────────────────────
- *
- * El modo llega por red. Sin nada más, un visitante nuevo vería el hero
- * clásico y medio segundo después el slider — el mismo problema que el tema
- * tuvo en §6.3, y la misma mitad de la solución: el valor se cachea en
- * `localStorage` y en la visita siguiente se aplica antes de que llegue la
- * consulta.
- *
- * **Para el visitante NUEVO el parpadeo sigue existiendo**, y acá no se puede
- * arreglar: el dato no está en ninguna parte del cliente. El tema lo resolvió
- * horneándolo en el HTML en tiempo de build (`bakeTheme`); si alguna vez
- * molesta, ése es el molde, y hay que sumarle las URLs de los banners o el
- * slider igual aparecería vacío.
- *
- * Mientras tanto **el caso por defecto no parpadea**: sin la clave en la base
- * el modo es `clasico` y la home queda exactamente como está hoy.
+ * Los botones van chicos y DEBAJO del banner a propósito: el banner es el
+ * contenido, los botones son atajos. El de eventos lleva el acento porque es
+ * el camino a la compra.
  */
-
-const CACHE_KEY = "odisea:hero";
-
-const leerCache = (): boolean => {
-  try {
-    return localStorage.getItem(CACHE_KEY) === "banners";
-  } catch {
-    // Incógnito o storage bloqueado: se pierde sólo el anti-parpadeo.
-    return false;
-  }
-};
-
 const HeroDelSitio = () => {
-  const modo = useHeroModo();
   const [banners, setBanners] = useState<SiteBanner[]>([]);
-  // Lo que se cree antes de que conteste la base. Se lee una sola vez.
-  const [optimista] = useState(leerCache);
   const [cargado, setCargado] = useState(false);
+  const { events } = useAuth();
+  // Si hay una fiesta fuera de la temporada, se le da su acceso propio. Sin
+  // ninguna vigente no se renderiza nada.
+  const aparte = useMemo(() => fiestaAparte(events), [events]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CACHE_KEY, modo);
-    } catch {
-      /* ver leerCache */
-    }
-  }, [modo]);
-
-  // Los banners se piden si el modo —el real o el cacheado— dice que hacen
-  // falta. Pedirlos siempre sería una consulta de más en la carga inicial para
-  // todos los visitantes mientras el slider esté apagado.
-  useEffect(() => {
-    if (modo !== "banners" && !optimista) return;
     let cancelado = false;
     fetchBannersActivos().then((b) => {
       if (cancelado) return;
@@ -69,16 +39,61 @@ const HeroDelSitio = () => {
     return () => {
       cancelado = true;
     };
-  }, [modo, optimista]);
+  }, []);
 
-  // Con el slider prendido pero sin banners cargados —o si la consulta
-  // falló— va el hero de siempre. Una home que arranca con un hueco blanco
-  // es peor que una que arranca como arrancaba.
-  if (modo === "banners" && cargado && banners.length > 0) {
-    return <HeroBanners banners={banners} />;
-  }
+  return (
+    <>
+      {banners.length > 0 ? (
+        <HeroBanners banners={banners} />
+      ) : (
+        /*
+         * Mientras la consulta no contesta se reserva el alto del banner, así
+         * los botones y lo de abajo no saltan cuando llega (§6.4). Si contestó
+         * y no hay ninguno activo, no queda hueco: sólo el despeje del header
+         * —que es `fixed` y flota sobre el contenido— y los botones.
+         */
+        <div
+          aria-hidden="true"
+          className={`bg-secondary/40 pt-[69px] md:pt-[85px] ${
+            cargado ? "" : "min-h-[calc(69px+125vw)] md:min-h-[calc(85px+31.25vw)]"
+          }`}
+        />
+      )}
 
-  return <Hero />;
+      <div className="bg-papel px-4 pb-2 pt-4 md:pt-5">
+        <div className="mx-auto flex max-w-md items-center justify-center gap-3">
+          <a
+            href="#eventos"
+            onClick={playThud}
+            className="btn-celeste min-h-[44px] flex-1 px-4 py-2.5 text-xs sm:flex-none sm:px-6"
+          >
+            Ver eventos
+          </a>
+          <a
+            href="#promos"
+            onClick={playThud}
+            className="btn-techno-outline min-h-[44px] flex-1 px-4 py-2.5 text-xs sm:flex-none sm:px-6"
+          >
+            Ver promociones
+          </a>
+        </div>
+
+        {/* Acceso a la fiesta aparte (Expo): una línea propia bajo los dos
+            atajos, en tinta para que no compita con el naranja de "Ver
+            eventos". Lleva a /expofiesta, que no lleva el tema estacional. */}
+        {aparte && (
+          <Link
+            to={RUTA_APARTE}
+            onClick={playThud}
+            className="btn-techno !flex mx-auto mt-3 min-h-[44px] w-full max-w-md px-4 py-2.5 text-xs"
+          >
+            <span className="truncate">{aparte.groupName || aparte.name}</span>
+            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+          </Link>
+        )}
+      </div>
+    </>
+  );
 };
 
 export default HeroDelSitio;

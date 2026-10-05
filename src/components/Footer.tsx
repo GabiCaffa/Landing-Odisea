@@ -55,11 +55,11 @@ const Footer = () => {
 
           {/* Links legales */}
           <div className="flex items-center gap-5 text-xs text-papel/60">
-            <Link to="/terminos" className="hover:text-celeste transition-colors">
+            <Link to="/terminos" className="inline-block py-3 hover:text-celeste transition-colors">
               Términos de Uso
             </Link>
             <span className="h-3 w-px bg-papel/20" />
-            <Link to="/privacidad" className="hover:text-celeste transition-colors">
+            <Link to="/privacidad" className="inline-block py-3 hover:text-celeste transition-colors">
               Política de Privacidad
             </Link>
           </div>

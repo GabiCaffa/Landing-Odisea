@@ -51,6 +51,9 @@ const App = () => (
                   RUTA_EVENTO (src/lib/rutas.ts), que es de donde lo saca el
                   plugin que hornea el HTML de cada evento. */}
               <Route path="/evento/:slug" element={<Evento />} />
+              {/* La fiesta aparte (Expo Fiesta): misma página, sin tema. Ver
+                  src/lib/fiestasAparte.ts. */}
+              <Route path="/expofiesta" element={<Evento />} />
               <Route path="/registro" element={<Register />} />
               <Route path="/login" element={<Login />} />
               <Route path="/recuperar" element={<ForgotPassword />} />

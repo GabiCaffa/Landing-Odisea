@@ -18,7 +18,8 @@ import { EventTicket, TicketType, sortEventTickets } from "@/lib/ticketTypes";
 
 // Vivía suelto en Admin.tsx, al lado de los componentes que se movieron.
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
-import WhatsAppIcon from "@/components/WhatsAppIcon";
+import { ArrowRight } from "lucide-react";
+import { useCartelEventos } from "@/contexts/ThemeContext";
 
 /**
  * Piezas del formulario de evento que usan DOS pantallas: el formulario de un
@@ -94,6 +95,16 @@ export const TicketsEditor = ({
   const setActive = (typeId: string, active: boolean) =>
     onChange(value.map((t) => (t.ticketTypeId === typeId ? { ...t, active } : t)));
 
+  // Vacío = no se informa ('null' se manda a la base como NULL).
+  const setStock = (typeId: string, raw: string) =>
+    onChange(
+      value.map((t) =>
+        t.ticketTypeId === typeId
+          ? { ...t, stockRemaining: raw === "" ? null : Math.max(0, Math.floor(Number(raw))) }
+          : t
+      )
+    );
+
   if (options.length === 0) {
     return (
       <p className="text-xs text-muted-foreground border border-dashed border-border p-4">
@@ -161,6 +172,28 @@ export const TicketsEditor = ({
                 />
                 A la venta (destildá para ocultarla sin perder el precio)
               </label>
+            )}
+
+            {row && (
+              <div className="mt-2 ml-7">
+                <label className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                  Quedan
+                  <input
+                    type="number"
+                    min={0}
+                    value={row.stockRemaining ?? ""}
+                    onChange={(e) => setStock(type.id, e.target.value)}
+                    className="input-techno w-20 text-right"
+                    placeholder="—"
+                    aria-label={`Entradas que quedan de ${type.name} antes del cambio de lote`}
+                  />
+                  entradas antes del cambio de lote
+                </label>
+                <p className="mt-1 text-[11px] text-muted-foreground/80">
+                  Opcional. Se muestra tal cual en la web: <strong>mantenelo al día</strong> con
+                  las ventas, o dejalo vacío para no mostrar nada.
+                </p>
+              </div>
             )}
           </div>
         );
@@ -368,7 +401,6 @@ export const EventCardPreview = ({
   date,
   location,
   description,
-  price,
   status,
 }: {
   image: string;
@@ -378,9 +410,10 @@ export const EventCardPreview = ({
   date: string;
   location: string;
   description: string;
-  price: number;
   status: AdminEvent["status"];
 }) => {
+  // El botón de la tarjeta real lleva el cartel del sitio (ver EventCard).
+  const cartel = useCartelEventos();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const dragState = useRef<{
@@ -523,10 +556,16 @@ export const EventCardPreview = ({
           <button
             type="button"
             disabled
-            className="btn-techno flex-1 text-xs py-2 px-3 opacity-90 cursor-default"
+            className="btn-celeste flex-1 text-xs font-bold uppercase py-3 px-3 cursor-default"
           >
-            <WhatsAppIcon className="w-4 h-4" />
-            <span>{status === "agotado" ? "Agotado" : `Comprar · desde $${price}`}</span>
+            <span>
+              {status === "agotado"
+                ? "Ver la fecha"
+                : cartel
+                  ? `Comprar · ${cartel}`
+                  : "Comprar entradas"}
+            </span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>

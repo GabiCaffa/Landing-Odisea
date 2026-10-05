@@ -98,7 +98,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v18_delivery_ticket_types.sql` → `v19_site_settings.sql` →
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
-`v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql`.
+`v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
+`v29_ticket_stock.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -951,20 +952,38 @@ todavía hay margen; con 5 días en una fila angosta vuelve a scrollear.
 > su propia ventana, su cupo y su precio, así que colapsarlas escondería que
 > vencen en momentos distintos.
 
-**v27 — Banners del hero (slider de la home).** El hero pasa a poder ser un
+**v27 — Banners del hero (slider de la home).** El hero de la home es un
 slider de banners que carga el staff. Hoy son 3, de **1920×600**.
 
-**Sí una tabla, cuando el cartel de §6.0 fue una clave suelta.** Un banner no
+> **Estado actual: el slider es el ÚNICO hero.** La v27 original convivía con un
+> hero clásico (logo + tagline + botones) y un interruptor en `site_settings`
+> (clave `hero` = `clasico` | `banners`) para elegir entre los dos. **Se sacó**
+> (rama `feat/banner-principal`): la web va enfocada a la venta y lo primero que
+> tiene que verse es la fecha que se está vendiendo, no la marca. Se borraron
+> `Hero.tsx`, el interruptor del panel y `heroModo`/`setHeroModo`/`HERO_KEY` de
+> `ThemeContext` y `siteSettings`. **La fila `hero` de `site_settings` queda
+> huérfana en la base**: nadie la lee y se puede borrar a mano.
+>
+> `HeroDelSitio.tsx` pide los banners activos y pinta `HeroBanners` y, **debajo**,
+> dos botones chicos (44 px de alto): "Ver eventos" (`#eventos`, con el acento) y
+> "Ver promociones" (`#promos`, en contorno). Son atajos: el contenido es el banner.
+> **Sin ningún banner activo no queda hueco**: se ve sólo el despeje del header
+> (`fixed`) y los botones. Mientras la consulta no contesta se reserva el alto del
+> banner para que lo de abajo no salte. Los murciélagos del tema Halloween vivían
+> sólo en el hero clásico y **ya no se montan en ningún lado** (`SpookyBats.tsx`
+> quedó sin uso): se probaron en la franja de los botones y, con ~70 px de alto,
+> quedaban cortados. Las arañas de Eventos no cambian.
+
+**Qué se necesita para cargar un banner:** 2 imágenes, escritorio **1920×600** y
+celular **1080×1350** (4:5). Se suben desde el panel (pestaña Banners), no al
+repo. **Con que a UN banner activo le falte la versión de celular, todo el slider
+va en 16:5** (ver más abajo): hay que cargar siempre las dos.
+
+**Una tabla, cuando el cartel de §6.0 fue una clave suelta.** Un banner no
 es un valor: son varias filas, con orden entre ellas, cada una con su imagen,
 su texto alternativo y su link. La regla que viene siguiendo el proyecto se
 mantiene — **un valor global va a `site_settings` (v19), una lista ordenada va
 a su tabla**.
-
-**El interruptor sí va a `site_settings`** (clave `hero` = `clasico` |
-`banners`), y no es "¿hay banners activos?", por el mismo motivo operativo de
-v19: se cargan los tres, se miran, y recién ahí se prende; y si a las 3 de la
-mañana se ve mal se apaga en 5 segundos sin borrar nada. **Sin la fila cae en
-`clasico`**, así que correr la migración no cambia la home por sí sola.
 
 **Escritura sólo admin**, con el criterio de v22: el operador gestiona el
 contenido (eventos, entradas, promos) pero no la cara pública. El hero es LO
@@ -998,6 +1017,87 @@ tienen, con la medida exacta para pedírsela al diseñador.
 > clásico no lo sufre porque está hecho para pasarle por debajo. **Van tres
 > veces en el proyecto** —la página del evento en v25 fue la anterior—, así
 > que: contenido nuevo arriba de todo = acordarse del `pt`.
+
+### Próximos Eventos: de carrusel a grid, con precio y botón de compra
+
+El carrusel horizontal con flechas **se reemplazó por un grid** que se ve entero:
+una tarjeta debajo de otra en celular (`max-w-[400px]`) y filas centradas de
+320 px desde `sm:`. Con pocas fechas el carrusel escondía las que no entraban —en
+un celular se veía UNA tarjeta y el borde de la siguiente— y desde un anuncio
+nadie desliza para descubrir que hay más. Se borraron las flechas, los degradés
+y el estado de scroll de `EventsSection`.
+
+- **Los agotados van al final** (sort estable sobre `agruparEventos`: dentro de
+  cada grupo se conserva el orden por fecha). Una tarjeta que no se puede comprar
+  no tiene por qué ser lo primero que se ve.
+- **La tarjeta NO muestra el precio, a propósito** (decisión del autor). El
+  precio depende del lote vigente y cambia a mano en cada evento; mostrarlo en la
+  tarjeta sería un segundo lugar que mantener al día. Los precios y los lotes
+  viven **sólo en la página del evento**. (En un primer intento la tarjeta
+  mostraba "Desde $X" con el tachado; se sacó.)
+- **El botón de compra es el llamado a la acción** y lleva el cartel del sitio:
+  "COMPRAR · 15% OFF SOLO WEB" (el texto es `cartel_eventos`, editable desde el
+  panel, hasta 24 caracteres; sin cartel dice "Comprar entradas"; con varios días
+  "Elegí tu día (N)"; agotado, "Ver la fecha" en contorno). Es de 48 px, ancho
+  completo. **No es un link nuevo**: es un `<span>` con cara de botón y el click
+  lo recibe el *stretched link* del título, así que sigue habiendo UNA sola
+  llamada a la acción (lo que v25 quiso lograr al sacar el botón). Con el botón
+  de Instagram al lado y un cartel largo, el texto puede bajar a dos líneas.
+- **El cartel ya no es una pastilla sobre el flyer**: sólo quedan las pastillas de
+  las promos reales (2x1, etc.).
+- **Los lotes no existen como concepto en el código.** Un lote es un tipo de
+  entrada ("General – 1er lote") con su precio y su casilla de "a la venta" en el
+  formulario del evento; **cambiar de lote es editar el evento a mano**. No hay
+  stock automático: las ventas entran por WhatsApp y se cargan a mano en Entregas.
+  Lo único automático es el cierre por fecha (`sale_ends_at`), que es del evento
+  entero y no de un tipo de entrada.
+- **Objetivos táctiles de 44 px** en lo que se toca más desde un celular: los
+  iconos del header (ingresar, WhatsApp, panel, cerrar sesión; eran 34) y los
+  links legales del footer (eran 16 de alto).
+
+### Fiestas aparte: Expo Fiesta fuera del tema y del carrusel
+
+ODÍSEA también hace fechas que no son de la temporada del sitio (la Expo Fiesta
+no tiene nada que ver con Halloween). Esas **no van en Próximos Eventos** y
+**no llevan el tema estacional**: tienen su propia página y su acceso bajo el
+banner. Todo vive en `src/lib/fiestasAparte.ts`.
+
+- **Cómo se reconoce una: por el NOMBRE.** Si el nombre del evento, de la fiesta
+  o su clave de grupo contiene una de `PALABRAS_APARTE` (hoy `"expo"`), es
+  aparte. **Sin migración**, a propósito: no hubo que correr nada en Supabase.
+  El costo: si una fiesta se carga con otro nombre no se detecta y queda en el
+  carrusel con el tema. Falla hacia el lado inofensivo. Si llegan a ser varias,
+  lo natural es una columna en `events` editable desde el panel; `esFiestaAparte`
+  es el único lugar que lo sabe.
+- **`/expofiesta`** es la URL para anuncios y banners. Renderiza la misma
+  `Evento` pero resolviendo la fiesta aparte vigente (`fiestaAparte`: la primera
+  por fecha que no esté finalizada), en vez del `:slug`. **No es un redirect**,
+  para que la URL no cambie y el tema se decida por la ruta.
+- **Sin tema, por dos vías.** (1) Por la URL: `/expofiesta` queda fuera de
+  `isThemedPath` (`ThemeContext`) y el script anti-flash de `index.html` quita el
+  atributo ahí, así que no parpadea. (2) Por los datos: `useSinTema` en `Evento`
+  la deja sin tema aunque se entre por `/evento/<slug>`, pero eso corre cuando
+  llegaron los eventos, así que **ese camino puede mostrar el tema un instante**.
+  Por eso los anuncios y banners deben usar `/expofiesta`.
+- **Acceso:** `HeroDelSitio` agrega una línea bajo "Ver eventos / Ver
+  promociones" con el nombre de la fiesta que lleva a `/expofiesta`. Sin fiesta
+  aparte vigente no se renderiza. Para ponerla también **como banner**: en el
+  panel (Banners) cargarlo con el link `/expofiesta`.
+- **El preview del link** (WhatsApp, etc.) de `/expofiesta` es el de la home: el
+  horneado de `paginasEvento` es por `/evento/<slug>`. Para compartir con el
+  flyer de la fiesta, usar `/evento/<slug>`.
+- **Lo que NO se tocó:** `PromosActivasSection` sigue listando las promos de la
+  fiesta aparte en la home (con el tema), y el sitemap no cambió.
+
+### Aire entre secciones de la home
+
+`.section-padding` pasó de `py-16 md:py-28 lg:py-36` (64/112/144 px) a
+`py-10 md:py-16 lg:py-20` (40/64/80), y los títulos de Eventos, Promos y Promos
+activas bajaron sus márgenes inferiores (`mb-10 md:mb-16` → `mb-8 md:mb-10`; el
+eyebrow y el `h2`, un escalón). Motivo: con tráfico de anuncios en celular, cada
+pantalla de aire entre el banner y las fechas es una pantalla más antes de poder
+comprar. **No se tocaron los tamaños de letra.** Sólo lo usan esas tres secciones;
+si se usa en una nueva, hereda esta medida.
 
 ### Sin librería de carrusel
 
@@ -1117,6 +1217,34 @@ pase. Por abajo el guardado se los suma a los tres días igual.
 
 > **El rótulo no aparece con un solo día.** Ahí "abono" no significa nada
 > distinto de una entrada, y un cartel que dice "vale para 1 día" es ruido.
+
+**v29 — Cuántas entradas quedan antes del cambio de lote.** Urgencia **real**
+para vender: "QUEDAN 50 ENTRADAS ANTES DEL CAMBIO DE LOTE", en la tarjeta de la
+home (arriba del botón) y en la página del evento. Una columna nueva,
+`event_ticket_types.stock_remaining` (entero, NULL = no informado), porque un lote
+es un tipo de entrada con su precio (v15) y el número vive donde vive el precio.
+
+> **Se pidió un contador falso en loop (72 hs que se reinician) y se rechazó**:
+> un reloj que llega a cero sin que cambie nada es urgencia inventada, publicidad
+> engañosa, y expone a ODÍSEA a un reclamo. La alternativa honesta es ésta: un
+> dato verdadero que carga el staff.
+
+- **Lo carga el staff** en el formulario del evento (`TicketsEditor`, campo
+  "Quedan N entradas antes del cambio de lote" bajo cada tipo vendido). Vacío =
+  no se muestra nada. **Se muestra tal cual**, así que hay que mantenerlo al día
+  con las ventas; el campo lo avisa. No hay descuento automático: las ventas
+  entran por WhatsApp y se cargan a mano en Entregas. Si algún día tiene que bajar
+  solo, el camino es un trigger sobre `delivery_ticket_types` (v18).
+- **`stockDelLote`** (en `ticketTypes.ts`) toma, de las entradas **a la venta**, la
+  que **menos queda** (lo urgente es lo que se acaba primero); un 0 no cuenta (un
+  lote sin entradas se apaga con "A la venta", no con un cartel). Para una fiesta
+  de varios días mira los tipos de todos los días.
+- **Tolera la columna sin migrar**: `saveEventTickets` sólo manda
+  `stock_remaining` si hay un valor, así que guardar eventos antes de correr v29
+  sigue funcionando; cargar un stock sin migrar da un error claro ("Falta correr
+  la migración v29").
+- Sin migrar, o con stock vacío, la tarjeta y la página quedan **exactamente como
+  antes**.
 
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
@@ -1559,7 +1687,7 @@ animaciones exportadas de After Effects por ilustradores; el componente sólo la
 pantalla. Las dos las eligió el autor en LottieFiles (filtro **Free** = *Lottie Simple License*:
 uso comercial permitido, sin atribución obligatoria).
 
-**Bandada de murciélagos (`SpookyBats`, en el hero).** Cuatro, a distintas alturas, tamaños,
+**Bandada de murciélagos (`SpookyBats`) — HOY SIN USO, ver v27.** Estaba en el hero clásico, que se sacó. Cuatro, a distintas alturas, tamaños,
 velocidades y direcciones — uno solo y quieto en un rincón se lee como un sticker pegado, que
 fue el primer intento. **Van lentos**: el más rápido tarda ~38s en cruzar (la decoración vieja
 lo hacía en 7 y se sentía agresiva). Los **tres tonos** —negro, gris y blanco— salen de pisar

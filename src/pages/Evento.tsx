@@ -1,14 +1,16 @@
 import { useEffect, useMemo, lazy, Suspense } from "react";
-import { Link, useParams } from "react-router-dom";
-import { CalendarDays, Instagram, MapPin, Ticket } from "lucide-react";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { CalendarDays, Flame, Instagram, MapPin, Ticket } from "lucide-react";
 import Header from "@/components/Header";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
 import { promoVigente, textoVencimiento } from "@/lib/ticketPromos";
 import { diasDelGrupo, etiquetaDeDia, eventoAgotado } from "@/lib/grupos";
-import { useComisionTicketera } from "@/contexts/ThemeContext";
+import { useComisionTicketera, useSinTema } from "@/contexts/ThemeContext";
+import { RUTA_APARTE, esFiestaAparte, fiestaAparte } from "@/lib/fiestasAparte";
 import { precioConComision } from "@/lib/siteSettings";
+import { stockDelLote, textoStockLote } from "@/lib/ticketTypes";
 import { urlDeEvento } from "@/lib/rutas";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
@@ -54,7 +56,17 @@ const Evento = () => {
   const { events, eventsLoaded } = useAuth();
   const comisionTicketera = useComisionTicketera();
 
-  const evento = useMemo(() => events.find((e) => e.slug === slug), [events, slug]);
+  // `/expofiesta` es la misma página sin el tramo del evento: la fiesta aparte
+  // vigente. Se resuelve acá y no con un redirect para que la URL de los
+  // anuncios no cambie y el tema se decida por la ruta, sin parpadeo.
+  const { pathname } = useLocation();
+  const enRutaAparte = pathname === RUTA_APARTE;
+  const evento = useMemo(
+    () => (enRutaAparte ? fiestaAparte(events) : events.find((e) => e.slug === slug)),
+    [events, slug, enRutaAparte]
+  );
+  // Una fiesta aparte no lleva el tema estacional, entren por donde entren.
+  useSinTema(!!evento && esFiestaAparte(evento));
 
   // Los días de la fiesta. Para un evento suelto es él solo, así que todo lo
   // de abajo funciona igual sin una sola rama extra.
@@ -110,6 +122,8 @@ const Evento = () => {
   // El tipo activo más barato, para el "desde $X" de arriba.
   const desde = entradas.length ? Math.min(...entradas.map((t) => t.price)) : 0;
   const desdeConComision = precioConComision(desde, comisionTicketera);
+  // Cuántas quedan antes del cambio de lote (v29), si el staff lo cargó.
+  const stockLote = agotado ? undefined : stockDelLote(entradas);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -192,6 +206,12 @@ const Evento = () => {
                       )}
                       <span>Desde ${desde.toLocaleString("es-UY")}</span>
                     </span>
+                  </p>
+                )}
+                {stockLote !== undefined && (
+                  <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-celeste-deep">
+                    <Flame className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    {textoStockLote(stockLote)}
                   </p>
                 )}
                 {evento.instagramUrl && (

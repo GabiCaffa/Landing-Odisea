@@ -133,11 +133,11 @@ const PromosActivasSection = () => {
   return (
     <section id="promos-activas" className="section-padding bg-papel" aria-labelledby="promos-activas-titulo">
       <div className="container-odisea">
-        <div className="mb-8 text-center md:mb-12">
-          <p className="eyebrow mb-4">Por tiempo limitado</p>
+        <div className="mb-6 text-center md:mb-10">
+          <p className="eyebrow mb-3">Por tiempo limitado</p>
           <h2
             id="promos-activas-titulo"
-            className="title-sport mb-6 text-5xl text-tinta sm:text-6xl md:text-7xl"
+            className="title-sport mb-4 text-5xl text-tinta sm:text-6xl md:text-7xl"
           >
             PROMOS <span className="highlight-celeste">ACTIVAS</span>
           </h2>
