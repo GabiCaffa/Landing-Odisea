@@ -6,7 +6,8 @@ import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext"
 import { EventTicket } from "@/lib/ticketTypes";
 import { EventPromo, promoVigente } from "@/lib/ticketPromos";
 import { urlDeEvento } from "@/lib/rutas";
-import { useCartelEventos } from "@/contexts/ThemeContext";
+import { useCartelEventos, useComisionTicketera } from "@/contexts/ThemeContext";
+import { precioConComision } from "@/lib/siteSettings";
 
 /**
  * Tarjeta de evento del carrusel de la home.
@@ -66,11 +67,18 @@ const EventCard = ({
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
   const destino = slug ? urlDeEvento(slug) : null;
   const cartel = useCartelEventos();
+  const comision = useComisionTicketera();
 
   // Agotado si el admin lo marcó así, si ya pasó la fecha/hora de cierre de
   // venta, o si el evento no tiene ningún tipo de entrada a la venta.
   const isSoldOut =
     soldOut || tickets.length === 0 || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
+
+  // El precio de la tarjeta: el tipo de entrada más barato a la venta, con el
+  // mismo tachado que la página del evento (lo que costaría en una ticketera,
+  // ver `precioConComision`). Es COSMÉTICO: lo que se cobra sale de la página.
+  const desde = tickets.length ? Math.min(...tickets.map((t) => t.price)) : 0;
+  const desdeConComision = precioConComision(desde, comision);
 
   return (
     /*
@@ -86,7 +94,7 @@ const EventCard = ({
      */
     <article
       onMouseEnter={playHover}
-      className="evento-card card-techno relative flex h-full w-[280px] flex-col overflow-hidden md:w-[320px]"
+      className="evento-card card-techno relative flex h-full w-full flex-col overflow-hidden"
     >
       <div className="evento-media relative aspect-[4/3] overflow-hidden border-b border-border bg-papel">
         <img
@@ -146,8 +154,8 @@ const EventCard = ({
             .map((nombre, i) => (
               <div
                 key={nombre}
-                className="evento-promo absolute right-3 z-[2] rounded-full bg-celeste px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent-foreground shadow-sm"
-                style={{ top: `${0.75 + i * 2}rem` }}
+                className="evento-promo absolute right-3 z-[2] rounded-full bg-celeste px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-accent-foreground shadow-sm"
+                style={{ top: `${0.75 + i * 2.25}rem` }}
               >
                 {nombre}
               </div>
@@ -193,19 +201,43 @@ const EventCard = ({
         </p>
 
         {/*
-          Sin botón de comprar.
+          El precio y UN botón, que es lo que decide la venta desde un celular.
 
-          La tarjeta ENTERA es el link a la página del evento, así que un botón
-          al lado era una segunda llamada a la acción compitiendo con ella y
-          agregando ruido a una tarjeta que ya tiene flyer, fecha, lugar y
-          promo. Queda sólo una pista de que se puede tocar —si no, nada dice
-          que la tarjeta lleva a algún lado— y el acceso a Instagram, que va a
-          otro destino y por eso sigue siendo un botón de verdad.
+          **El botón no es un link nuevo**: es un <span> con cara de botón, y el
+          click lo recibe el link del título (el `::after` que cubre la tarjeta).
+          Así no hay dos llamadas a la acción distintas —que fue lo que se sacó
+          en v25— sino una sola, ahora visible como lo que es. Antes quedaba una
+          pista de texto chico ("VER Y COMPRAR →") que se confundía con
+          decoración.
+
+          Agotado: sin precio y sin naranja; el botón pasa a contorno.
         */}
-        <div className="mt-auto flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-celeste-deep">
-            {isSoldOut ? "Ver la fecha" : dias > 1 ? `Elegí tu día (${dias})` : "Ver y comprar"}
-            <ArrowRight className="h-3.5 w-3.5" />
+        {!isSoldOut && desde > 0 && (
+          <div className="mb-3 flex items-baseline gap-2 font-sport">
+            <span className="text-xs font-semibold uppercase tracking-wider text-tinta/60">
+              Desde
+            </span>
+            <span className="text-3xl font-black leading-none text-tinta tabular-nums">
+              ${desde.toLocaleString("es-UY")}
+            </span>
+            {desdeConComision > 0 && (
+              <span className="text-sm font-semibold text-tinta/50 line-through tabular-nums">
+                ${desdeConComision.toLocaleString("es-UY")}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="mt-auto flex items-stretch gap-2">
+          <span
+            className={`group flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold tracking-wide transition-all ${
+              isSoldOut
+                ? "border border-tinta/20 text-tinta"
+                : "bg-celeste text-accent-foreground"
+            }`}
+          >
+            {isSoldOut ? "Ver la fecha" : dias > 1 ? `Elegí tu día (${dias})` : "Comprar entradas"}
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </span>
 
           {instagramUrl && (
@@ -213,7 +245,7 @@ const EventCard = ({
               href={instagramUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-techno-outline relative z-10 flex-shrink-0 px-3 py-2.5 text-xs"
+              className="btn-techno-outline relative z-10 min-h-[44px] min-w-[44px] flex-shrink-0 px-3 text-xs"
               aria-label="Ver en Instagram"
             >
               <Instagram className="h-4 w-4" />
