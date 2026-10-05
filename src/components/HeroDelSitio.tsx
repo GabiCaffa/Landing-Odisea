@@ -85,7 +85,7 @@ const HeroDelSitio = () => {
           <Link
             to={RUTA_APARTE}
             onClick={playThud}
-            className="btn-techno mx-auto mt-3 min-h-[44px] w-full max-w-md px-4 py-2.5 text-xs"
+            className="btn-techno !flex mx-auto mt-3 min-h-[44px] w-full max-w-md px-4 py-2.5 text-xs"
           >
             <span className="truncate">{aparte.groupName || aparte.name}</span>
             <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
