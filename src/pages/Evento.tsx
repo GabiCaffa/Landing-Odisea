@@ -11,6 +11,7 @@ import { useComisionTicketera, useSinTema } from "@/contexts/ThemeContext";
 import { RUTA_APARTE, esFiestaAparte, fiestaAparte } from "@/lib/fiestasAparte";
 import { precioConComision } from "@/lib/siteSettings";
 import { stockDelLote, textoStockLote } from "@/lib/ticketTypes";
+import { rastrear } from "@/lib/pixel";
 import { urlDeEvento } from "@/lib/rutas";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
@@ -87,6 +88,29 @@ const Evento = () => {
       document.title = previo;
     };
   }, [evento, titulo]);
+
+  // Píxel de Meta: alguien miró esta fecha. Una vez por evento, cuando ya se
+  // sabe cuál es (los datos llegan después de la ruta). Una fiesta aparte (Expo)
+  // va también a su píxel; si se entró por /evento/<slug> y no por /expofiesta,
+  // su PageView lo manda esto, porque la ruta sola no dice que es de la Expo.
+  const eventoId = evento?.id;
+  const esAparte = !!evento && esFiestaAparte(evento);
+  useEffect(() => {
+    if (!evento) return;
+    const minimo = evento.tickets.filter((t) => t.active).map((t) => t.price);
+    rastrear(
+      "ViewContent",
+      {
+        content_name: titulo,
+        content_ids: [evento.slug],
+        content_type: "product",
+        ...(minimo.length ? { value: Math.min(...minimo), currency: "UYU" } : {}),
+      },
+      esAparte ? "web+expo" : "web"
+    );
+    if (esAparte && !enRutaAparte) rastrear("PageView", undefined, "expo");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventoId]);
 
   if (!eventsLoaded) return <LoadingScreen />;
 

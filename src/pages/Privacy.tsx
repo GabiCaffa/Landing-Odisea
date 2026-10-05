@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 // Compartido por Terms.tsx y Privacy.tsx
-export const LEGAL_LAST_UPDATED = "23 de junio de 2026";
+export const LEGAL_LAST_UPDATED = "5 de octubre de 2026";
 
 export const LegalSection = ({
   n,
@@ -113,7 +113,14 @@ const Privacy = () => {
 
             <LegalSection n="10" title="Almacenamiento en tu dispositivo">
               Utilizamos almacenamiento local del navegador para mantener tu sesión
-              iniciada. No usamos cookies de seguimiento publicitario.
+              iniciada. En las páginas públicas del sitio usamos además el Píxel de
+              Meta (Facebook e Instagram) para medir las visitas y la efectividad de
+              nuestros anuncios: puede instalar cookies y enviarle a Meta datos de tu
+              navegación y de lo que hacés en el sitio (por ejemplo, ver una fecha o
+              iniciar una compra). No lo usamos en el panel de administración ni en las
+              pantallas de tu cuenta. Podés controlar los anuncios personalizados desde
+              la configuración de tu cuenta de Meta o bloquear las cookies de terceros
+              en tu navegador.
             </LegalSection>
 
             <LegalSection n="11" title="Cambios en esta Política">

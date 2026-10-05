@@ -1246,6 +1246,46 @@ es un tipo de entrada con su precio (v15) y el número vive donde vive el precio
 - Sin migrar, o con stock vacío, la tarjeta y la página quedan **exactamente como
   antes**.
 
+### Píxel de Meta (anuncios)
+
+Dos píxeles, en `src/lib/pixel.ts`: **`PIXEL_WEB` (1447683830328402)**, el de toda
+la web, y **`PIXEL_EXPO` (2313308699445374)**, sólo para la sección de la Expo
+(la fiesta "aparte", `fiestasAparte.ts`). Lo de la Expo va a los dos; lo demás,
+sólo al de la web. Son ids públicos, no secretos.
+
+- **No es el snippet pegado en el `<head>`.** Es una SPA: el snippet cuenta la
+  primera carga y nada más. Acá hay un `PageView` por cambio de ruta
+  (`PixelPageView`, dentro del router; mira el `pathname`, no la query) y eventos
+  propios: **`ViewContent`** al abrir la página de una fecha (con `value` = la
+  entrada más barata, en UYU) y **`Lead`** al tocar "Enviar por WhatsApp"
+  (`CompraEntradas`, con el total ya con promos). La compra se cierra por
+  WhatsApp, así que **no hay un `Purchase` real**: `Lead` es el momento de mayor
+  intención y es lo que se le da a Meta para optimizar.
+- **`trackSingle` con el id explícito, nunca `track`**: con dos píxeles iniciados,
+  `track` dispara en los dos y el de la Expo recibiría toda la web.
+- **La Expo se decide distinto según cómo se entre.** `/expofiesta` va al píxel de
+  la Expo por la ruta. `/evento/<slug>` de una fecha de la Expo no se puede decidir
+  por la ruta (depende de los datos): lo manda `Evento` cuando ya sabe cuál es.
+- **`fbevents.js` se baja después del `load` y con el navegador libre** (misma
+  regla que la decoración, §6.6). Los eventos anteriores quedan en la cola del stub
+  de `fbq` y salen cuando llega la librería.
+- **Sólo se carga en `odiseaoficial.com` y `www.odiseaoficial.com`.** En localhost
+  y en las previews de Vercel no sale nada, para no ensuciar los datos reales de
+  los anuncios; en desarrollo los eventos se imprimen por consola (`[pixel] …`).
+  **Consecuencia: la preview de Vercel NO sirve para ver el píxel funcionando; se
+  verifica en producción** (Meta Pixel Helper o Events Manager → Probar eventos).
+- **No se mide en `/admin`, `/auth`, `/reset-password`, `/recuperar` ni `/perfil`**
+  (`RUTAS_SIN_PIXEL`): ahí la URL puede llevar un código de sesión, y Meta
+  recibe la URL de la página.
+- **La Política de Privacidad (§10) decía "No usamos cookies de seguimiento
+  publicitario"** y con el píxel dejaba de ser verdad: se reescribió para
+  declararlo y se actualizó `LEGAL_LAST_UPDATED` (que comparte con Términos). **El
+  texto legal conviene que lo revise quien corresponda.** No hay banner de
+  consentimiento.
+- **Quedó afuera:** `Contact` en los botones sueltos de WhatsApp (header, footer,
+  botón flotante) y `CompleteRegistration` en el registro. Se suman en una línea
+  con `rastrear(...)`.
+
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
 Reportado con una captura: el bloque de sesión quedaba partido contra el borde
