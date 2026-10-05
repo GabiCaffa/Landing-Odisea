@@ -1594,13 +1594,6 @@ const EventFormModal = ({
   const puedeCambiarCuenta = usePuede("evento:cuenta");
   const cuentaBloqueada = Boolean(initial) && !puedeCambiarCuenta;
 
-  // El "desde $X" del preview: el tipo de entrada más barato a la venta. Es lo
-  // mismo que la DB va a dejar en events.price al guardar.
-  const minTicketPrice = useMemo(() => {
-    const active = form.tickets.filter((t) => t.active);
-    return active.length ? Math.min(...active.map((t) => t.price)) : 0;
-  }, [form.tickets]);
-
   const setImagePosition = (updater: (p: ImageTransform) => ImageTransform) =>
     setForm((prev) => ({ ...prev, imagePosition: updater(prev.imagePosition) }));
 
@@ -1991,7 +1984,6 @@ const EventFormModal = ({
               date={form.date ? formatEventDate(form.date) : "FECHA"}
               location={form.location || "Lugar del evento"}
               description={form.description || "Descripción del evento..."}
-              price={minTicketPrice}
               status={form.status}
             />
             <p className="text-[10px] text-center text-muted-foreground leading-relaxed">
