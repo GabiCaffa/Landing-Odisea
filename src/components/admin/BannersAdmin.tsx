@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Loader2, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
-import { useTheme } from "@/contexts/ThemeContext";
-import { HERO_LABELS, HERO_MODOS, HeroModo } from "@/lib/siteSettings";
 import {
   BANNER_ALTO,
   BANNER_ANCHO,
@@ -23,10 +21,9 @@ import {
  * Va **fuera de `Admin.tsx`**, que ya pasa las 5000 líneas — misma regla que
  * `PromosAdmin` desde v21: lo nuevo empieza afuera.
  *
- * El interruptor del hero vive arriba, con la lista debajo, y no en
- * Apariencia: prender el slider y mirar qué banners tiene son la misma
- * decisión, y separarlas obliga a saltar entre pestañas para contestar
- * "¿qué va a ver la gente?".
+ * Los banners activos SON el hero de la home: ya no hay un interruptor ni un
+ * hero alternativo. Sin ningún banner activo la home muestra sólo los botones
+ * a eventos y promociones.
  */
 
 const ERRORES_DE_MIGRACION = ["PGRST205", "42P01"];
@@ -39,7 +36,6 @@ const mensajeDeError = (err: unknown, accion: string) => {
 };
 
 const BannersAdmin = () => {
-  const { heroModo, setHeroModo } = useTheme();
   const confirm = useConfirm();
   const [banners, setBanners] = useState<SiteBanner[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -64,33 +60,6 @@ const BannersAdmin = () => {
   useEffect(() => {
     void recargar();
   }, []);
-
-  const cambiarHero = async (modo: HeroModo) => {
-    if (modo === heroModo) return;
-
-    if (modo === "banners" && banners.filter((b) => b.active).length === 0) {
-      toast.error("Cargá al menos un banner activo antes de prender el slider");
-      return;
-    }
-
-    const ok = await confirm({
-      title:
-        modo === "banners" ? "Prender el slider de banners" : "Volver al hero de siempre",
-      description:
-        modo === "banners"
-          ? "Todos los visitantes van a ver los banners en vez del hero actual, ahora mismo. Lo podés apagar desde acá cuando quieras."
-          : "El sitio vuelve al hero de siempre. Los banners quedan guardados.",
-      confirmText: modo === "banners" ? "Prender" : "Volver al original",
-    });
-    if (!ok) return;
-
-    try {
-      await setHeroModo(modo);
-      toast.success(modo === "banners" ? "Slider prendido" : "Hero de siempre");
-    } catch (err) {
-      toast.error(mensajeDeError(err, "cambiar el hero"));
-    }
-  };
 
   const subirNuevo = async (file: File) => {
     setSubiendo(true);
@@ -184,42 +153,6 @@ const BannersAdmin = () => {
           <p className="text-sm font-semibold text-charrua">{error}</p>
         </div>
       )}
-
-      {/* ─── El interruptor ──────────────────────────────────────────────── */}
-      <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-        Qué se muestra arriba de todo en la home. El cambio es inmediato para todos: quien
-        tenga el sitio abierto lo ve cambiar sin recargar.
-      </p>
-
-      <div className="grid gap-3 sm:grid-cols-2 mb-10">
-        {HERO_MODOS.map((m) => {
-          const activo = m === heroModo;
-          return (
-            <button
-              key={m}
-              type="button"
-              onClick={() => cambiarHero(m)}
-              aria-pressed={activo}
-              className={`text-left border rounded-2xl p-5 transition-all ${
-                activo
-                  ? "border-celeste ring-2 ring-celeste/20 bg-celeste/[0.04]"
-                  : "border-border hover:border-tinta/30 hover:-translate-y-0.5"
-              }`}
-            >
-              <span className="font-sport text-lg font-black tracking-wide text-tinta">
-                {HERO_LABELS[m].toUpperCase()}
-              </span>
-              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                {m === "clasico"
-                  ? "Logo de ODÍSEA, el texto de siempre y los botones a eventos y promociones."
-                  : `Los banners de abajo, uno tras otro. Hoy hay ${activos} activo${
-                      activos === 1 ? "" : "s"
-                    }.`}
-              </p>
-            </button>
-          );
-        })}
-      </div>
 
       {/* ─── La lista ────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">

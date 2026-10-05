@@ -65,10 +65,10 @@ const EventsSection = () => {
         {/* Section header */}
         <div
           ref={headerRef}
-          className={`text-center mb-10 md:mb-16 transition-all duration-700 ${headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
+          className={`text-center mb-8 md:mb-10 transition-all duration-700 ${headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
         >
-          <p className="eyebrow mb-4">Calendario</p>
-          <h2 className="title-sport text-5xl sm:text-6xl md:text-7xl lg:text-8xl mb-6 text-tinta">
+          <p className="eyebrow mb-3">Calendario</p>
+          <h2 className="title-sport text-5xl sm:text-6xl md:text-7xl lg:text-8xl mb-4 text-tinta">
             PRÓXIMOS <span className="highlight-celeste">EVENTOS</span>
           </h2>
           <div className={`mx-auto h-px w-16 bg-celeste transition-all duration-500 delay-200 ${headerVisible ? 'scale-x-100' : 'scale-x-0'}`} />

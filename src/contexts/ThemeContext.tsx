@@ -15,18 +15,12 @@ import {
   fetchCartel,
   fetchTheme,
   COMISION_KEY,
-  DEFAULT_HERO,
-  HERO_KEY,
-  HeroModo,
-  esHeroModo,
   fetchComision,
-  fetchHero,
   isSiteTheme,
   limpiarCartel,
   limpiarComision,
   saveCartel,
   saveComision,
-  saveHero,
   saveTheme,
 } from "@/lib/siteSettings";
 
@@ -128,11 +122,6 @@ interface ThemeContextValue {
    * explica por qué se guarda el recargo y no el descuento.
    */
   comisionTicketera: number;
-  /**
-   * Qué hero pinta la home: el de siempre o el slider de banners (v27).
-   * Ver `HERO_KEY` en src/lib/siteSettings.ts.
-   */
-  heroModo: HeroModo;
   /** Todavía no llegó el TEMA de la DB (el cartel no lo bloquea). */
   loading: boolean;
   /** Guarda el tema. Sólo el admin pasa el RLS. */
@@ -141,8 +130,6 @@ interface ThemeContextValue {
   setCartel: (texto: string) => Promise<void>;
   /** Guarda la comisión de ticketera. Sólo el admin pasa el RLS. */
   setComisionTicketera: (comision: number) => Promise<void>;
-  /** Guarda qué hero se muestra. Sólo el admin pasa el RLS. */
-  setHeroModo: (modo: HeroModo) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -151,7 +138,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<SiteTheme>(DEFAULT_THEME);
   const [cartel, setCartelState] = useState("");
   const [comisionTicketera, setComisionState] = useState(0);
-  const [heroModo, setHeroModoState] = useState<HeroModo>(DEFAULT_HERO);
   const [loading, setLoading] = useState(true);
   const { pathname } = useLocation();
   const [params] = useSearchParams();
@@ -179,9 +165,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     });
     fetchComision().then((value) => {
       if (!cancelled) setComisionState(value);
-    });
-    fetchHero().then((value) => {
-      if (!cancelled) setHeroModoState(value);
     });
     return () => {
       cancelled = true;
@@ -211,8 +194,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
             setCartelState(limpiarCartel(fila?.value));
           } else if (key === COMISION_KEY) {
             setComisionState(limpiarComision(fila?.value));
-          } else if (key === HERO_KEY) {
-            setHeroModoState(esHeroModo(fila?.value) ? fila.value : DEFAULT_HERO);
           }
         }
       )
@@ -238,11 +219,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     setComisionState(limpiarComision(next));
   }, []);
 
-  const setHeroModo = useCallback(async (next: HeroModo) => {
-    await saveHero(next);
-    setHeroModoState(next);
-  }, []);
-
   const setTheme = useCallback(async (next: SiteTheme) => {
     await saveTheme(next);
     // No esperamos al realtime para reflejarlo en quien lo cambió.
@@ -256,12 +232,10 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         siteTheme: theme,
         cartel,
         comisionTicketera,
-        heroModo,
         loading,
         setTheme,
         setCartel,
         setComisionTicketera,
-        setHeroModo,
       }}>
       {children}
     </ThemeContext.Provider>
@@ -279,9 +253,6 @@ export const useCartelEventos = () => useTheme().cartel;
  * 0 = no se tacha nada.
  */
 export const useComisionTicketera = () => useTheme().comisionTicketera;
-
-/** Qué hero muestra la home. */
-export const useHeroModo = () => useTheme().heroModo;
 
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);

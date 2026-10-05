@@ -107,12 +107,12 @@ const PromosSection = () => {
         {/* Header */}
         <div
           ref={headerRef}
-          className={`text-center mb-10 md:mb-16 transition-all duration-700 ${
+          className={`text-center mb-8 md:mb-10 transition-all duration-700 ${
             headerVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <p className="eyebrow mb-4">Beneficios</p>
-          <h2 className="title-sport text-5xl sm:text-6xl md:text-7xl lg:text-8xl mb-6 text-tinta">
+          <p className="eyebrow mb-3">Beneficios</p>
+          <h2 className="title-sport text-5xl sm:text-6xl md:text-7xl lg:text-8xl mb-4 text-tinta">
             <span className="highlight-celeste">PROMOCIONES</span>
           </h2>
           <div
