@@ -25,8 +25,14 @@ import { useCartelEventos } from "@/contexts/ThemeContext";
  */
 
 interface EventCardProps {
-  /** Tramo de URL del evento. Sin esto la tarjeta no linkea a ningún lado. */
+  /** Tramo de URL del evento. Sin esto (ni `destino`) la tarjeta no linkea a ningún lado. */
   slug?: string;
+  /**
+   * Ruta a la que lleva la tarjeta, si no es la página del evento. La usa la
+   * Expo (fiesta aparte), que vive en `/expofiesta`, sin el tema estacional.
+   * Si viene, manda sobre `slug`.
+   */
+  destino?: string;
   image: string;
   imagePosition?: ImageTransform;
   name: string;
@@ -51,6 +57,7 @@ interface EventCardProps {
 
 const EventCard = ({
   slug,
+  destino: destinoPropio,
   image,
   imagePosition,
   name,
@@ -65,7 +72,7 @@ const EventCard = ({
   dias = 1,
 }: EventCardProps) => {
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
-  const destino = slug ? urlDeEvento(slug) : null;
+  const destino = destinoPropio ?? (slug ? urlDeEvento(slug) : null);
   const cartel = useCartelEventos();
 
   // Agotado si el admin lo marcó así, si ya pasó la fecha/hora de cierre de

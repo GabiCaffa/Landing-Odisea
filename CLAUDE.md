@@ -1055,12 +1055,20 @@ y el estado de scroll de `EventsSection`.
   iconos del header (ingresar, WhatsApp, panel, cerrar sesión; eran 34) y los
   links legales del footer (eran 16 de alto).
 
-### Fiestas aparte: Expo Fiesta fuera del tema y del carrusel
+### Fiestas aparte: Expo Fiesta sin el tema estacional (y también en la grilla)
 
 ODÍSEA también hace fechas que no son de la temporada del sitio (la Expo Fiesta
-no tiene nada que ver con Halloween). Esas **no van en Próximos Eventos** y
-**no llevan el tema estacional**: tienen su propia página y su acceso bajo el
-banner. Todo vive en `src/lib/fiestasAparte.ts`.
+no tiene nada que ver con Halloween). Esas **no llevan el tema estacional**: tienen su
+propia página (`/expofiesta`) y su acceso bajo el banner. Todo vive en
+`src/lib/fiestasAparte.ts`.
+
+> **Historia:** primero se sacaron de Próximos Eventos para no mezclarlas con las de la
+> temporada. **A pedido del cliente volvieron a la grilla**, ordenadas por fecha como
+> cualquier otra, y el botón bajo el banner se mantiene. Lo único que las distingue ahí
+> es el destino: `EventsSection` le pasa a `EventCard` `destino="/expofiesta"`
+> (prop nueva, manda sobre `slug`) cuando `esFiestaAparte`, así que la tarjeta lleva a la
+> página sin tema y no a `/evento/<slug>`. Entrar por `/expofiesta` o por la tarjeta da
+> lo mismo (y el mismo `PageView` al píxel de la Expo).
 
 - **Cómo se reconoce una: por el NOMBRE.** Si el nombre del evento, de la fiesta
   o su clave de grupo contiene una de `PALABRAS_APARTE` (hoy `"expo"`), es
