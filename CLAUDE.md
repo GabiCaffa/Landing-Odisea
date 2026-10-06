@@ -1392,6 +1392,34 @@ que vende desde el teléfono, el cliente no tiene que recorrer eso.
   a ella se llega con el botón del hero. La altura de cada tarjeta de evento en
   celular (~630 px) es lo que la deja "abajo"; achicarlas es una decisión aparte.
 
+### Tarjetas de evento compactas en celular
+
+Una tarjeta de evento en celular medía ~630 px (flyer 4:3 a todo el ancho + título +
+lugar + descripción + stock + botón), así que con 3-4 fechas la home se iba a más de
+2.300 px antes de llegar a Promociones. Ahora, **por debajo de `sm:` (640 px)** la
+tarjeta es una fila compacta de **216 px**: miniatura 4:5 de 104 px a la izquierda,
+fecha + título + lugar + stock a la derecha y **el botón de compra a ancho completo
+abajo**. De `sm:` para arriba es la tarjeta vertical de siempre (320 px).
+
+- **Es la misma tarjeta con otra grilla, no dos componentes**: el artículo es
+  `grid grid-cols-[104px_1fr]` en celular y `flex-col` desde `sm:`; el contenedor de
+  texto usa `contents` en celular (no existe) para que la miniatura, los datos y el
+  botón se acomoden en la grilla. Un solo camino de datos y de click.
+- **Qué se oculta en celular y por qué**: la descripción (es lo que más alto hacía la
+  tarjeta y se lee en la página del evento) y la pastilla de fecha sobre el flyer (la
+  fecha pasa a texto encima del título). Las promos (2x1, etc.) pasan de pastilla
+  sobre el flyer a una pastilla bajo el título.
+- **El encuadre del admin (ajuste, zoom, foco) vale desde `sm:`.** Está pensado para
+  el 4:3; en la miniatura 4:5 el zoom la recortaría mal, así que ahí la imagen llena
+  el cuadro (`object-cover`) respetando sólo el foco. Va por variables CSS
+  (`--fit`, `--pos`, `--scale`) porque un `style` inline no puede depender del tamaño
+  de pantalla.
+- **El click sigue siendo el *stretched link* del título**: toda la tarjeta es
+  tocable; el botón es un `<span>` con cara de botón (UNA sola llamada a la acción).
+- Medido en 375 px: tarjetas de 216 px (antes ~630), sección de eventos de 943 px con
+  3 fechas, las promos pasan de empezar en ~2.330 px a ~1.600, la página total de
+  ~3.500 a ~2.780, sin desborde horizontal y sin toques menores de 44 px.
+
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
 Reportado con una captura: el bloque de sesión quedaba partido contra el borde
