@@ -1313,6 +1313,56 @@ WEB") no puede colgar de una única cuenta. Se abren al operador, **y sólo eso*
 - El texto del panel del cartel decía que se muestra "arriba a la derecha" como una
   pastilla: ya no. Es el texto del botón de compra de la tarjeta.
 
+### El flyer de la página del evento: esquinas redondeadas y visor propio
+
+- **Esquinas redondeadas** (`rounded-xl` en celular, `rounded-2xl` desde `sm:`) y una
+  sombra suave. El marco **se ajusta a la imagen** (`md:w-fit`, imagen con
+  `md:w-auto md:max-w-full md:max-h-[72vh]`): antes la imagen era `w-full` con
+  `object-contain`, y al toparse con el tope de alto quedaba una caja más ancha
+  que el dibujo, así que redondear la caja no redondeaba el flyer. Medido: marco e
+  imagen miden lo mismo en un vertical (518×648) y en un cuadrado chico (320×320).
+- **La sombra va inline** (`style={{ boxShadow: "var(--shadow-lg)" }}`): la clase
+  `shadow-[var(--shadow-lg)]` no genera nada (Tailwind no distingue si el valor es
+  una sombra o un color; comprobado: `box-shadow: none`).
+- **Tocar el flyer ya no abre la imagen en otra pestaña**, que sacaba a la persona
+  de la compra. Abre `VisorFlyer`: la imagen grande sobre un velo, en la misma
+  página; se cierra tocándola, tocando el fondo, con el ✕ (44 px) o con Escape, y
+  devuelve el scroll de la página. Va por `createPortal` (§6.5), pero **no** por
+  `ModalShell`: ése es una hoja con fondo pensada para formularios.
+- **Lo que la página NO puede arreglar: un flyer que ya viene cortado o chico.**
+  El de Halloween Colonia se subió de **320×320 px** y con el texto de arriba
+  ("VIERNES X ODISEA") ya recortado en el archivo; se ve borroso al ampliarlo. La
+  subida redimensiona hacia abajo (máx. 800 px, `compressImageToBlob`) pero no
+  puede agrandar. **La solución es volver a subir el arte original del diseñador**
+  (conviene 800×1000 o mayor, vertical).
+- La tarjeta de la home recorta los flyers verticales a 4:3 (el encuadre se ajusta
+  en el formulario del evento); no se tocó.
+
+### El flyer de la página del evento: esquinas redondeadas y visor propio
+
+- **Esquinas redondeadas** (`rounded-xl` en celular, `rounded-2xl` desde `sm:`) y una
+  sombra suave. El marco **se ajusta a la imagen** (`md:w-fit`, imagen con
+  `md:w-auto md:max-w-full md:max-h-[72vh]`): antes la imagen era `w-full` con
+  `object-contain`, y al toparse con el tope de alto quedaba una caja más ancha
+  que el dibujo, así que redondear la caja no redondeaba el flyer. Medido: marco e
+  imagen miden lo mismo en un vertical (518×648) y en un cuadrado chico (320×320).
+- **La sombra va inline** (`style={{ boxShadow: "var(--shadow-lg)" }}`): la clase
+  `shadow-[var(--shadow-lg)]` no genera nada (Tailwind no distingue si el valor es
+  una sombra o un color; comprobado: `box-shadow: none`).
+- **Tocar el flyer ya no abre la imagen en otra pestaña**, que sacaba a la persona
+  de la compra. Abre `VisorFlyer`: la imagen grande sobre un velo, en la misma
+  página; se cierra tocándola, tocando el fondo, con el ✕ (44 px) o con Escape, y
+  devuelve el scroll de la página. Va por `createPortal` (§6.5), pero **no** por
+  `ModalShell`: ése es una hoja con fondo pensada para formularios.
+- **Lo que la página NO puede arreglar: un flyer que ya viene cortado o chico.**
+  El de Halloween Colonia se subió de **320×320 px** y con el texto de arriba
+  ("VIERNES X ODISEA") ya recortado en el archivo; se ve borroso al ampliarlo. La
+  subida redimensiona hacia abajo (máx. 800 px, `compressImageToBlob`) pero no
+  puede agrandar. **La solución es volver a subir el arte original del diseñador**
+  (conviene 800×1000 o mayor, vertical).
+- La tarjeta de la home recorta los flyers verticales a 4:3 (el encuadre se ajusta
+  en el formulario del evento); no se tocó.
+
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
 Reportado con una captura: el bloque de sesión quedaba partido contra el borde
