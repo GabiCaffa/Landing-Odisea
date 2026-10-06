@@ -3,7 +3,7 @@ import EventCard from "./EventCard";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth } from "@/contexts/AuthContext";
 import { agruparEventos } from "@/lib/grupos";
-import { esFiestaAparte } from "@/lib/fiestasAparte";
+import { RUTA_APARTE, esFiestaAparte } from "@/lib/fiestasAparte";
 import SpookySpiders from "./SpookySpiders";
 
 /**
@@ -33,16 +33,22 @@ const EventsSection = () => {
    * tiene por qué ocupar el primer lugar de la pantalla: el sort es estable, así
    * que dentro de cada grupo se conserva el orden por fecha.
    *
-   * Las fiestas aparte (Expo) no van acá: tienen su propia página y su acceso
-   * bajo el banner. Mezcladas con las de la temporada confunden.
+   * **Las fiestas aparte (Expo) también van acá**, a pedido del cliente, y
+   * además tienen su acceso bajo el banner. Se distinguen en un solo punto: su
+   * tarjeta no linkea a `/evento/<slug>` sino a `/expofiesta`, la página sin el
+   * tema estacional (ver `destinoDe` más abajo).
    */
   const visibleEvents = useMemo(
     () =>
-      agruparEventos(
-        events.filter((e) => e.status !== "finalizado" && !esFiestaAparte(e))
-      ).sort((a, b) => Number(a.agotado) - Number(b.agotado)),
+      agruparEventos(events.filter((e) => e.status !== "finalizado")).sort(
+        (a, b) => Number(a.agotado) - Number(b.agotado)
+      ),
     [events]
   );
+
+  /** A dónde lleva la tarjeta. Una fiesta aparte va a su página sin tema. */
+  const destinoDe = (entrada: (typeof visibleEvents)[number]) =>
+    esFiestaAparte(entrada.destino) ? RUTA_APARTE : undefined;
 
   return (
     <section id="eventos" className="section-padding scroll-mt-16 bg-secondary/40 relative overflow-hidden">
@@ -98,6 +104,7 @@ const EventsSection = () => {
                   */}
                   <EventCard
                     slug={entrada.destino.slug}
+                    destino={destinoDe(entrada)}
                     image={entrada.destino.image}
                     imagePosition={entrada.destino.imagePosition}
                     name={entrada.nombre}
