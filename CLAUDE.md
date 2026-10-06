@@ -99,7 +99,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
-`v29_ticket_stock.sql`.
+`v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1285,6 +1285,33 @@ sólo al de la web. Son ids públicos, no secretos.
 - **Quedó afuera:** `Contact` en los botones sueltos de WhatsApp (header, footer,
   botón flotante) y `CompleteRegistration` en el registro. Se suman en una línea
   con `rastrear(...)`.
+
+**v30 — El operador carga banners y edita el cartel de las tarjetas.** Hasta v29
+los banners (v27) y los ajustes del sitio (v19) eran sólo del admin. Para una web
+que vende con anuncios, el cambio diario del banner y del cartel ("15% OFF SOLO
+WEB") no puede colgar de una única cuenta. Se abren al operador, **y sólo eso**:
+
+- **Banners → `is_manager()`** (admin u operador), mismo criterio que v22 aplicó a
+  eventos, entradas y promos. Las imágenes ya las podía subir: el bucket
+  `event-images` admite insert/update del manager desde v22.
+- **Cartel → política POR CLAVE, no por tabla.** `site_settings` guarda también el
+  **tema** del sitio y la **comisión de ticketera** (el número tachado junto al
+  precio, con consecuencias legales). Abrirla entera le daría al operador, a nivel
+  de base, cambiar la paleta de todo el sitio y ese número. La política nueva
+  (`site_settings_write_cartel_manager`) sólo deja escribir la fila
+  `cartel_eventos`; las políticas permisivas se combinan con OR, así que la del
+  admin (v19) sigue cubriendo todo y ésta suma una excepción acotada.
+- **Front:** permiso nuevo `apariencia:cartel` en `adminPermisos.ts` (abre la
+  pestaña Apariencia y es el único que el operador tiene ahí); el tema y la
+  comisión siguen pidiendo `apariencia`, que es sólo del admin. Para el operador la
+  pestaña muestra únicamente "Cartel en las tarjetas".
+- **Verificado en una base Postgres temporal** con la cadena completa de
+  migraciones: el operador escribe/edita/borra banners y el cartel; su intento de
+  cambiar el tema, la comisión o de insertar otra clave no afecta ninguna fila o
+  es rechazado por RLS; un usuario común no puede nada; el admin puede todo. La
+  migración corre dos veces sin error.
+- El texto del panel del cartel decía que se muestra "arriba a la derecha" como una
+  pastilla: ya no. Es el texto del botón de compra de la tarjeta.
 
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
