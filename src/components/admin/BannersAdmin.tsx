@@ -35,12 +35,51 @@ const mensajeDeError = (err: unknown, accion: string) => {
     : `No se pudo ${accion}. ¿Seguís con la sesión iniciada?`;
 };
 
+/**
+ * Un botón de texto que abre el explorador de archivos. Es un `<label>` con el
+ * `<input type="file">` escondido adentro, el mismo patrón que el "Agregar
+ * banner" de arriba. Después de elegir se vacía el input: si no, volver a
+ * elegir el MISMO archivo no dispararía nada.
+ */
+const BotonImagen = ({
+  texto,
+  ocupado,
+  onFile,
+}: {
+  texto: string;
+  ocupado: boolean;
+  onFile: (f: File) => void;
+}) => (
+  <label
+    className={`mt-1 inline-flex min-h-[44px] cursor-pointer items-center gap-1.5 text-xs font-semibold text-celeste-deep underline ${
+      ocupado ? "pointer-events-none opacity-60" : ""
+    }`}
+  >
+    {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+    {ocupado ? "Subiendo…" : texto}
+    <input
+      type="file"
+      accept="image/*"
+      className="hidden"
+      disabled={ocupado}
+      onChange={(e) => {
+        const f = e.target.files?.[0];
+        e.target.value = "";
+        if (f) onFile(f);
+      }}
+    />
+  </label>
+);
+
 const BannersAdmin = () => {
   const confirm = useConfirm();
   const [banners, setBanners] = useState<SiteBanner[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subiendo, setSubiendo] = useState(false);
+  // Qué imagen se está cambiando (`<id>:escritorio` o `<id>:movil`), para mostrar
+  // "Subiendo…" sólo en ese botón y no dejar tocar dos veces.
+  const [cambiando, setCambiando] = useState<string | null>(null);
   const inputNuevo = useRef<HTMLInputElement>(null);
 
   const recargar = async () => {
@@ -131,13 +170,31 @@ const BannersAdmin = () => {
     }
   };
 
-  const subirMovil = async (id: string, file: File) => {
+  /**
+   * Cambia la imagen de un banner que ya existe, sin perder su lugar en el
+   * orden ni su texto, link y estado. Sirve para las dos versiones.
+   *
+   * Sube un archivo NUEVO y apunta el banner a él: la imagen anterior queda en
+   * el storage (un bucket público de flyers, no estorba) pero deja de usarse. Y
+   * como la URL cambia, ningún navegador ni CDN muestra la imagen vieja.
+   */
+  const cambiarImagen = async (id: string, file: File, variante: "escritorio" | "movil") => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("El archivo tiene que ser una imagen");
+      return;
+    }
+    setCambiando(`${id}:${variante}`);
     try {
-      const url = await uploadBanner(file, "movil");
-      await guardarCampo(id, { imageUrlMobile: url });
-      toast.success("Versión de celular cargada");
+      const url = await uploadBanner(file, variante);
+      await updateBanner(id, variante === "movil" ? { imageUrlMobile: url } : { imageUrl: url });
+      await recargar();
+      toast.success(
+        variante === "movil" ? "Versión de celular actualizada" : "Imagen actualizada"
+      );
     } catch (err) {
-      toast.error(mensajeDeError(err, "subir la versión de celular"));
+      toast.error(mensajeDeError(err, "cambiar la imagen"));
+    } finally {
+      setCambiando(null);
     }
   };
 
@@ -217,42 +274,53 @@ const BannersAdmin = () => {
           {banners.map((b, i) => (
             <div key={b.id} className="border border-border rounded-xl p-4">
               <div className="flex flex-col gap-4 sm:flex-row">
-                {/* La imagen, a su proporción real */}
+                {/* Las dos versiones, cada una con su medida y su botón para cambiarla */}
                 <div className="sm:w-56 flex-shrink-0">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Escritorio · {BANNER_ANCHO}×{BANNER_ALTO}
+                  </p>
                   <img
                     src={b.imageUrl}
                     alt=""
                     className="w-full aspect-[16/5] object-cover rounded-lg border border-border"
                   />
+                  <BotonImagen
+                    texto="Cambiar imagen"
+                    ocupado={cambiando === `${b.id}:escritorio`}
+                    onFile={(f) => void cambiarImagen(b.id, f, "escritorio")}
+                  />
+
+                  <p className="mb-1 mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Celular · {BANNER_MOVIL_ANCHO}×{BANNER_MOVIL_ALTO}
+                  </p>
                   {b.imageUrlMobile ? (
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="flex items-start gap-3">
                       <img
                         src={b.imageUrlMobile}
                         alt=""
-                        className="h-16 w-[51px] object-cover rounded border border-border"
+                        className="h-16 w-[51px] flex-shrink-0 object-cover rounded border border-border"
                       />
-                      <button
-                        type="button"
-                        onClick={() => void guardarCampo(b.id, { imageUrlMobile: "" })}
-                        className="text-xs text-muted-foreground underline hover:text-foreground"
-                      >
-                        Quitar la de celular
-                      </button>
+                      <div className="flex flex-col">
+                        <BotonImagen
+                          texto="Cambiar imagen"
+                          ocupado={cambiando === `${b.id}:movil`}
+                          onFile={(f) => void cambiarImagen(b.id, f, "movil")}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void guardarCampo(b.id, { imageUrlMobile: "" })}
+                          className="min-h-[44px] text-left text-xs text-muted-foreground underline hover:text-foreground"
+                        >
+                          Quitar la de celular
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 text-xs text-celeste-deep font-semibold underline">
-                      <Upload className="h-3.5 w-3.5" />
-                      Subir versión de celular
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) void subirMovil(b.id, f);
-                        }}
-                      />
-                    </label>
+                    <BotonImagen
+                      texto="Subir versión de celular"
+                      ocupado={cambiando === `${b.id}:movil`}
+                      onFile={(f) => void cambiarImagen(b.id, f, "movil")}
+                    />
                   )}
                 </div>
 
