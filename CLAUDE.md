@@ -1420,6 +1420,26 @@ abajo**. De `sm:` para arriba es la tarjeta vertical de siempre (320 px).
   3 fechas, las promos pasan de empezar en ~2.330 px a ~1.600, la página total de
   ~3.500 a ~2.780, sin desborde horizontal y sin toques menores de 44 px.
 
+### Banners: cambiar la imagen de uno que ya existe
+
+La pestaña Banners sólo dejaba **crear** un banner nuevo o **borrar** uno (y en la
+versión de celular, "quitarla"): para corregir una imagen había que borrar el banner
+y cargarlo de nuevo, perdiendo su lugar en el orden, el texto alternativo, el link y
+el estado. Ahora cada versión tiene su botón **"Cambiar imagen"**:
+
+- **Escritorio (1920×600)** y **celular (1080×1350)** muestran cada una su medida y su
+  botón. En celular, si ya hay imagen aparece "Cambiar imagen" y "Quitar la de
+  celular"; si no hay, "Subir versión de celular".
+- `cambiarImagen` sube un archivo NUEVO a `banners/` y apunta el banner a él (`updateBanner`),
+  así que el **orden, el texto, el link y el estado se conservan** y, como la URL cambia,
+  ningún navegador ni CDN muestra la imagen vieja. **La anterior queda en el storage**
+  (bucket público de flyers) sin usarse; no se borra.
+- Mientras sube, sólo ese botón dice "Subiendo…" y se bloquea. Se rechaza un archivo que
+  no sea imagen. El `<input>` se vacía tras elegir, para poder volver a elegir el mismo
+  archivo.
+- No necesita migración: `updateBanner` ya aceptaba `imageUrl` e `imageUrlMobile`, y la
+  política de escritura de `site_banners` (v30) ya cubre al operador.
+
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
 Reportado con una captura: el bloque de sesión quedaba partido contra el borde
