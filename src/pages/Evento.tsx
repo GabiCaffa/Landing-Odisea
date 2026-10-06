@@ -1,4 +1,4 @@
-import { useEffect, useMemo, lazy, Suspense } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { CalendarDays, Flame, Instagram, MapPin, Ticket } from "lucide-react";
 import Header from "@/components/Header";
@@ -12,6 +12,7 @@ import { RUTA_APARTE, esFiestaAparte, fiestaAparte } from "@/lib/fiestasAparte";
 import { precioConComision } from "@/lib/siteSettings";
 import { stockDelLote, textoStockLote } from "@/lib/ticketTypes";
 import { rastrear } from "@/lib/pixel";
+import VisorFlyer from "@/components/VisorFlyer";
 import { urlDeEvento } from "@/lib/rutas";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
@@ -56,6 +57,8 @@ const Evento = () => {
   const { slug } = useParams<{ slug: string }>();
   const { events, eventsLoaded } = useAuth();
   const comisionTicketera = useComisionTicketera();
+  // El flyer a tamaño grande, en la misma página (no en otra pestaña).
+  const [flyerAbierto, setFlyerAbierto] = useState(false);
 
   // `/expofiesta` es la misma página sin el tramo del evento: la fiesta aparte
   // vigente. Se resuelve acá y no con un redirect para que la URL de los
@@ -161,27 +164,29 @@ const Evento = () => {
               **Capado al 45% de la pantalla en celular.** Un flyer vertical a
               ancho completo se comía la primera pantalla entera: medido, había
               que scrollear 845 px —más que el alto de la ventana— para ver un
-              solo precio. Con `object-contain` se sigue viendo completo, sólo
-              que más chico, y tocarlo lo abre a tamaño real (ahí el navegador
-              da zoom con los dedos, que es mejor que cualquier visor nuestro).
+              solo precio. Se sigue viendo completo, sólo que más chico, y
+              tocarlo lo muestra grande en la misma página (`VisorFlyer`); antes
+              abría la imagen en otra pestaña y sacaba a la persona de la compra.
 
               De `md:` para arriba no se capa, y además va `sticky`: la columna
               de la derecha mide el doble que ésta, así que sin esto quedaban
               520 px de vacío al bajar. Pegado, el flyer acompaña la compra.
             */}
-            <a
-              href={imagenRedimensionada(evento.image, 1600)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative float-left mb-2 mr-3 block w-20 overflow-hidden sm:w-32 md:float-none md:m-0 md:w-full md:self-start md:sticky md:top-6"
-              aria-label={`Ver el flyer de ${evento.name} en tamaño completo`}
+            <button
+              type="button"
+              onClick={() => setFlyerAbierto(true)}
+              className="relative float-left cursor-zoom-in mb-2 mr-3 block w-20 overflow-hidden rounded-xl sm:w-32 sm:rounded-2xl md:float-none md:m-0 md:w-fit md:max-w-full md:self-start md:sticky md:top-6"
+              aria-label={`Ampliar el flyer de ${evento.name}`}
+              // Inline y no `shadow-[var(...)]`: Tailwind no distingue si eso es una
+              // sombra o un color y no genera nada (comprobado: `box-shadow: none`).
+              style={{ boxShadow: "var(--shadow-lg)" }}
             >
               <img
                 src={imagenRedimensionada(evento.image, 960)}
                 srcSet={srcSetRedimensionado(evento.image) || undefined}
                 sizes="(min-width: 768px) 480px, 100vw"
                 alt={evento.name}
-                className="w-full object-contain md:max-h-[72vh]"
+                className="block h-auto w-full md:w-auto md:max-w-full md:max-h-[72vh]"
                 style={{
                   objectPosition: `${evento.imagePosition.x}% ${evento.imagePosition.y}%`,
                 }}
@@ -193,7 +198,14 @@ const Evento = () => {
                   </span>
                 </div>
               )}
-            </a>
+            </button>
+            {flyerAbierto && (
+              <VisorFlyer
+                src={imagenRedimensionada(evento.image, 1600)}
+                alt={evento.name}
+                onClose={() => setFlyerAbierto(false)}
+              />
+            )}
 
             {/* ── La info y la compra ──────────────────────────────────── */}
             <div className="md:flex md:flex-col">
