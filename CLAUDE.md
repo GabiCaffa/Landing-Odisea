@@ -1363,6 +1363,35 @@ WEB") no puede colgar de una única cuenta. Se abren al operador, **y sólo eso*
 - La tarjeta de la home recorta los flyers verticales a 4:3 (el encuadre se ajusta
   en el formulario del evento); no se tocó.
 
+### Promociones: compactas, de un toque y sin recorrer pantallas
+
+La sección (`PromosSection`) eran tres tarjetas enormes (título hasta 5xl, un número
+de fondo "01/02/03", párrafo largo y un botón chico) más un bloque negro de "HABLÁ
+CON NOSOTROS" de unos 250 px: ~1.600 px en celular para tres atajos. Para una web
+que vende desde el teléfono, el cliente no tiene que recorrer eso.
+
+- **Ahora son ~660 px en celular y entran en una sola pantalla** (verificado con el
+  botón "Ver promociones" del hero). Una fila por promo: ícono, etiqueta, título,
+  dos líneas de texto y una flecha de 44 px. **Toda la tarjeta es la acción**: un
+  solo toque, no hace falta apuntarle a un botón chico. Desde `md:` son tres
+  columnas con el botón con texto ("Comprar directo", "Reclamar beneficio",
+  "Consultar").
+- **El orden es el de lo que más vende**: Precio directo (la única que cierra una
+  venta en el momento, destacada en naranja), Cumpleaños y Grupos (una consulta).
+  Antes iban numeradas en el orden en que se fueron agregando. Textos más cortos.
+- **Se mantiene todo el comportamiento**: el selector de evento + compra directa, el
+  modal de cumpleaños (pide cuenta) y el link de WhatsApp de grupos. Se conservan
+  las clases `promo-card` / `promo-card--destacada`, que son los ganchos del tema
+  Halloween en `index.css`.
+- **El bloque de contacto es una fila de 3 líneas**, no una pantalla: "¿Tenés dudas?
+  Escribinos." + botón de WhatsApp de 44 px.
+- **`scroll-mt-20` en `#promos` y `scroll-mt-16` en `#eventos`**: el header es
+  `fixed` (69 px en celular) y al llegar desde "Ver promociones" / "Ver eventos" el
+  título de la sección quedaba tapado.
+- **Dónde está la sección**: sigue DESPUÉS de los eventos (lo que vende va primero), y
+  a ella se llega con el botón del hero. La altura de cada tarjeta de evento en
+  celular (~630 px) es lo que la deja "abajo"; achicarlas es una decisión aparte.
+
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
 Reportado con una captura: el bloque de sesión quedaba partido contra el borde

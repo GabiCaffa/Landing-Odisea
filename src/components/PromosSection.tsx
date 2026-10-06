@@ -1,4 +1,5 @@
 import { useMemo, useState, lazy, Suspense } from "react";
+import { Cake, ChevronRight, Users, Zap, type LucideIcon } from "lucide-react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
 // Diferido, igual que en EventCard: arrastra PhoneInput -> libphonenumber.
@@ -14,6 +15,7 @@ import { playThud } from "@/lib/spookySound";
 import { useComisionTicketera } from "@/contexts/ThemeContext";
 import { precioConComision } from "@/lib/siteSettings";
 import ModalShell from "./ModalShell";
+import WhatsAppIcon from "./WhatsAppIcon";
 
 // Evento que consume el selector / modal de compra (derivado de los eventos reales).
 type PickerEvent = {
@@ -27,35 +29,59 @@ type PickerEvent = {
 };
 
 // ── Datos de las 3 promos ─────────────────────────────────────────────────────
-const promos = [
+/**
+ * El orden es el de lo que más vende: primero la compra directa, que es la
+ * única que cierra una venta en el momento; después la de cumpleaños y por
+ * último la de grupos, que es una consulta. Antes iban numeradas 01-02-03 en el
+ * orden en que se fueron agregando.
+ *
+ * Los textos son cortos a propósito: se leen en un vistazo desde el celular.
+ */
+type Promo = {
+  id: string;
+  icon: LucideIcon;
+  tag: string;
+  title: string;
+  description: string;
+  cta: string;
+  /** Si abre un modal del sitio. Sin esto es un link (`ctaHref`). */
+  modal?: "birthday" | "tickets";
+  ctaHref?: string;
+  highlight?: boolean;
+};
+
+const promos: Promo[] = [
   {
-    number: "01",
-    tag: "PROMO GRUPOS",
-    title: "Vengan juntos,\npara acceder a beneficios.",
+    id: "directo",
+    icon: Zap,
+    tag: "Exclusivo WhatsApp",
+    title: "Precio directo",
     description:
-      "Coordiná con tu grupo y paguen en un solo pago para acceder al beneficio.",
-    cta: "Consultar por WhatsApp",
-    ctaHref:
-      "https://wa.me/59892592179?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Grupos",
+      "Comprá por nuestro canal de ventas al valor vigente de preventa. Pagás por transferencia y te confirmamos rápido.",
+    cta: "Comprar directo",
+    modal: "tickets", // ← abre el selector de evento + modal de compra
+    highlight: true,
   },
   {
-    number: "02",
-    tag: "PROMO CUMPLEAÑOS",
-    title: "Tu cumple,\ntu fiesta.",
+    id: "cumple",
+    icon: Cake,
+    tag: "Promo cumpleaños",
+    title: "Tu cumple, tu fiesta",
     description:
-      "Si tu cumpleaños cae cerca de la fecha del evento, tenemos un beneficio especial para vos. Reclamalo desde tu cuenta y te lo confirmamos.",
-    cta: "Reclamar mi beneficio",
+      "Si tu cumpleaños cae cerca del evento tenés un beneficio especial. Reclamalo desde tu cuenta.",
+    cta: "Reclamar beneficio",
     modal: "birthday", // ← abre el modal de la promo de cumpleaños
   },
   {
-    number: "03",
-    tag: "EXCLUSIVO WHATSAPP",
-    title: "Precio Directo",
+    id: "grupos",
+    icon: Users,
+    tag: "Promo grupos",
+    title: "Vengan juntos",
     description:
-      "Comprá mediante nuestro canal de ventas y accedé al valor vigente de preventa. Atención personalizada, pago por transferencia y confirmación rápida.",
-    cta: "Compra Directa",
-    modal: "tickets", // ← abre el selector de evento + modal de compra
-    highlight: true,
+      "Coordiná con tu grupo y paguen en un solo pago para acceder al beneficio.",
+    cta: "Consultar",
+    ctaHref:
+      "https://wa.me/59892592179?text=Hola!%20Quiero%20info%20sobre%20la%20Promo%20Grupos",
   },
 ];
 
@@ -90,8 +116,8 @@ const PromosSection = () => {
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [showBirthday, setShowBirthday] = useState(false);
 
-  const openPromoModal = (promo: (typeof promos)[number]) => {
-    if ("modal" in promo && promo.modal === "birthday") setShowBirthday(true);
+  const openPromoModal = (promo: Promo) => {
+    if (promo.modal === "birthday") setShowBirthday(true);
     else setShowEventPicker(true);
   };
 
@@ -102,33 +128,32 @@ const PromosSection = () => {
   };
 
   return (
-    <section id="promos" className="section-padding bg-papel">
+    // Padding propio y más chico que `section-padding`: esta sección es de
+    // consulta rápida, no de lectura, y a este alto se llega sin recorrer
+    // pantallas de aire.
+    // `scroll-mt-20`: el header es `fixed` (69 px en celular) y sin esto el título
+    // queda tapado cuando se llega desde "Ver promociones".
+    <section id="promos" className="scroll-mt-20 bg-papel py-8 md:py-12">
       <div className="container-odisea">
         {/* Header */}
         <div
           ref={headerRef}
-          className={`text-center mb-8 md:mb-10 transition-all duration-700 ${
-            headerVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+          className={`mb-5 text-center transition-all duration-500 md:mb-7 ${
+            headerVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
           }`}
         >
-          <p className="eyebrow mb-3">Beneficios</p>
-          <h2 className="title-sport text-5xl sm:text-6xl md:text-7xl lg:text-8xl mb-4 text-tinta">
+          <p className="eyebrow mb-2">Beneficios</p>
+          <h2 className="title-sport text-4xl text-tinta sm:text-5xl md:text-6xl">
             <span className="highlight-celeste">PROMOCIONES</span>
           </h2>
-          <div
-            className={`w-16 h-px bg-celeste mx-auto transition-all duration-500 delay-200 ${
-              headerVisible ? "scale-x-100" : "scale-x-0"
-            }`}
-          />
         </div>
 
-        {/* Cards grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
-          {promos.map((promo, index) => (
+        {/* Una promo por fila en celular, tres en una fila desde `md:` */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
+          {promos.map((promo) => (
             <PromoCard
-              key={promo.number}
+              key={promo.id}
               promo={promo}
-              index={index}
               onOpenModal={() => openPromoModal(promo)}
             />
           ))}
@@ -260,94 +285,104 @@ const EventPickerOverlay = ({
 };
 
 // ── Card individual ───────────────────────────────────────────────────────────
+/**
+ * Toda la tarjeta es la acción: un solo toque, sin tener que apuntarle a un
+ * botón chico. El botón de la derecha es la flecha que dice "esto se toca", y
+ * mide 44 px.
+ *
+ * Es un `<button>` si abre un modal del sitio y un `<a>` si va a WhatsApp, pero
+ * por dentro son iguales, así que comparten el contenido y las clases.
+ */
 const PromoCard = ({
   promo,
-  index,
   onOpenModal,
 }: {
-  promo: (typeof promos)[number];
-  index: number;
+  promo: Promo;
   onOpenModal: () => void;
 }) => {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.15 });
+  const Icon = promo.icon;
 
-  return (
-    <div
-      ref={ref}
-      className={`promo-card ${promo.highlight ? 'promo-card--destacada' : ''} relative p-8 md:p-10 flex flex-col gap-6 group rounded-2xl border transition-all duration-700 hover:-translate-y-1 ${
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
-      } ${promo.highlight ? "bg-celeste text-accent-foreground border-celeste shadow-[var(--shadow-lg)]" : "bg-card border-border hover:shadow-[var(--shadow-md)]"}`}
-      style={{ transitionDelay: `${index * 120}ms` }}
-    >
-      {/* Número watermark */}
+  // `promo-card` y `promo-card--destacada` son los ganchos del tema estacional
+  // (src/index.css): se enganchan de clases propias y no de utilidades.
+  const clases = `promo-card ${promo.highlight ? "promo-card--destacada" : ""} group flex h-full w-full items-center gap-3 rounded-2xl border p-3.5 text-left transition-all duration-300 active:scale-[0.99] md:flex-col md:items-start md:gap-3 md:p-5 ${
+    promo.highlight
+      ? "border-celeste bg-celeste text-accent-foreground shadow-[var(--shadow-md)]"
+      : "border-border bg-card hover:border-tinta/30 hover:shadow-[var(--shadow-md)]"
+  }`;
+
+  const contenido = (
+    <>
       <span
-        className={`absolute top-4 right-6 title-sport text-8xl font-black leading-none select-none pointer-events-none transition-opacity duration-300 ${
-          promo.highlight
-            ? "text-tinta/15 group-hover:text-tinta/25"
-            : "text-tinta/8 group-hover:text-celeste-deep/30"
+        className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${
+          promo.highlight ? "bg-tinta/10" : "bg-celeste/10 text-celeste-deep"
         }`}
+        aria-hidden="true"
       >
-        {promo.number}
+        <Icon className="h-6 w-6" />
       </span>
 
-      {/* Icono + tag */}
-      <div className="flex items-center gap-3">
-        <div className={`p-2 border ${promo.highlight ? "border-background/30" : "border-border"}`}>
-          <span className={promo.highlight ? "text-background" : "text-foreground"}>
-          </span>
-        </div>
+      <span className="min-w-0 flex-1">
         <span
-          className={`text-xs tracking-[0.25em] uppercase font-medium ${
-            promo.highlight ? "text-background/60" : "text-muted-foreground"
+          className={`block text-[10px] font-semibold uppercase tracking-[0.2em] ${
+            promo.highlight ? "text-accent-foreground/70" : "text-muted-foreground"
           }`}
         >
           {promo.tag}
         </span>
-      </div>
+        <span className="block font-sport text-xl font-black uppercase leading-tight tracking-wide text-tinta md:text-2xl">
+          {promo.title}
+        </span>
+        <span
+          className={`mt-1 block text-xs leading-snug md:text-sm ${
+            promo.highlight ? "text-accent-foreground/80" : "text-muted-foreground"
+          }`}
+        >
+          {promo.description}
+        </span>
+      </span>
 
-      {/* Título */}
-      <h3
-        className={`title-sport text-3xl md:text-4xl lg:text-5xl tracking-wide leading-[0.95] font-black whitespace-pre-line ${
-          promo.highlight ? "text-tinta" : "text-tinta"
+      <span
+        className={`flex min-h-[44px] flex-shrink-0 items-center justify-center gap-1 rounded-full text-xs font-bold uppercase tracking-wide transition-all md:w-full ${
+          promo.highlight
+            ? "bg-tinta px-3 text-papel group-hover:bg-tinta/85 md:px-4"
+            : "bg-tinta px-3 text-papel group-hover:bg-celeste group-hover:text-accent-foreground md:px-4"
         }`}
       >
-        {promo.title}
-      </h3>
+        <span className="hidden md:inline">{promo.cta}</span>
+        <ChevronRight className="h-5 w-5 md:h-4 md:w-4" aria-hidden="true" />
+      </span>
+    </>
+  );
 
-      {/* Descripción */}
-      <p
-        className={`text-sm leading-relaxed flex-1 ${
-          promo.highlight ? "text-background/70" : "text-muted-foreground"
-        }`}
-      >
-        {promo.description}
-      </p>
-
-      {/* CTA — botón si abre un modal, link si es WhatsApp directo */}
-      {"modal" in promo ? (
+  return (
+    <div
+      ref={ref}
+      className={`h-full transition-all duration-500 ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+      }`}
+    >
+      {promo.modal ? (
         <button
+          type="button"
           onClick={() => {
             playThud();
             onOpenModal();
           }}
-          className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide bg-tinta text-papel rounded-full px-6 py-3 transition-all duration-200 w-fit hover:bg-papel hover:text-tinta active:scale-[0.98] cursor-pointer"
+          aria-label={`${promo.title}: ${promo.cta}`}
+          className={clases}
         >
-          {promo.cta}
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
+          {contenido}
         </button>
       ) : (
         <a
-          href={"ctaHref" in promo ? promo.ctaHref : "#"}
+          href={promo.ctaHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide border border-tinta/20 rounded-full px-6 py-3 transition-all duration-200 w-fit hover:bg-tinta hover:text-papel active:scale-[0.98]"
+          aria-label={`${promo.title}: ${promo.cta}`}
+          className={clases}
         >
-          {promo.cta}
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-          </svg>
+          {contenido}
         </a>
       )}
     </div>
@@ -355,34 +390,23 @@ const PromoCard = ({
 };
 
 // ── Strip inferior ────────────────────────────────────────────────────────────
-const BottomCta = () => {
-  const { ref, isVisible } = useScrollReveal({ threshold: 0.3 });
-
-  return (
-    <div
-      ref={ref}
-      className={`bloque-invertido mt-5 bg-tinta text-papel rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-700 delay-300 shadow-[var(--shadow-lg)] ${
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-      }`}
+/**
+ * Una fila angosta, no un bloque de pantalla: eran ~250 px de "HABLÁ CON
+ * NOSOTROS" en 5xl para algo que es un enlace a WhatsApp.
+ */
+const BottomCta = () => (
+  <div className="bloque-invertido mt-3 flex items-center justify-between gap-3 rounded-2xl bg-tinta px-4 py-3 text-papel md:mt-4 md:px-6">
+    <p className="text-sm font-semibold md:text-base">¿Tenés dudas? Escribinos.</p>
+    <a
+      href="https://wa.me/59892592179"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex min-h-[44px] flex-shrink-0 items-center gap-2 rounded-full bg-celeste px-5 text-sm font-semibold tracking-wide text-accent-foreground transition-all hover:bg-celeste-deep active:scale-[0.98]"
     >
-      <div className="text-center md:text-left">
-        <p className="eyebrow mb-3">¿Tenés dudas?</p>
-        <p className="title-sport text-3xl md:text-4xl lg:text-5xl">HABLÁ CON NOSOTROS</p>
-      </div>
-      <a
-        href="https://wa.me/59892592179"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-3 bg-celeste text-accent-foreground rounded-full px-8 py-4 text-sm font-semibold tracking-wide hover:bg-celeste-deep active:scale-[0.98] transition-all whitespace-nowrap"
-      >
-        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.523 5.85L.057 23.215a.75.75 0 00.92.92l5.365-1.466A11.943 11.943 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.693-.504-5.23-1.385l-.374-.217-3.882 1.06 1.06-3.882-.217-.374A9.963 9.963 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
-        </svg>
-        WhatsApp
-      </a>
-    </div>
-  );
-};
+      <WhatsAppIcon className="h-4 w-4" />
+      WhatsApp
+    </a>
+  </div>
+);
 
 export default PromosSection;
