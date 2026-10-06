@@ -32,7 +32,7 @@ const mensajeDeError = (err: unknown, accion: string) => {
   const code = (err as { code?: string } | null)?.code;
   return ERRORES_DE_MIGRACION.includes(code ?? "")
     ? "Falta correr la migración v27_site_banners.sql en Supabase."
-    : `No se pudo ${accion}. ¿Seguís con sesión de admin?`;
+    : `No se pudo ${accion}. ¿Seguís con la sesión iniciada?`;
 };
 
 const BannersAdmin = () => {

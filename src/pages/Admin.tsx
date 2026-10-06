@@ -4920,6 +4920,9 @@ const THEME_SWATCHES: Record<SiteTheme, { colors: string[]; caption: string }> =
 
 const AppearanceAdmin = () => {
   const { siteTheme: theme, loading, setTheme } = useTheme();
+  // El operador entra a esta pestaña sólo para el cartel (v30): el tema y la
+  // comisión de ticketera siguen siendo del admin.
+  const puedeTema = usePuede("apariencia");
   const confirm = useConfirm();
   const [saving, setSaving] = useState<SiteTheme | null>(null);
 
@@ -4973,6 +4976,8 @@ const AppearanceAdmin = () => {
 
   return (
     <div className="max-w-3xl">
+      {puedeTema && (
+        <>
       <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
         Cambia la paleta de la parte pública del sitio (home, registro, login y perfil).
         El cambio es inmediato para todos: quien tenga el sitio abierto lo ve cambiar sin recargar.
@@ -5036,6 +5041,8 @@ const AppearanceAdmin = () => {
         </Link>{" "}
         en otra pestaña.
       </p>
+        </>
+      )}
 
       <CartelEventosPanel />
     </div>
@@ -5055,6 +5062,8 @@ const AppearanceAdmin = () => {
  */
 const CartelEventosPanel = () => {
   const { cartel, setCartel, comisionTicketera, setComisionTicketera } = useTheme();
+  // La comisión de ticketera es del admin (v30): el operador sólo ve el cartel.
+  const puedeComision = usePuede("apariencia");
   const [texto, setTexto] = useState(cartel);
   const [recargo, setRecargo] = useState(String(comisionTicketera));
   const [saving, setSaving] = useState(false);
@@ -5071,7 +5080,9 @@ const CartelEventosPanel = () => {
   }, [comisionTicketera, saving]);
 
   const limpio = texto.trim().slice(0, CARTEL_MAX);
-  const comisionNum = Math.min(Math.max(Math.round(Number(recargo) || 0), 0), COMISION_MAX);
+  const comisionNum = puedeComision
+    ? Math.min(Math.max(Math.round(Number(recargo) || 0), 0), COMISION_MAX)
+    : comisionTicketera;
   const cambio = limpio !== cartel || comisionNum !== comisionTicketera;
 
   // El ejemplo se calcula con la MISMA función que el sitio, no con una cuenta
@@ -5093,7 +5104,7 @@ const CartelEventosPanel = () => {
       toast.error(
         code === "PGRST205" || code === "42P01"
           ? "Falta correr la migración v19_site_settings.sql en Supabase."
-          : "No se pudo guardar. ¿Seguís con sesión de admin?"
+          : "No se pudo guardar. ¿Seguís con la sesión iniciada?"
       );
     } finally {
       setSaving(false);
@@ -5101,13 +5112,14 @@ const CartelEventosPanel = () => {
   };
 
   return (
-    <div className="mt-10 border-t border-border pt-8">
+    <div className={puedeComision ? "mt-10 border-t border-border pt-8" : ""}>
       <h3 className="font-sport text-xl font-black tracking-wide text-tinta">
         CARTEL EN LAS TARJETAS
       </h3>
       <p className="text-sm text-muted-foreground mt-2 mb-5 leading-relaxed">
-        Se muestra arriba a la derecha en la tarjeta de cada evento que esté a la venta.
-        Dejalo vacío para sacarlo. El cambio es inmediato para todos.
+        Es el texto del botón de compra de la tarjeta de cada evento que esté a la venta
+        (por ejemplo, "COMPRAR · 15% OFF SOLO WEB"). Hasta 24 caracteres. Dejalo vacío para
+        que el botón diga "Comprar entradas". El cambio es inmediato para todos.
       </p>
 
       <div className="border border-charrua/30 bg-charrua/[0.06] rounded-xl p-4 mb-5">
@@ -5161,6 +5173,7 @@ const CartelEventosPanel = () => {
         ))}
       </div>
 
+      {puedeComision && (
       <div className="mt-6 border-t border-border pt-6">
         <label htmlFor="cartel-comision" className="label-techno">
           Comisión de ticketera
@@ -5202,23 +5215,18 @@ const CartelEventosPanel = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Cómo se va a ver. Las muestras de esta pestaña están escritas a mano
           y no salen de los tokens (el panel no se tematiza), así que el color
           es el naranja de siempre aunque el sitio esté en otro tema. */}
       <div className="mt-6">
         <p className="label-techno mb-2">Así se ve en la tarjeta</p>
-        <div className="relative w-56 h-40 rounded-lg bg-tinta/90 overflow-hidden">
-          <div className="absolute left-3 top-3 rounded-full bg-celeste px-3 py-1.5">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-white">
-              12 OCT
-            </span>
+        <div className="w-64 rounded-lg bg-tinta/90 p-3">
+          <div className="mb-3 h-16 rounded-md bg-white/10" />
+          <div className="flex min-h-[40px] items-center justify-center rounded-full bg-celeste px-3 text-center text-[11px] font-bold uppercase tracking-wide text-white">
+            {limpio ? `Comprar · ${limpio}` : "Comprar entradas"}
           </div>
-          {limpio && (
-            <div className="absolute right-3 top-3 rounded-full bg-celeste px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">
-              {limpio}
-            </div>
-          )}
         </div>
       </div>
     </div>
