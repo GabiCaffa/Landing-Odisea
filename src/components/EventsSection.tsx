@@ -4,6 +4,7 @@ import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth } from "@/contexts/AuthContext";
 import { agruparEventos } from "@/lib/grupos";
 import { RUTA_APARTE, esFiestaAparte } from "@/lib/fiestasAparte";
+import { useStockHoja } from "@/lib/stockHoja";
 import SpookySpiders from "./SpookySpiders";
 
 /**
@@ -18,6 +19,8 @@ import SpookySpiders from "./SpookySpiders";
  */
 const EventsSection = () => {
   const { events } = useAuth();
+  // Las entradas que quedan según las ventas anotadas en el Google Sheets.
+  const stockHoja = useStockHoja();
   const { ref: headerRef, isVisible: headerVisible } = useScrollReveal({ threshold: 0.3 });
   const { ref: gridContainerRef, isVisible: gridVisible } = useScrollReveal({ threshold: 0.1 });
 
@@ -105,6 +108,7 @@ const EventsSection = () => {
                   <EventCard
                     slug={entrada.destino.slug}
                     destino={destinoDe(entrada)}
+                    stockHoja={stockHoja[entrada.destino.slug]}
                     image={entrada.destino.image}
                     imagePosition={entrada.destino.imagePosition}
                     name={entrada.nombre}

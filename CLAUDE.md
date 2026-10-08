@@ -1448,6 +1448,47 @@ el estado. Ahora cada versión tiene su botón **"Cambiar imagen"**:
 - No necesita migración: `updateBanner` ya aceptaba `imageUrl` e `imageUrlMobile`, y la
   política de escritura de `site_banners` (v30) ya cubre al operador.
 
+### El stock sale del Google Sheets de ventas (`/api/stock`)
+
+El "Quedan N entradas antes del cambio de lote" (v29) era un número que el staff
+tipeaba a mano y que casi nunca se movía: **un número fijo se lee como inventado** y
+hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google Sheets
+(una pestaña por fiesta, una fila por compra, columna `Cantidad`), así se mueve solo.
+
+> **Se descartó que el número baje con cada click en "Consultar por WhatsApp"**: un
+> click no es una venta, y un contador que se mueve sin ventas es urgencia inventada
+> (mismo motivo por el que no hay un reloj falso en loop).
+
+- **El contrato con la hoja es mínimo**: una pestaña **"Resumen"** con las columnas
+  `slug` y `quedan` (el resto de columnas, las que sean). Ahí se calcula
+  `quedan = capacidad − vendidas` con fórmulas sobre las pestañas de cada fiesta.
+  **Sólo esa pestaña se publica** (como CSV): las de ventas tienen nombres, teléfonos y
+  mails de compradores y **no se publican nunca**. `api/_parseStock.js` además sólo
+  devuelve `slug` y `quedan`, aunque la hoja traiga más.
+- **`api/stock.js`** (función de Vercel) lee el CSV de `STOCK_SHEET_CSV_URL` y
+  contesta `{ stock: { slug: quedan } }`. **Caché de 1 minuto en el CDN**
+  (`s-maxage=60`): con tráfico de anuncios, Google recibe como mucho una consulta por
+  minuto. Sólo le pega a `docs.google.com`. **Nunca rompe la página**: ante cualquier
+  error (hoja despublicada, Google lento, sin red) contesta `{ stock: {} }` y el sitio
+  usa el número manual. Para apagarlo, se borra la variable de entorno.
+- **Precedencia (`stockAMostrar`, `src/lib/stockHoja.ts`)**: si la fiesta (por `slug`)
+  está en la hoja, **manda el de la hoja sobre el manual del panel**; si no, el manual.
+  **Un 0 de la hoja no muestra nada** (un lote sin entradas se apaga desde el panel).
+- **`vercel.json`**: el rewrite de la SPA pasó a `/((?!api/).*)` para no capturar
+  `/api/*`. En `vite` (desarrollo) `/api/stock` no existe: el `json()` falla, se atrapa
+  y queda el manual.
+- **Retraso**: Google refresca el CSV publicado cada pocos minutos (hasta ~5) y el CDN
+  suma 1 más. El número NO es en tiempo real. Y **depende de que el staff anote las
+  ventas con puntualidad** (igual que Entregas).
+- **Qué cuenta como vendida es una decisión de la hoja, no del código**: la fórmula de
+  `vendidas` puede sumar todas las filas o sólo las con `Confirmacion` completa.
+- **El cambio de lote sigue siendo manual** (apagar un tipo de entrada y prender el
+  siguiente en el panel). Que el precio cambie solo al agotarse es otra feature, y toca
+  el precio que se cobra.
+- Probado con 13 casos del lector (CSV sucio, filas rotas, miles, datos personales que
+  no viajan) y del servicio (sin variable, URL ajena, Google 500, sin red) más la
+  pantalla con una hoja simulada. **No probado contra una hoja real de Google.**
+
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
 Reportado con una captura: el bloque de sesión quedaba partido contra el borde
