@@ -13,6 +13,7 @@ import { precioConComision } from "@/lib/siteSettings";
 import { stockDelLote, textoStockLote } from "@/lib/ticketTypes";
 import { rastrear } from "@/lib/pixel";
 import VisorFlyer from "@/components/VisorFlyer";
+import { stockAMostrar, useStockHoja } from "@/lib/stockHoja";
 import { urlDeEvento } from "@/lib/rutas";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
@@ -57,6 +58,7 @@ const Evento = () => {
   const { slug } = useParams<{ slug: string }>();
   const { events, eventsLoaded } = useAuth();
   const comisionTicketera = useComisionTicketera();
+  const stockHoja = useStockHoja();
   // El flyer a tamaño grande, en la misma página (no en otra pestaña).
   const [flyerAbierto, setFlyerAbierto] = useState(false);
 
@@ -150,7 +152,7 @@ const Evento = () => {
   const desde = entradas.length ? Math.min(...entradas.map((t) => t.price)) : 0;
   const desdeConComision = precioConComision(desde, comisionTicketera);
   // Cuántas quedan antes del cambio de lote (v29), si el staff lo cargó.
-  const stockLote = agotado ? undefined : stockDelLote(entradas);
+  const stockLote = agotado ? undefined : stockAMostrar(stockHoja[evento.slug], stockDelLote(entradas));
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

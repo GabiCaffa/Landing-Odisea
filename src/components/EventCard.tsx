@@ -7,6 +7,7 @@ import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext"
 import { EventTicket, stockDelLote, textoStockLote } from "@/lib/ticketTypes";
 import { EventPromo, promoVigente } from "@/lib/ticketPromos";
 import { urlDeEvento } from "@/lib/rutas";
+import { stockAMostrar } from "@/lib/stockHoja";
 import { useCartelEventos } from "@/contexts/ThemeContext";
 
 /**
@@ -33,6 +34,11 @@ interface EventCardProps {
    * Si viene, manda sobre `slug`.
    */
   destino?: string;
+  /**
+   * Cuántas quedan según las ventas anotadas en el Google Sheets (`/api/stock`).
+   * Si viene, manda sobre el stock manual del panel.
+   */
+  stockHoja?: number;
   image: string;
   imagePosition?: ImageTransform;
   name: string;
@@ -58,6 +64,7 @@ interface EventCardProps {
 const EventCard = ({
   slug,
   destino: destinoPropio,
+  stockHoja,
   image,
   imagePosition,
   name,
@@ -80,7 +87,7 @@ const EventCard = ({
   const isSoldOut =
     soldOut || tickets.length === 0 || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
 
-  const stock = isSoldOut ? undefined : stockDelLote(tickets);
+  const stock = isSoldOut ? undefined : stockAMostrar(stockHoja, stockDelLote(tickets));
 
   // Los carteles de promo (2x1, etc.), sin repetir y de a tres como mucho. En
   // escritorio van sobre el flyer; en celular, donde el flyer es una miniatura,
