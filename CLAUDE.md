@@ -99,7 +99,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
-`v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql`.
+`v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
+`v32_orden_eventos_home.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1488,6 +1489,35 @@ hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google S
 - Probado con 13 casos del lector (CSV sucio, filas rotas, miles, datos personales que
   no viajan) y del servicio (sin variable, URL ajena, Google 500, sin red) más la
   pantalla con una hoja simulada. **No probado contra una hoja real de Google.**
+
+### Orden de las tarjetas de la home, elegido a mano (v32)
+
+La grilla de Próximos Eventos salía siempre por fecha. A veces conviene poner primero la
+fecha que más se quiere vender. Ahora el staff elige el orden en **Eventos → "Orden en la
+home"** (un panel plegable arriba de la lista), con una flecha para subir o bajar cada
+tarjeta.
+
+- **Columna `events.home_order`** (entero, NULL = sin elegir; migración
+  `v32_orden_eventos_home.sql`). Correrla **no mueve nada**: todos quedan en NULL = por fecha.
+- **El panel muestra la grilla tal cual está en la home**: usa la misma lista
+  (`agruparEventos` + `compararParaHome`, en `grupos.ts`). **Una fiesta de varios días es
+  UNA fila** y su lugar es el más alto de sus días (`menorOrden`).
+- **Reglas del orden (`compararParaHome`)**: (1) **los agotados siempre al final**, tengan
+  el número que tengan; (2) los que tienen lugar elegido, por ese número; (3) los que no
+  tienen (un evento recién creado) **van después de los que sí**, por fecha. Con ningún
+  evento ordenado es exactamente el orden de antes (fecha, agotados al final).
+- **Mover una tarjeta numera todas** (0, 1, 2…) y escribe `home_order` en todos los días
+  de cada tarjeta (`guardarOrdenHome`, `src/lib/ordenEventos.ts`): si había números
+  repetidos o eventos sin número, intercambiar dos valores no arreglaría nada (mismo
+  criterio que los banners). Va directo a `supabase` y no por `updateEvent`, que dispararía
+  una recarga por cada fila; se recarga UNA vez al final (`refreshEvents`).
+- **Las flechas no cruzan la frontera de agotados**: un agotado no se puede subir por
+  encima de uno a la venta (en la home no se vería), así que ese botón se deshabilita.
+- **"Volver al orden por fecha"** borra todos los números (con confirmación).
+- Sin la migración corrida, mover una tarjeta muestra "Falta correr la migración v32"; la
+  home sigue por fecha. La escritura es de `is_manager()` (admin y operador, v22).
+- **Pendiente de decidir si molesta**: los agotados no se pueden fijar arriba aunque el
+  staff quiera (por ejemplo, una fiesta "agotada" que se usa como prueba social).
 
 ### El sidebar del panel cortaba el botón de cerrar sesión
 

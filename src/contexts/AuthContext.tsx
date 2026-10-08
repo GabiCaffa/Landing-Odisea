@@ -133,6 +133,11 @@ export interface AdminEvent {
   groupKey?: string;
   /** Nombre que muestra la tarjeta agrupada. Repetido en los días del grupo. */
   groupName?: string;
+  /**
+   * v32: lugar elegido a mano en la grilla de la home (0 = primero). `undefined`
+   * = sin orden elegido: va por fecha, después de los que tienen número.
+   */
+  homeOrder?: number;
   createdAt: string;
 }
 
@@ -241,6 +246,7 @@ function eventFromDb(row: any): AdminEvent {
     instagramUrl: row.instagram_url ?? undefined,
     groupKey: row.group_key ?? undefined,
     groupName: row.group_name ?? undefined,
+    homeOrder: row.home_order ?? undefined,
     createdAt: row.created_at,
   };
 }

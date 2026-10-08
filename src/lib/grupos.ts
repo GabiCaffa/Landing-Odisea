@@ -102,9 +102,41 @@ export interface EntradaCarrusel {
   dias: AdminEvent[];
   /** Agotado sólo si lo están TODOS los días. */
   agotado: boolean;
+  /**
+   * El lugar elegido a mano en la home (v32): el más bajo de sus días, o
+   * `undefined` si ninguno tiene número. Ver `compararParaHome`.
+   */
+  orden?: number;
 }
 
 const unicos = (valores: string[]) => [...new Set(valores.filter(Boolean))];
+
+/** El lugar más alto (número más bajo) elegido entre los días de una fiesta. */
+const menorOrden = (dias: AdminEvent[]): number | undefined => {
+  const numeros = dias.map((d) => d.homeOrder).filter((n): n is number => typeof n === "number");
+  return numeros.length ? Math.min(...numeros) : undefined;
+};
+
+/**
+ * El orden de la grilla de la home (v32), para pasarle a `.sort()`:
+ *
+ * 1. **Los agotados al final**, sin importar su número: una tarjeta que no se puede
+ *    comprar no tiene por qué ocupar el primer lugar.
+ * 2. Los que tienen un lugar elegido, por ese número.
+ * 3. Los que no tienen (un evento recién creado, o todo si nadie ordenó nunca),
+ *    **después de los que sí**, y entre ellos por fecha. Como `agruparEventos` ya
+ *    los devuelve por fecha y `.sort` es estable, acá devolver 0 los deja así.
+ *
+ * Con ningún evento ordenado a mano esto es exactamente el orden de antes
+ * (fecha, agotados al final).
+ */
+export const compararParaHome = (a: EntradaCarrusel, b: EntradaCarrusel): number => {
+  if (a.agotado !== b.agotado) return Number(a.agotado) - Number(b.agotado);
+  if (a.orden === undefined && b.orden === undefined) return 0;
+  if (a.orden === undefined) return 1;
+  if (b.orden === undefined) return -1;
+  return a.orden - b.orden;
+};
 
 /**
  * Colapsa los eventos agrupados en una sola entrada por grupo.
@@ -128,6 +160,7 @@ export const agruparEventos = (events: AdminEvent[]): EntradaCarrusel[] => {
         lugar: e.location,
         dias: [e],
         agotado: eventoAgotado(e),
+        orden: e.homeOrder,
       });
       continue;
     }
@@ -154,6 +187,7 @@ export const agruparEventos = (events: AdminEvent[]): EntradaCarrusel[] => {
       lugar: lugares.length === 1 ? lugares[0] : "",
       dias,
       agotado: dias.every(eventoAgotado),
+      orden: menorOrden(dias),
     });
   }
 
