@@ -13,6 +13,8 @@ import { precioConComision } from "@/lib/siteSettings";
 import { stockDelLote, textoStockLote } from "@/lib/ticketTypes";
 import { rastrear } from "@/lib/pixel";
 import VisorFlyer from "@/components/VisorFlyer";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
+import { urlConsultaEvento } from "@/lib/consulta";
 import { urlDeEvento } from "@/lib/rutas";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
@@ -141,10 +143,13 @@ const Evento = () => {
   const promos = evento.promos.filter((p) => promoVigente(p));
   // Mismo criterio que la tarjeta del carrusel, para que no digan cosas
   // distintas: agotado si lo marcaron, si venció la venta o si no hay entradas.
+  // Un evento de sólo consulta (v31) no vende entradas desde acá, y no es "agotado".
+  const soloConsulta = !!evento.consultOnly;
   const agotado =
-    evento.status === "agotado" ||
-    entradas.length === 0 ||
-    (evento.saleEndsAt ? new Date() >= new Date(evento.saleEndsAt) : false);
+    !soloConsulta &&
+    (evento.status === "agotado" ||
+      entradas.length === 0 ||
+      (evento.saleEndsAt ? new Date() >= new Date(evento.saleEndsAt) : false));
 
   // El tipo activo más barato, para el "desde $X" de arriba.
   const desde = entradas.length ? Math.min(...entradas.map((t) => t.price)) : 0;
@@ -358,7 +363,31 @@ const Evento = () => {
 
               {/* ── La compra, sin modal de por medio ──────────────────── */}
               <div className="clear-both mt-2 border-t border-border pt-2 sm:mt-4 sm:pt-4">
-                {agotado ? (
+                {soloConsulta ? (
+                  // Sin entradas ni precios: un solo botón que abre WhatsApp con la
+                  // consulta escrita (nombre y fecha de la fiesta).
+                  <div className="text-center">
+                    <a
+                      href={urlConsultaEvento(evento.name, formatEventDate(evento.date))}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() =>
+                        rastrear(
+                          "Lead",
+                          { content_name: evento.name, content_ids: [evento.slug], content_category: "consulta" },
+                          esAparte ? "web+expo" : "web"
+                        )
+                      }
+                      className="btn-celeste flex min-h-[52px] w-full items-center justify-center gap-2 px-5 text-sm font-bold uppercase tracking-wide"
+                    >
+                      <WhatsAppIcon className="h-5 w-5" />
+                      Consultar por WhatsApp
+                    </a>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Escribinos y te respondemos por WhatsApp.
+                    </p>
+                  </div>
+                ) : agotado ? (
                   <div className="border border-border p-4 text-center">
                     <p className="font-sport text-lg font-black uppercase tracking-wide">
                       Entradas agotadas

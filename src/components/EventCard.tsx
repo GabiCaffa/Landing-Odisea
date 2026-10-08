@@ -7,6 +7,9 @@ import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext"
 import { EventTicket, stockDelLote, textoStockLote } from "@/lib/ticketTypes";
 import { EventPromo, promoVigente } from "@/lib/ticketPromos";
 import { urlDeEvento } from "@/lib/rutas";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
+import { urlConsultaEvento } from "@/lib/consulta";
+import { rastrear } from "@/lib/pixel";
 import { useCartelEventos } from "@/contexts/ThemeContext";
 
 /**
@@ -33,6 +36,12 @@ interface EventCardProps {
    * Si viene, manda sobre `slug`.
    */
   destino?: string;
+  /**
+   * v31: evento sin venta online. No muestra entradas ni stock, nunca está
+   * "agotado", y toda la tarjeta lleva a una consulta por WhatsApp en vez de a la
+   * página del evento.
+   */
+  soloConsulta?: boolean;
   image: string;
   imagePosition?: ImageTransform;
   name: string;
@@ -58,6 +67,7 @@ interface EventCardProps {
 const EventCard = ({
   slug,
   destino: destinoPropio,
+  soloConsulta = false,
   image,
   imagePosition,
   name,
@@ -78,7 +88,11 @@ const EventCard = ({
   // Agotado si el admin lo marcó así, si ya pasó la fecha/hora de cierre de
   // venta, o si el evento no tiene ningún tipo de entrada a la venta.
   const isSoldOut =
-    soldOut || tickets.length === 0 || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
+    !soloConsulta &&
+    (soldOut || tickets.length === 0 || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false));
+
+  // Sólo consulta: la tarjeta entera abre WhatsApp con la consulta escrita.
+  const urlConsulta = soloConsulta ? urlConsultaEvento(name, date) : null;
 
   const stock = isSoldOut ? undefined : stockDelLote(tickets);
 
@@ -191,7 +205,22 @@ const EventCard = ({
           {date}
         </p>
         <h3 className="font-sport mb-1.5 line-clamp-3 text-xl font-black leading-[0.95] tracking-wide text-tinta sm:mb-2 sm:line-clamp-none sm:text-2xl md:text-3xl">
-          {destino ? (
+          {urlConsulta ? (
+            // El mismo truco del `after:`, pero hacia WhatsApp: la tarjeta entera
+            // es la consulta.
+            <a
+              href={urlConsulta}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                playThud();
+                rastrear("Lead", { content_name: name, content_category: "consulta" });
+              }}
+              className="after:absolute after:inset-0 after:content-['']"
+            >
+              {name}
+            </a>
+          ) : destino ? (
             // El `after:` es el que hace clickeable la tarjeta entera.
             <Link
               to={destino}
@@ -267,14 +296,19 @@ const EventCard = ({
                 : "bg-celeste text-accent-foreground"
             }`}
           >
-            {isSoldOut
-              ? "Ver la fecha"
-              : dias > 1
-                ? `Elegí tu día (${dias})`
-                : cartel
-                  ? `Comprar · ${cartel}`
-                  : "Comprar entradas"}
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            {soloConsulta && <WhatsAppIcon className="h-4 w-4" />}
+            {soloConsulta
+              ? "Consultar por WhatsApp"
+              : isSoldOut
+                ? "Ver la fecha"
+                : dias > 1
+                  ? `Elegí tu día (${dias})`
+                  : cartel
+                    ? `Comprar · ${cartel}`
+                    : "Comprar entradas"}
+            {!soloConsulta && (
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            )}
           </span>
 
           {instagramUrl && (

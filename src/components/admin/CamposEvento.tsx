@@ -402,6 +402,7 @@ export const EventCardPreview = ({
   location,
   description,
   status,
+  soloConsulta = false,
 }: {
   image: string;
   imagePosition: ImageTransform;
@@ -411,6 +412,8 @@ export const EventCardPreview = ({
   location: string;
   description: string;
   status: AdminEvent["status"];
+  /** v31: la tarjeta real lleva "Consultar por WhatsApp" en vez de comprar. */
+  soloConsulta?: boolean;
 }) => {
   // El botón de la tarjeta real lleva el cartel del sitio (ver EventCard).
   const cartel = useCartelEventos();
@@ -559,11 +562,13 @@ export const EventCardPreview = ({
             className="btn-celeste flex-1 text-xs font-bold uppercase py-3 px-3 cursor-default"
           >
             <span>
-              {status === "agotado"
-                ? "Ver la fecha"
-                : cartel
-                  ? `Comprar · ${cartel}`
-                  : "Comprar entradas"}
+              {soloConsulta
+                ? "Consultar por WhatsApp"
+                : status === "agotado"
+                  ? "Ver la fecha"
+                  : cartel
+                    ? `Comprar · ${cartel}`
+                    : "Comprar entradas"}
             </span>
             <ArrowRight className="w-4 h-4" />
           </button>

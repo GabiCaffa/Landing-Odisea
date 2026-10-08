@@ -226,8 +226,10 @@ const Dashboard = ({
   const totalCapacity = events.reduce((acc, e) => acc + e.capacity, 0);
   // El evento ya no tiene precio propio: e.price es el tipo de entrada más
   // barato (lo deriva la DB), así que esto es el promedio de esos mínimos.
-  const avgEntryPrice = events.length
-    ? Math.round(events.reduce((acc, e) => acc + e.price, 0) / events.length)
+  // Los eventos de sólo consulta (v31) no tienen precio: no entran en el promedio.
+  const conPrecio = events.filter((e) => !e.consultOnly);
+  const avgEntryPrice = conPrecio.length
+    ? Math.round(conPrecio.reduce((acc, e) => acc + e.price, 0) / conPrecio.length)
     : 0;
   const newThisMonth = users.filter((u) => {
     const created = new Date(u.createdAt);
@@ -598,7 +600,9 @@ const EventsAdmin = () => {
                       </div>
                     </div>
 
-                    {e.tickets.length === 0 ? (
+                    {e.consultOnly ? (
+                      <p className="text-xs text-muted-foreground">Solo consulta por WhatsApp</p>
+                    ) : e.tickets.length === 0 ? (
                       <p className="text-xs text-charrua">Sin entradas cargadas</p>
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
@@ -692,7 +696,9 @@ const EventsAdmin = () => {
                         <Td>{formatEventDate(e.date)}</Td>
                         <Td>{e.location}</Td>
                         <Td>
-                          {e.tickets.length === 0 ? (
+                          {e.consultOnly ? (
+                            <span className="text-xs text-muted-foreground">Solo consulta</span>
+                          ) : e.tickets.length === 0 ? (
                             <span className="text-xs text-charrua">Sin entradas</span>
                           ) : (
                             <div className="space-y-0.5">
@@ -1539,6 +1545,7 @@ const EventFormModal = ({
     instagramUrl: initial?.instagramUrl ?? "https://www.instagram.com/odisea.uy/",
     groupKey: initial?.groupKey ?? "",
     groupName: initial?.groupName ?? "",
+    consultOnly: initial?.consultOnly ?? false,
   });
 
   /**
@@ -1641,18 +1648,21 @@ const EventFormModal = ({
       toast.error("Elegí a qué cuenta se cobra este evento");
       return;
     }
-    if (form.tickets.length === 0) {
-      toast.error("Agregá al menos un tipo de entrada");
-      return;
-    }
-    if (form.tickets.some((t) => !(t.price > 0))) {
-      toast.error("Poné el precio de cada tipo de entrada");
-      return;
-    }
-    const problemaPromo = problemasPromos(promosSel, form.tickets, nombresPromos);
-    if (problemaPromo) {
-      toast.error(problemaPromo);
-      return;
+    // Un evento de sólo consulta (v31) no vende entradas: no se le piden.
+    if (!form.consultOnly) {
+      if (form.tickets.length === 0) {
+        toast.error("Agregá al menos un tipo de entrada");
+        return;
+      }
+      if (form.tickets.some((t) => !(t.price > 0))) {
+        toast.error("Poné el precio de cada tipo de entrada");
+        return;
+      }
+      const problemaPromo = problemasPromos(promosSel, form.tickets, nombresPromos);
+      if (problemaPromo) {
+        toast.error(problemaPromo);
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -1660,6 +1670,10 @@ const EventFormModal = ({
         ...form,
         // datetime-local (hora local) → ISO UTC; vacío → "" (se guarda null)
         saleEndsAt: form.saleEndsAt ? new Date(form.saleEndsAt).toISOString() : "",
+        // Sólo se manda si lo tocaron: con la columna sin migrar (v31), mandarlo
+        // siempre rompería el guardado de cualquier evento.
+        consultOnly:
+          form.consultOnly === (initial?.consultOnly ?? false) ? undefined : form.consultOnly,
       }, promosSel);
     } finally {
       setSaving(false);
@@ -1768,6 +1782,35 @@ const EventFormModal = ({
               />
             </FormField>
 
+            {/* Fiestas privadas o a coordinar (v31): sin entradas ni precios, sólo
+                un botón de consulta por WhatsApp. */}
+            <FormField label="Tipo de evento">
+              <label className="flex cursor-pointer items-start gap-3 border border-border p-3">
+                <input
+                  type="checkbox"
+                  checked={!!form.consultOnly}
+                  onChange={(e) => setForm({ ...form, consultOnly: e.target.checked })}
+                  className="mt-0.5 accent-foreground"
+                />
+                <span>
+                  <span className="block text-sm font-medium">
+                    Solo consulta por WhatsApp (sin venta de entradas)
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    La tarjeta y la página no muestran entradas ni precios: solo el botón
+                    "Consultar por WhatsApp". Para fiestas privadas o a coordinar.
+                  </span>
+                </span>
+              </label>
+            </FormField>
+
+            {form.consultOnly ? (
+              <p className="border border-dashed border-border p-4 text-xs text-muted-foreground">
+                Este evento no vende entradas desde el sitio, así que no se cargan entradas,
+                precios ni promos.
+              </p>
+            ) : (
+              <>
             <FormField label="Entradas a la venta">
               <TicketsEditor
                 catalog={ticketTypes}
@@ -1787,6 +1830,8 @@ const EventFormModal = ({
                 onCatalogo={setNombresPromos}
               />
             </FormField>
+              </>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField label="Capacidad">
@@ -1841,6 +1886,7 @@ const EventFormModal = ({
               </p>
             </FormField>
 
+            {!form.consultOnly && (
             <FormField label="Cierre de venta (opcional)">
               <input
                 type="datetime-local"
@@ -1852,6 +1898,7 @@ const EventFormModal = ({
                 Pasada esta fecha y hora, el card se muestra “Agotado” y se deshabilita la compra automáticamente.
               </p>
             </FormField>
+            )}
 
             <FormField label="Instagram (opcional)">
               <input
@@ -1985,6 +2032,7 @@ const EventFormModal = ({
               location={form.location || "Lugar del evento"}
               description={form.description || "Descripción del evento..."}
               status={form.status}
+              soloConsulta={!!form.consultOnly}
             />
             <p className="text-[10px] text-center text-muted-foreground leading-relaxed">
               Arrastrá la imagen para reposicionarla · rueda del mouse para zoom

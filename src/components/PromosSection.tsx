@@ -96,7 +96,7 @@ const PromosSection = () => {
     () =>
       events
         // Sin tipos de entrada a la venta no hay nada que comprar: no se ofrece.
-        .filter((e) => e.status === "activo" && e.tickets.some((t) => t.active))
+        .filter((e) => e.status === "activo" && !e.consultOnly && e.tickets.some((t) => t.active))
         .slice()
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((e) => ({

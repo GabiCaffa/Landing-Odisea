@@ -105,6 +105,7 @@ const EventsSection = () => {
                   <EventCard
                     slug={entrada.destino.slug}
                     destino={destinoDe(entrada)}
+                    soloConsulta={entrada.destino.consultOnly}
                     image={entrada.destino.image}
                     imagePosition={entrada.destino.imagePosition}
                     name={entrada.nombre}

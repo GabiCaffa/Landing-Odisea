@@ -99,7 +99,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v20_birthday_role.sql` → `v21_ticket_promos.sql` → `v22_manager_role.sql` →
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
-`v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql`.
+`v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
+`v31_evento_solo_consulta.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1447,6 +1448,36 @@ el estado. Ahora cada versión tiene su botón **"Cambiar imagen"**:
   archivo.
 - No necesita migración: `updateBanner` ya aceptaba `imageUrl` e `imageUrlMobile`, y la
   política de escritura de `site_banners` (v30) ya cubre al operador.
+
+**v31 — Eventos "solo consulta por WhatsApp".** Fiestas privadas o a coordinar que
+no se venden desde el sitio (la primera: Nacho Fest). Sin entradas ni precios: la
+tarjeta y la página llevan **sólo un botón "Consultar por WhatsApp"**.
+
+- **Es una columna (`events.consult_only`, `default false`), no "un evento sin
+  entradas".** Hasta ahora un evento sin tipos de entrada a la venta es un evento
+  AGOTADO (tarjeta, página, selector de Compra Directa, JSON-LD). Reinterpretarlo
+  habría dado vuelta los que hoy están agotados por esa vía. La marca explícita no
+  cambia nada de lo existente.
+- **El botón abre WhatsApp con la consulta ya escrita**: "Hola! Quiero consultar por
+  <nombre> (<fecha>)." (`src/lib/consulta.ts`, número `59892592179`). **En la
+  tarjeta toda la superficie es ese enlace** (mismo truco del *stretched link*, pero
+  externo, `target="_blank"` + `rel="noopener noreferrer"`): no pasa por la página
+  del evento. La página (`/evento/<slug>`) existe igual, con el mismo botón grande.
+- **Nunca está "agotado"**: `eventoAgotado` (grupos.ts), `EventCard` y `Evento`
+  devuelven `false` si `consultOnly`. Tampoco muestra stock, promos ni "Desde $X".
+- **Fuera de la venta**: el selector de Compra Directa (`PromosSection`) lo excluye,
+  el promedio de "entrada más barata" del dashboard no lo cuenta (su precio es 0) y
+  el JSON-LD de Google no emite `offers` (ya sólo lo hacía con entradas activas).
+- **Pixel**: tocar el botón manda un `Lead` (`content_category: "consulta"`); el
+  `ViewContent` de la página sale sin `value`.
+- **Panel**: en el formulario del evento, casilla **"Solo consulta por WhatsApp"**
+  ("Tipo de evento"). Marcada, se ocultan Entradas a la venta, Promos y Cierre de
+  venta (no se piden ni se validan) y la vista previa del card muestra el botón. En
+  las listas aparece "Solo consulta". Sigue pidiendo la **cuenta de cobro** porque
+  `payment_account_id` es `not null` (v13): se propone la de por defecto.
+- **Tolera la columna sin migrar**: `consult_only` se escribe sólo si la persona
+  cambió la casilla, así que guardar eventos antes de correr v31 sigue andando;
+  marcarla sin migrar da error. Los eventos existentes quedan en `false`.
 
 ### El sidebar del panel cortaba el botón de cerrar sesión
 

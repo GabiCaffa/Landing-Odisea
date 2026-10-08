@@ -133,6 +133,12 @@ export interface AdminEvent {
   groupKey?: string;
   /** Nombre que muestra la tarjeta agrupada. Repetido en los días del grupo. */
   groupName?: string;
+  /**
+   * v31: evento SIN venta online. La tarjeta y la página no muestran entradas ni
+   * precios, sólo un botón de consulta por WhatsApp. Es una marca explícita y no
+   * "un evento sin entradas", que hoy significa AGOTADO.
+   */
+  consultOnly?: boolean;
   createdAt: string;
 }
 
@@ -241,6 +247,7 @@ function eventFromDb(row: any): AdminEvent {
     instagramUrl: row.instagram_url ?? undefined,
     groupKey: row.group_key ?? undefined,
     groupName: row.group_name ?? undefined,
+    consultOnly: row.consult_only ?? false,
     createdAt: row.created_at,
   };
 }
@@ -268,6 +275,9 @@ function eventToDb(e: Partial<NewEventInput>) {
   // trigger de v26 lo limpia igual; esto es el lado de acá de la misma regla.)
   if (e.groupKey !== undefined) out.group_key = e.groupKey?.trim() || null;
   if (e.groupName !== undefined) out.group_name = e.groupName?.trim() || null;
+  // Sólo si viene: con la columna todavía sin migrar (v31), mandarlo siempre haría
+  // fallar el guardado de CUALQUIER evento. El form lo omite si no lo tocaron.
+  if (e.consultOnly !== undefined) out.consult_only = e.consultOnly;
   return out;
 }
 

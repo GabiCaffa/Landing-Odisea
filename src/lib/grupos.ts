@@ -76,9 +76,11 @@ export const diasDelGrupo = (events: AdminEvent[], evento: AdminEvent): AdminEve
 /** Un evento está agotado si lo marcaron, si no le quedan tipos a la venta o
  *  si ya venció su cierre. Mismo criterio que la tarjeta y que la página. */
 export const eventoAgotado = (e: AdminEvent): boolean =>
-  e.status === "agotado" ||
+  // Un evento de sólo consulta (v31) no vende entradas, pero tampoco está agotado.
+  !e.consultOnly &&
+  (e.status === "agotado" ||
   e.tickets.filter((t) => t.active).length === 0 ||
-  (e.saleEndsAt ? new Date() >= new Date(e.saleEndsAt) : false);
+  (e.saleEndsAt ? new Date() >= new Date(e.saleEndsAt) : false));
 
 /**
  * Lo que el carrusel dibuja: un evento suelto o un grupo colapsado en una
