@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import EventCard from "./EventCard";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth } from "@/contexts/AuthContext";
-import { agruparEventos } from "@/lib/grupos";
+import { agruparEventos, compararParaHome } from "@/lib/grupos";
 import { RUTA_APARTE, esFiestaAparte } from "@/lib/fiestasAparte";
 import { useStockHoja } from "@/lib/stockHoja";
 import SpookySpiders from "./SpookySpiders";
@@ -43,9 +43,8 @@ const EventsSection = () => {
    */
   const visibleEvents = useMemo(
     () =>
-      agruparEventos(events.filter((e) => e.status !== "finalizado")).sort(
-        (a, b) => Number(a.agotado) - Number(b.agotado)
-      ),
+      // El orden lo elige el staff desde el panel (v32); sin elegir, por fecha.
+      agruparEventos(events.filter((e) => e.status !== "finalizado")).sort(compararParaHome),
     [events]
   );
 

@@ -102,6 +102,7 @@ import {
 import { birthdayMessageFor, buildBirthdayWhatsAppUrl } from "@/lib/birthdayMessage";
 import PromosAdmin from "@/components/admin/PromosAdmin";
 import BannersAdmin from "@/components/admin/BannersAdmin";
+import OrdenHomeEventos from "@/components/admin/OrdenHomeEventos";
 import FiestaFormModal from "@/components/admin/FiestaFormModal";
 import {
   EventCardPreview,
@@ -527,6 +528,9 @@ const EventsAdmin = () => {
 
   return (
     <div className="space-y-4">
+      {/* El orden de las tarjetas de la home, elegido a mano (v32). */}
+      <OrdenHomeEventos />
+
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
