@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import EventCard from "./EventCard";
+import CarruselEventos from "./CarruselEventos";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth } from "@/contexts/AuthContext";
 import { agruparEventos, compararParaHome } from "@/lib/grupos";
@@ -8,14 +9,14 @@ import { useStockHoja } from "@/lib/stockHoja";
 import SpookySpiders from "./SpookySpiders";
 
 /**
- * Las próximas fechas, en un grid que se ve entero.
+ * Las próximas fechas, como un carrusel con la elegida grande al centro y las
+ * vecinas asomando a los costados (`CarruselEventos`).
  *
- * Antes era un carrusel horizontal con flechas. Con pocas fechas —que es lo
- * normal— escondía las que no entraban: en un celular se veía UNA tarjeta y el
- * borde de la siguiente, y quien no deslizaba nunca se enteraba de que había
- * más. Ahora van todas, una debajo de la otra en celular y en filas centradas
- * de 320 px desde `sm:`. Cero gestos para ver qué hay, y cada tarjeta lleva
- * directo a comprar.
+ * Fue un carrusel, después un grid y ahora vuelve a ser carrusel. El grid se
+ * puso porque el anterior escondía las fechas: se veía UNA tarjeta y nadie
+ * sabía que había más. Este las deja asomar a ambos lados y suma puntitos, y
+ * las tarjetas pasan a ser verticales con el flyer grande (`vertical`): el
+ * flyer es lo que más vende y en la fila compacta era una miniatura de 104 px.
  */
 const EventsSection = () => {
   const { events } = useAuth();
@@ -83,13 +84,9 @@ const EventsSection = () => {
               No hay eventos disponibles en este momento.
             </p>
           ) : (
-            <div className="flex flex-wrap justify-center gap-5 md:gap-6">
-              {visibleEvents.map((entrada, index) => (
-                <div
-                  key={entrada.key}
-                  className="flex w-full max-w-[400px] transition-all duration-700 sm:w-[320px] sm:max-w-none"
-                  style={{ transitionDelay: `${index * 100}ms` }}
-                >
+            <CarruselEventos>
+              {visibleEvents.map((entrada) => (
+                <div key={entrada.key} className="flex w-full">
                   {/*
                     La tarjeta muestra lo del GRUPO (nombre, rango de fechas) y
                     linkea al primer día que todavía venda, pero el flyer, la
@@ -119,10 +116,11 @@ const EventsSection = () => {
                     tickets={entrada.dias.flatMap((d) => d.tickets.filter((t) => t.active))}
                     promos={entrada.dias.flatMap((d) => d.promos)}
                     dias={entrada.dias.length}
+                    vertical
                   />
                 </div>
               ))}
-            </div>
+            </CarruselEventos>
           )}
         </div>
       </div>

@@ -59,6 +59,12 @@ interface EventCardProps {
    * es cuántas entradas sino **qué día**, y conviene decirlo antes de entrar.
    */
   dias?: number;
+  /**
+   * Tarjeta vertical a cualquier ancho, para el carrusel de la home: flyer
+   * grande arriba (4:5) y los datos abajo. Sin esto, por debajo de `sm:` la
+   * tarjeta es la fila compacta de siempre (miniatura + datos).
+   */
+  vertical?: boolean;
 }
 
 const EventCard = ({
@@ -77,6 +83,7 @@ const EventCard = ({
   soldOut,
   saleEndsAt,
   dias = 1,
+  vertical = false,
 }: EventCardProps) => {
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
   const destino = destinoPropio ?? (slug ? urlDeEvento(slug) : null);
@@ -110,9 +117,19 @@ const EventCard = ({
      */
     <article
       onMouseEnter={playHover}
-      className="evento-card card-techno relative grid h-full w-full grid-cols-[104px_minmax(0,1fr)] gap-x-3 gap-y-3 overflow-hidden p-3 sm:flex sm:flex-col sm:gap-0 sm:p-0"
+      className={`evento-card card-techno relative h-full w-full overflow-hidden ${
+        vertical
+          ? "flex flex-col"
+          : "grid grid-cols-[104px_minmax(0,1fr)] gap-x-3 gap-y-3 p-3 sm:flex sm:flex-col sm:gap-0 sm:p-0"
+      }`}
     >
-      <div className="evento-media relative aspect-[4/5] overflow-hidden rounded-xl bg-papel sm:aspect-[4/3] sm:rounded-none sm:border-b sm:border-border">
+      <div
+        className={`evento-media relative overflow-hidden bg-papel ${
+          vertical
+            ? "aspect-[4/5] border-b border-border"
+            : "aspect-[4/5] rounded-xl sm:aspect-[4/3] sm:rounded-none sm:border-b sm:border-border"
+        }`}
+      >
         <img
           // El original pesa hasta 533 KB para mostrarse a 318 px: se pide
           // redimensionado a Supabase, que además devuelve WebP.
@@ -121,7 +138,7 @@ const EventCard = ({
           // En celular el flyer es una miniatura de 104 px; desde `sm:` la
           // tarjeta mide 320. Con esto el navegador baja la variante que
           // corresponde en vez de la más grande.
-          sizes="(min-width: 640px) 320px, 104px"
+          sizes={vertical ? "(min-width: 640px) 300px, 70vw" : "(min-width: 640px) 320px, 104px"}
           alt={name}
           // width/height NO fijan el tamaño —de eso se encarga el CSS— sino
           // la proporción, para que el navegador reserve el espacio antes de
@@ -135,7 +152,11 @@ const EventCard = ({
           // mal, así que ahí sólo se respeta el foco y la imagen llena el cuadro;
           // el resto vale desde `sm:`. Va por variables CSS porque un `style`
           // inline no puede depender del tamaño de pantalla.
-          className="h-full w-full object-cover [object-position:var(--pos)] sm:[object-fit:var(--fit)] sm:[transform-origin:var(--pos)] sm:[transform:scale(var(--scale))]"
+          className={`h-full w-full object-cover [object-position:var(--pos)] ${
+            vertical
+              ? ""
+              : "sm:[object-fit:var(--fit)] sm:[transform-origin:var(--pos)] sm:[transform:scale(var(--scale))]"
+          }`}
           style={
             {
               "--fit": pos.fit,
@@ -144,7 +165,7 @@ const EventCard = ({
             } as CSSProperties
           }
         />
-        <div className="evento-fecha absolute left-3 top-3 z-[2] hidden sm:block rounded-full bg-celeste px-3 py-1.5 text-accent-foreground shadow-sm">
+        <div className={`evento-fecha absolute left-3 top-3 z-[2] ${vertical ? "block" : "hidden sm:block"} rounded-full bg-celeste px-3 py-1.5 text-accent-foreground shadow-sm`}>
           <span className="text-xs font-semibold uppercase tracking-[0.12em]">{date}</span>
         </div>
 
@@ -170,7 +191,9 @@ const EventCard = ({
         {etiquetas.map((nombre, i) => (
           <div
             key={nombre}
-            className="evento-promo absolute right-3 z-[2] hidden rounded-full bg-celeste px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-accent-foreground shadow-sm sm:block"
+            className={`evento-promo absolute right-3 z-[2] rounded-full bg-celeste px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-accent-foreground shadow-sm ${
+              vertical ? "block" : "hidden sm:block"
+            }`}
             style={{ top: `${0.75 + i * 2.25}rem` }}
           >
             {nombre}
@@ -191,13 +214,19 @@ const EventCard = ({
       {/* En celular este contenedor no existe (`contents`): la grilla de arriba
           acomoda la miniatura, los datos y el botón de abajo. Desde `sm:` es la
           columna de siempre. */}
-      <div className="contents sm:flex sm:flex-1 sm:flex-col sm:p-4">
-        <div className="flex min-w-0 flex-col sm:flex-1">
+      <div className={vertical ? "flex flex-1 flex-col p-4" : "contents sm:flex sm:flex-1 sm:flex-col sm:p-4"}>
+        <div className={`flex min-w-0 flex-col ${vertical ? "flex-1" : "sm:flex-1"}`}>
         {/* La fecha, que desde `sm:` es la pastilla sobre el flyer. */}
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-celeste-deep sm:hidden">
+        <p className={`mb-1 text-[11px] font-semibold uppercase tracking-wider text-celeste-deep sm:hidden ${vertical ? "!hidden" : ""}`}>
           {date}
         </p>
-        <h3 className="font-sport mb-1.5 line-clamp-3 text-xl font-black leading-[0.95] tracking-wide text-tinta sm:mb-2 sm:line-clamp-none sm:text-2xl md:text-3xl">
+        <h3
+          className={`font-sport font-black tracking-wide text-tinta ${
+            vertical
+              ? "mb-2 line-clamp-3 text-2xl leading-[0.95]"
+              : "mb-1.5 line-clamp-3 text-xl leading-[0.95] sm:mb-2 sm:line-clamp-none sm:text-2xl md:text-3xl"
+          }`}
+        >
           {destino ? (
             // El `after:` es el que hace clickeable la tarjeta entera.
             <Link
@@ -212,23 +241,27 @@ const EventCard = ({
           )}
         </h3>
 
-        <div className="font-sport mb-2 flex items-center gap-1.5 text-tinta/70 sm:mb-3 sm:gap-2">
+        <div className={`font-sport flex items-center gap-1.5 text-tinta/70 ${vertical ? "mb-3 gap-2" : "mb-2 sm:mb-3 sm:gap-2"}`}>
           <svg className="h-4 w-4 text-celeste-deep" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <span className="text-xs font-semibold uppercase tracking-wide sm:text-sm">{location}</span>
+          <span className={`text-xs font-semibold uppercase tracking-wide ${vertical ? "line-clamp-2" : "sm:text-sm"}`}>{location}</span>
         </div>
 
         {/* La descripción sólo desde `sm:`: en celular es lo que más alto hace a
             la tarjeta y se lee en la página del evento. */}
-        <p className="mb-4 hidden flex-1 text-xs leading-relaxed text-muted-foreground sm:line-clamp-3 sm:block">
+        <p
+          className={`mb-4 flex-1 text-xs leading-relaxed text-muted-foreground ${
+            vertical ? "line-clamp-2" : "hidden sm:line-clamp-3 sm:block"
+          }`}
+        >
           {description}
         </p>
 
         {/* Promos (2x1, etc.): pastilla bajo el título en celular. */}
         {etiquetas.length > 0 && (
-          <span className="mb-2 inline-flex w-fit rounded-full bg-celeste px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground sm:hidden">
+          <span className={`mb-2 w-fit rounded-full bg-celeste px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground sm:hidden ${vertical ? "hidden" : "inline-flex"}`}>
             {etiquetas.join(" · ")}
           </span>
         )}
@@ -258,7 +291,13 @@ const EventCard = ({
           sólo aparece si hay un número cargado; sin él, no se inventa nada.
         */}
         {stock !== undefined && (
-          <p className="mb-0 flex items-start gap-1.5 text-[11px] font-bold uppercase leading-tight tracking-wide text-celeste-deep sm:mb-3 sm:items-center sm:text-xs">
+          <p
+            className={`flex gap-1.5 font-bold uppercase leading-tight tracking-wide text-celeste-deep ${
+              vertical
+                ? "mb-3 items-center text-xs"
+                : "mb-0 items-start text-[11px] sm:mb-3 sm:items-center sm:text-xs"
+            }`}
+          >
             <Flame className="h-4 w-4 flex-shrink-0 sm:h-4 sm:w-4" aria-hidden="true" />
             {textoStockLote(stock)}
           </p>
@@ -266,7 +305,7 @@ const EventCard = ({
 
         </div>
 
-        <div className="col-span-2 mt-auto flex items-stretch gap-2 sm:col-auto">
+        <div className={`mt-auto flex items-stretch gap-2 ${vertical ? "" : "col-span-2 sm:col-auto"}`}>
           <span
             className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-bold uppercase tracking-wide transition-all ${
               isSoldOut
