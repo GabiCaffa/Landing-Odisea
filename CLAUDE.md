@@ -1019,6 +1019,26 @@ tienen, con la medida exacta para pedírsela al diseñador.
 > veces en el proyecto** —la página del evento en v25 fue la anterior—, así
 > que: contenido nuevo arriba de todo = acordarse del `pt`.
 
+### Próximos Eventos: carrusel con la fecha elegida al centro
+
+> **Estado actual: vuelve a ser un carrusel** (`CarruselEventos.tsx`), distinto del
+> primero. La fecha elegida va grande al centro y las vecinas **asoman** a los
+> costados (70 vw de ancho por tarjeta, máx. 300 px), con puntitos y, desde `md:`,
+> flechas. Lo que se explica abajo del grid sigue valiendo para el contenido de la
+> tarjeta; cambia el contenedor y la tarjeta pasa a ser **vertical** (`EventCard`
+> con `vertical`: flyer 4:5 arriba, datos y botón abajo).
+>
+> - **Sin librería**: el deslizar y el imán al centro son `scroll-snap` nativo; en
+>   JS sólo se calcula cuál es la del medio (para resaltarla y los puntitos).
+> - **Tocar una vecina NO navega: la trae al centro** (captura del click). Un toque
+>   que roza una tarjeta a medio ver no tiene que abrir una compra.
+> - **Por qué el carrusel no repite el problema que hizo pasar al grid**: antes
+>   se veía UNA tarjeta y nadie sabía que había más; ahora las vecinas asoman y hay
+>   puntitos que cuentan cuántas son.
+> - El flyer vertical usa sólo el foco del encuadre (`object-position`), no el zoom ni
+>   el ajuste del 4:3: es la misma regla de la miniatura de celular.
+> - **Visto en navegador con datos de prueba, no con los flyers reales.**
+
 ### Próximos Eventos: de carrusel a grid, con precio y botón de compra
 
 El carrusel horizontal con flechas **se reemplazó por un grid** que se ve entero:
