@@ -1543,6 +1543,13 @@ fiestas pasadas, y dos botones nuevos en el header: **"Eventos anteriores"** y
   inexistente, quedaría invisible para siempre.
 - **Mosaico**: 2 columnas en celular, 4 desde `md:`; un item cada 7 es grande (2×2) y
   otro es alto (1×2), con `grid-auto-flow: dense`. Muestra 8 y "Ver más" suma de a 8.
+  **La cola se ajusta** (`src/lib/mosaico.ts`): si la última foto es grande y no quedan
+  más para rellenar a su lado, queda un hueco de 2×2 (pasó en producción con 8 fotos). Se
+  simula cómo acomoda CSS `dense` y, mientras el borde de abajo quede desparejo (>1 fila
+  entre columnas, en las grillas de 2 y de 4), la última grande/alta pasa a chica; hay
+  solución para cualquier cantidad de 1 a 40. **La foto alta NO lleva `aspect-square`**:
+  un item de grilla con `aspect-ratio` y alto automático no se estira, y medía una sola
+  fila aunque ocupara dos.
 - **Los videos no se bajan hasta tocarlos**: en la grilla se ve su póster (un cuadro
   suelto que se captura en el navegador al subir; si no se puede decodificar, el video
   se sube igual y la grilla usa `preload="metadata"`). El visor (`Visor`, por portal)
