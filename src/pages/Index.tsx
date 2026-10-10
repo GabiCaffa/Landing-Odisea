@@ -3,6 +3,7 @@ import HeroDelSitio from "@/components/HeroDelSitio";
 import PromosActivasSection from "@/components/PromosActivasSection";
 import EventsSection from "@/components/EventsSection";
 import PromosSection from "@/components/PromosSection";
+import GaleriaAnteriores from "@/components/GaleriaAnteriores";
 import Footer from "@/components/Footer";
 import SpookyLayer from "@/components/SpookyLayer";
 import SoundToggle from "@/components/SoundToggle";
@@ -32,6 +33,9 @@ const Index = () => {
         <PromosActivasSection />
         <EventsSection />
         <PromosSection />
+        {/* Fotos y videos de fiestas pasadas (v33). Sin nada cargado no se
+            renderiza, ni el título. */}
+        <GaleriaAnteriores />
       </main>
       <Footer />
 

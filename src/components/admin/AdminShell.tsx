@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CreditCard,
   ExternalLink,
+  Film,
   Images,
   LayoutDashboard,
   LogOut,
@@ -102,6 +103,12 @@ const TAB_META: Record<AdminTab, TabMeta> = {
     icon: <Images className="h-4 w-4" />,
     kicker: "Hero de la home",
     title: "BANNERS",
+  },
+  gallery: {
+    label: "Galería",
+    icon: <Film className="h-4 w-4" />,
+    kicker: "Eventos anteriores",
+    title: "GALERÍA",
   },
   appearance: {
     label: "Apariencia",

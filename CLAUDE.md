@@ -100,7 +100,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
-`v32_orden_eventos_home.sql`.
+`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1030,6 +1030,17 @@ tienen, con la medida exacta para pedírsela al diseñador.
 >
 > - **Sin librería**: el deslizar y el imán al centro son `scroll-snap` nativo; en
 >   JS sólo se calcula cuál es la del medio (para resaltarla y los puntitos).
+> - **Es infinito**: las fechas se dibujan 3 veces (`copia | reales | copia`) y se arranca
+>   en la tanda del medio; cuando el scroll se detiene (140 ms sin eventos) en una de las
+>   tandas de los costados se salta, sin animación, a la misma fecha de la del medio. El
+>   salto es invisible porque las tandas son idénticas. **El estilo de "elegida" va por la
+>   fecha y no por la posición**: si fuera por la posición, el salto haría animar la tarjeta
+>   (0.93 → 1) justo después de saltar. Las copias van `aria-hidden` y con `tabindex=-1`.
+>   Con una sola fecha no se repite nada. Las flechas y los puntitos dan la vuelta por el
+>   camino más corto.
+> - No se pudo ver el deslizar con el dedo en el navegador de pruebas (con la pestaña
+>   oculta Chrome no despacha eventos de scroll): el salto se verificó disparando el
+>   evento a mano desde cada tanda.
 > - **Tocar una vecina NO navega: la trae al centro** (captura del click). Un toque
 >   que roza una tarjeta a medio ver no tiene que abrir una compra.
 > - **Por qué el carrusel no repite el problema que hizo pasar al grid**: antes
@@ -1509,6 +1520,47 @@ hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google S
 - Probado con 13 casos del lector (CSV sucio, filas rotas, miles, datos personales que
   no viajan) y del servicio (sin variable, URL ajena, Google 500, sin red) más la
   pantalla con una hoja simulada. **No probado contra una hoja real de Google.**
+
+### Galería de eventos anteriores y botones del header (v33)
+
+Sección bajo Promociones (`GaleriaAnteriores`, `#anteriores`) con fotos y videos de
+fiestas pasadas, y dos botones nuevos en el header: **"Eventos anteriores"** y
+**"Promociones"** (resaltado).
+
+- **Tabla `gallery_items`** (`kind` image|video, `url`, `poster_url`, `caption`,
+  `sort_order`, `active`). Lectura pública, escritura `is_manager()` (admin y
+  operador). Permiso `galeria` en `adminPermisos.ts`, pestaña **Galería**
+  (`GaleriaAdmin`).
+- **Bucket propio `gallery`** (público, 50 MB, jpg/png/webp/mp4/webm/mov). A diferencia
+  de los banners (v27, que usaron `event-images`), acá sí conviene bucket aparte: los
+  videos pesan decenas de MB y así el tope y los tipos permitidos no tocan la config con
+  la que ya andan los flyers. ⚠ Existe además el tope GLOBAL del proyecto (Supabase →
+  Storage → Settings; 50 MB en el plan gratis): si es menor, manda ése.
+- **Sin items activos no se renderiza nada** (ni el título), y el botón "Eventos
+  anteriores" del header sigue la misma condición (comparten `useGaleria()`, una sola
+  consulta por carga). `Contenido` es un componente aparte que se monta sólo con datos:
+  `useScrollReveal` engancha el observer en el primer efecto y, con el título todavía
+  inexistente, quedaría invisible para siempre.
+- **Mosaico**: 2 columnas en celular, 4 desde `md:`; un item cada 7 es grande (2×2) y
+  otro es alto (1×2), con `grid-auto-flow: dense`. Muestra 8 y "Ver más" suma de a 8.
+- **Los videos no se bajan hasta tocarlos**: en la grilla se ve su póster (un cuadro
+  suelto que se captura en el navegador al subir; si no se puede decodificar, el video
+  se sube igual y la grilla usa `preload="metadata"`). El visor (`Visor`, por portal)
+  tiene flechas, swipe, teclado y bloquea el scroll del fondo.
+- **Subida**: varios archivos a la vez; las fotos se achican a 1600 px; videos tal cual
+  (tope 50 MB, recomendado ≤ 15 MB). **Lo último que se sube queda primero**, que es el
+  lugar grande de la home. Borrar un item borra también los archivos del bucket.
+- **Header en celular**: "Promociones" va relleno y "Eventos anteriores" en dos líneas.
+  Con sesión iniciada hay más iconos a la derecha, así que "Promociones" se achica y
+  **"Eventos anteriores" se oculta** (la sección se sigue viendo al scrollear).
+- **`ScrollToTop` reintenta** hasta 3 s si el ancla todavía no existe: las secciones que
+  se arman con datos de red aparecen después de montar la home, y `/#anteriores` desde
+  otra página caía al tope.
+- En la home los botones **scrollean** en vez de navegar (un `<Link to="/#x">` a la URL
+  en la que ya estás no hace nada).
+- Probado en navegador con datos de prueba (celular, escritorio, visor, panel y subida,
+  incluido un video de 51 MB rechazado) y la migración dos veces en un Postgres temporal.
+  **No se vio reproducir un video real** (no hay archivos de video en el entorno de prueba).
 
 ### Orden de las tarjetas de la home, elegido a mano (v32)
 
