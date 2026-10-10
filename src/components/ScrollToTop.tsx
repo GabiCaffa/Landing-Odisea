@@ -16,6 +16,19 @@ const ScrollToTop = () => {
         el.scrollIntoView();
         return;
       }
+      // La sección puede no existir todavía: las que se arman con datos de la
+      // red (eventos, galería) aparecen unos instantes después de montar la
+      // home. Sin esto, un link a `/#anteriores` desde otra página caía al tope.
+      let intentos = 0;
+      const t = window.setInterval(() => {
+        const e = document.getElementById(hash.slice(1));
+        if (e || ++intentos >= 20) {
+          window.clearInterval(t);
+          e?.scrollIntoView();
+        }
+      }, 150);
+      window.scrollTo(0, 0);
+      return () => window.clearInterval(t);
     }
     window.scrollTo(0, 0);
   }, [pathname, hash]);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, ShieldCheck, User as UserIcon, UserCircle } from "lucide-react";
 import odiseaLogoDark from "@/assets/odisea-logo-black.png";
 import odiseaLogoLight from "@/assets/odisea-logo-white.png";
@@ -8,6 +8,7 @@ import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { useAuth, isStaffRole } from "@/contexts/AuthContext";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { useGaleria } from "@/lib/galeria";
 
 
 const Header = () => {
@@ -20,6 +21,25 @@ const Header = () => {
   const { currentUser, logout } = useAuth();
   const confirm = useConfirm();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // "Eventos anteriores" sólo existe si la galería tiene algo cargado: un botón
+  // que lleva a una sección que no se muestra es peor que no tenerlo.
+  const hayGaleria = (useGaleria()?.length ?? 0) > 0;
+
+  /**
+   * En la home, ir a una sección es scrollear, no navegar: un `<Link to="/#x">`
+   * a la URL en la que ya estás no cambia nada y el click parece muerto. Desde
+   * otra página sí se navega, y `ScrollToTop` baja hasta el ancla.
+   */
+  const irAAncla = (e: React.MouseEvent, id: string) => {
+    if (pathname !== "/") return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    e.preventDefault();
+    el.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -82,9 +102,29 @@ const Header = () => {
           <nav className="hidden md:flex items-center gap-6">
             <Link
               to="/#eventos"
+              onClick={(e) => irAAncla(e, "eventos")}
               className="font-sport text-sm font-bold tracking-[0.15em] uppercase text-tinta/70 hover:text-celeste-deep transition-colors duration-200"
             >
               Eventos
+            </Link>
+            {hayGaleria && (
+              <Link
+                to="/#anteriores"
+                onClick={(e) => irAAncla(e, "anteriores")}
+                className="font-sport text-sm font-bold tracking-[0.15em] uppercase text-tinta/70 hover:text-celeste-deep transition-colors duration-200"
+              >
+                Eventos anteriores
+              </Link>
+            )}
+            {/* Resaltado: es lo que más conviene que se toque. Con borde y
+                fondo suave y NO relleno sólido, para no competir con "Crear
+                cuenta", que ya es el botón naranja lleno de este mismo header. */}
+            <Link
+              to="/#promos"
+              onClick={(e) => irAAncla(e, "promos")}
+              className="font-sport text-sm font-bold tracking-[0.15em] uppercase rounded-full border-2 border-celeste bg-celeste/10 px-4 py-1.5 text-celeste-deep hover:bg-celeste hover:text-accent-foreground transition-colors duration-200"
+            >
+              Promociones
             </Link>
             <a
               href="https://www.instagram.com/odisea.uy/"
@@ -164,6 +204,31 @@ const Header = () => {
 
           {/* Mobile actions */}
           <div className="md:hidden flex items-center gap-2">
+            {/* Los dos atajos, en celular también. "Promociones" va relleno: es el
+                resaltado. "Eventos anteriores" va en dos líneas porque en una
+                no entra junto a los iconos de sesión y WhatsApp. */}
+            {hayGaleria && !currentUser && (
+              <Link
+                to="/#anteriores"
+                onClick={(e) => irAAncla(e, "anteriores")}
+                className="flex h-11 items-center px-1 text-center font-sport text-[10px] font-bold uppercase leading-[1.1] tracking-wide text-tinta/80"
+              >
+                Eventos
+                <br />
+                anteriores
+              </Link>
+            )}
+            <Link
+              to="/#promos"
+              onClick={(e) => irAAncla(e, "promos")}
+              // Con sesión iniciada hay más iconos a la derecha (hasta 4 para el
+              // staff), así que el botón se achica para que el header no se desborde.
+              className={`flex h-11 items-center rounded-full bg-celeste font-sport font-bold uppercase tracking-wide text-accent-foreground active:scale-[0.97] ${
+                currentUser ? "px-2.5 text-[10px]" : "px-3.5 text-[11px]"
+              }`}
+            >
+              Promociones
+            </Link>
             {currentUser ? (
               <>
                 <Link to="/perfil" className="rounded-full border border-border overflow-hidden" aria-label="Mi perfil">

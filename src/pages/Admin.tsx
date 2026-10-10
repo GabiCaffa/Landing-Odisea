@@ -102,6 +102,7 @@ import {
 import { birthdayMessageFor, buildBirthdayWhatsAppUrl } from "@/lib/birthdayMessage";
 import PromosAdmin from "@/components/admin/PromosAdmin";
 import BannersAdmin from "@/components/admin/BannersAdmin";
+import GaleriaAdmin from "@/components/admin/GaleriaAdmin";
 import OrdenHomeEventos from "@/components/admin/OrdenHomeEventos";
 import FiestaFormModal from "@/components/admin/FiestaFormModal";
 import {
@@ -204,6 +205,7 @@ const Admin = () => {
       {activeTab === "accounts" && <AccountsAdmin />}
       {activeTab === "users" && <UsersAdmin />}
       {activeTab === "banners" && <BannersAdmin />}
+      {activeTab === "gallery" && <GaleriaAdmin />}
       {activeTab === "appearance" && <AppearanceAdmin />}
       {activeTab === "deliveries" && <DeliveriesAdmin />}
       {activeTab === "birthdays" && <BirthdaysAdmin />}
