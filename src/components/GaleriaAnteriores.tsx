@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Play, X } from "lucide-react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { GaleriaItem, useGaleria } from "@/lib/galeria";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
+import { claseDeMosaico, tamanosDeMosaico } from "@/lib/mosaico";
 
 /**
  * Galería de eventos anteriores: un mosaico de fotos y videos de fiestas que ya
@@ -20,15 +21,6 @@ import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
  */
 
 const DE_A = 8;
-
-/**
- * El mosaico no es una grilla pareja: cada 7 items uno es grande (2×2) y uno es
- * alto (1×2), y `grid-auto-flow: dense` rellena los huecos. Es lo que hace que
- * se vea armada y no una planilla de fotos. Es posicional, así que lo que se
- * carga primero (lo más nuevo) cae en el lugar protagonista.
- */
-const claseDeMosaico = (i: number) =>
-  i % 7 === 0 ? "col-span-2 row-span-2" : i % 7 === 4 ? "row-span-2" : "";
 
 const Miniatura = ({ item, grande }: { item: GaleriaItem; grande: boolean }) => {
   const imagen = item.kind === "video" ? item.posterUrl : item.url;
@@ -170,6 +162,9 @@ const Contenido = ({ items }: { items: GaleriaItem[] }) => {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.1 });
   const [visibles, setVisibles] = useState(DE_A);
   const [abierto, setAbierto] = useState<number | null>(null);
+  const mostrados = items.slice(0, visibles);
+  // Tamaño de cada foto, con la cola ajustada para que el mosaico no deje huecos.
+  const tamanos = useMemo(() => tamanosDeMosaico(mostrados.length), [mostrados.length]);
 
   return (
     <section id="anteriores" className="scroll-mt-20 bg-secondary/40 py-10 md:py-14">
@@ -187,15 +182,15 @@ const Contenido = ({ items }: { items: GaleriaItem[] }) => {
         </div>
 
         <div className="grid grid-cols-2 gap-2 [grid-auto-flow:dense] md:grid-cols-4 md:gap-3">
-          {items.slice(0, visibles).map((item, i) => {
-            const grande = i % 7 === 0;
+          {mostrados.map((item, i) => {
+            const grande = tamanos[i] === "g";
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setAbierto(i)}
                 aria-label={`${item.kind === "video" ? "Ver video" : "Ver foto"}${item.caption ? `: ${item.caption}` : ""}`}
-                className={`group relative aspect-square overflow-hidden rounded-2xl bg-secondary text-left ${claseDeMosaico(i)}`}
+                className={`group relative overflow-hidden rounded-2xl bg-secondary text-left ${claseDeMosaico(tamanos[i])}`}
               >
                 <Miniatura item={item} grande={grande} />
 
@@ -237,7 +232,7 @@ const Contenido = ({ items }: { items: GaleriaItem[] }) => {
 
       {abierto !== null && (
         <Visor
-          items={items.slice(0, visibles)}
+          items={mostrados}
           indice={abierto}
           onCambiar={setAbierto}
           onCerrar={() => setAbierto(null)}
