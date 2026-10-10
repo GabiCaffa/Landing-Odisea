@@ -1,4 +1,4 @@
-import { Children, ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { Children, ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 /**
@@ -15,14 +15,49 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
  * más. Acá las vecinas asoman a propósito y hay puntitos, así que se ve que
  * hay más y se ve cuántas.
  *
+ * **Es infinito**: al llegar a la última vuelve a la primera y a la inversa, así
+ * nunca hay un costado vacío. Sin librería y sin trucos de scroll falso: las
+ * fechas se dibujan TRES veces seguidas (`anteriores | reales | siguientes`) y
+ * se arranca en la tanda del medio. Cuando el deslizar termina y quedó en una
+ * de las tandas de los costados, se salta —sin animación— a la misma fecha de
+ * la tanda del medio. Como las tandas son idénticas, el salto no se ve. Se hace
+ * recién cuando el scroll se detuvo: saltar durante el movimiento corta el
+ * impulso del dedo.
+ *
  * Tocar una vecina NO navega: la trae al centro. Navegar con un toque a una
  * tarjeta a medio ver, que el dedo rozó al intentar deslizar, es una compra
  * abierta por error.
  */
 const CarruselEventos = ({ children }: { children: ReactNode }) => {
   const items = Children.toArray(children);
+  const n = items.length;
+  const loop = n > 1;
+  // Con una sola fecha no hay nada que repetir.
+  const todos = loop ? [...items, ...items, ...items] : items;
+
   const pista = useRef<HTMLDivElement>(null);
-  const [activo, setActivo] = useState(0);
+  // Posición ABSOLUTA entre las `3n` diapositivas; la fecha es `abs % n`.
+  const [abs, setAbs] = useState(loop ? n : 0);
+  const activo = loop ? abs % n : 0;
+
+  const movimientoReducido = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const centrar = (i: number, suave: boolean) => {
+    const el = pista.current;
+    const hijo = el?.children[i] as HTMLElement | undefined;
+    if (!el || !hijo) return;
+    el.scrollTo({
+      left: hijo.offsetLeft + hijo.offsetWidth / 2 - el.clientWidth / 2,
+      behavior: suave && !movimientoReducido() ? "smooth" : "instant",
+    });
+  };
+
+  /** Cuánto mide una tanda completa (lo medido, no calculado: hay gap y escalas). */
+  const anchoDeTanda = () => {
+    const el = pista.current;
+    if (!el || el.children.length <= n) return 0;
+    return (el.children[n] as HTMLElement).offsetLeft - (el.children[0] as HTMLElement).offsetLeft;
+  };
 
   const calcularActivo = useCallback(() => {
     const el = pista.current;
@@ -38,38 +73,70 @@ const CarruselEventos = ({ children }: { children: ReactNode }) => {
         mejor = i;
       }
     });
-    setActivo(mejor);
+    setAbs(mejor);
+    return mejor;
   }, []);
 
-  // Un solo cálculo por cuadro mientras se desliza.
+  // Al montar (y si cambia la cantidad de fechas): arrancar en la tanda del medio.
+  useLayoutEffect(() => {
+    if (loop) centrar(n, false);
+    calcularActivo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [n]);
+
   const enFrame = useRef(0);
+  const alQuieto = useRef<number>();
   const alDeslizar = () => {
     cancelAnimationFrame(enFrame.current);
     enFrame.current = requestAnimationFrame(calcularActivo);
+    if (!loop) return;
+    // Cuando el scroll se detuvo, si quedó en una tanda de los costados se
+    // vuelve a la del medio. Sin animación y sin que se note.
+    window.clearTimeout(alQuieto.current);
+    alQuieto.current = window.setTimeout(() => {
+      const el = pista.current;
+      const actual = calcularActivo();
+      const ancho = anchoDeTanda();
+      if (!el || actual === undefined || !ancho) return;
+      if (actual < n) el.scrollTo({ left: el.scrollLeft + ancho, behavior: "instant" });
+      else if (actual >= 2 * n) el.scrollTo({ left: el.scrollLeft - ancho, behavior: "instant" });
+    }, 140);
   };
 
   useEffect(() => {
-    calcularActivo();
-    window.addEventListener("resize", calcularActivo);
-    return () => {
-      window.removeEventListener("resize", calcularActivo);
-      cancelAnimationFrame(enFrame.current);
+    const alRedimensionar = () => {
+      if (loop) centrar(abs, false);
+      calcularActivo();
     };
-  }, [calcularActivo, items.length]);
+    window.addEventListener("resize", alRedimensionar);
+    return () => {
+      window.removeEventListener("resize", alRedimensionar);
+      cancelAnimationFrame(enFrame.current);
+      window.clearTimeout(alQuieto.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calcularActivo, loop, abs]);
 
-  const irA = (i: number) => {
-    const el = pista.current;
-    const hijo = el?.children[i] as HTMLElement | undefined;
-    if (!el || !hijo) return;
-    const movimientoReducido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollTo({
-      left: hijo.offsetLeft + hijo.offsetWidth / 2 - el.clientWidth / 2,
-      behavior: movimientoReducido ? "auto" : "smooth",
+  // Las copias de las tandas de los costados son sólo visuales: se sacan del
+  // orden del teclado para que Tab no recorra cada fecha tres veces.
+  useEffect(() => {
+    if (!loop || !pista.current) return;
+    Array.from(pista.current.children).forEach((hijo, i) => {
+      if (i >= n && i < 2 * n) return;
+      hijo.querySelectorAll<HTMLElement>("a, button").forEach((e) => e.setAttribute("tabindex", "-1"));
     });
-    setActivo(i);
+  }, [loop, n, todos.length]);
+
+  /** Va a la fecha `i` (0…n-1) por el camino más corto, dando la vuelta si conviene. */
+  const irAFecha = (i: number) => {
+    if (!loop) return;
+    let d = i - activo;
+    if (d > n / 2) d -= n;
+    else if (d < -n / 2) d += n;
+    centrar(abs + d, true);
   };
 
-  const hayVarias = items.length > 1;
+  const hayVarias = n > 1;
 
   return (
     <div role="region" aria-roledescription="carrusel" aria-label="Próximos eventos">
@@ -81,47 +148,53 @@ const CarruselEventos = ({ children }: { children: ReactNode }) => {
           onScroll={alDeslizar}
           className="flex snap-x snap-mandatory items-stretch gap-4 overflow-x-auto px-[calc(50%-min(35vw,150px))] pb-4 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {items.map((item, i) => (
-            <div
-              key={i}
-              role="group"
-              aria-roledescription="diapositiva"
-              aria-label={`${i + 1} de ${items.length}`}
-              // En captura, para ganarle al link de la tarjeta: la vecina se
-              // trae al centro en vez de navegar.
-              onClickCapture={(e) => {
-                if (i !== activo) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  irA(i);
-                }
-              }}
-              className={`flex w-[70vw] max-w-[300px] flex-none snap-center transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none ${
-                i === activo ? "scale-100 opacity-100" : "scale-[0.93] opacity-60"
-              }`}
-            >
-              {item}
-            </div>
-          ))}
+          {todos.map((item, i) => {
+            const real = loop ? i % n : i;
+            const copia = loop && (i < n || i >= 2 * n);
+            return (
+              <div
+                key={i}
+                role="group"
+                aria-roledescription="diapositiva"
+                aria-label={`${real + 1} de ${n}`}
+                aria-hidden={copia || undefined}
+                // En captura, para ganarle al link de la tarjeta: la vecina se
+                // trae al centro en vez de navegar.
+                onClickCapture={(e) => {
+                  if (i !== abs) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    centrar(i, true);
+                  }
+                }}
+                // El estilo de "elegida" va por la FECHA y no por la posición: el
+                // original y su copia quedan idénticos, así el salto de tanda no
+                // dispara ninguna animación.
+                className={`flex w-[70vw] max-w-[300px] flex-none snap-center transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none ${
+                  real === activo ? "scale-100 opacity-100" : "scale-[0.93] opacity-60"
+                }`}
+              >
+                {item}
+              </div>
+            );
+          })}
         </div>
 
         {hayVarias && (
           <>
             <button
               type="button"
-              onClick={() => irA(Math.max(0, activo - 1))}
-              disabled={activo === 0}
+              onClick={() => irAFecha((activo - 1 + n) % n)}
               aria-label="Fecha anterior"
-              className="absolute left-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-papel/90 text-tinta shadow-md backdrop-blur transition-opacity disabled:opacity-0 md:flex"
+              className="absolute left-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-papel/90 text-tinta shadow-md backdrop-blur md:flex"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
             <button
               type="button"
-              onClick={() => irA(Math.min(items.length - 1, activo + 1))}
-              disabled={activo === items.length - 1}
+              onClick={() => irAFecha((activo + 1) % n)}
               aria-label="Fecha siguiente"
-              className="absolute right-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-papel/90 text-tinta shadow-md backdrop-blur transition-opacity disabled:opacity-0 md:flex"
+              className="absolute right-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-papel/90 text-tinta shadow-md backdrop-blur md:flex"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -135,7 +208,7 @@ const CarruselEventos = ({ children }: { children: ReactNode }) => {
             <button
               key={i}
               type="button"
-              onClick={() => irA(i)}
+              onClick={() => irAFecha(i)}
               aria-label={`Ir a la fecha ${i + 1}`}
               aria-current={i === activo}
               // Zona táctil de 44 px alrededor de un punto chico.

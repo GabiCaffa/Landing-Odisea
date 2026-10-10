@@ -1030,6 +1030,17 @@ tienen, con la medida exacta para pedírsela al diseñador.
 >
 > - **Sin librería**: el deslizar y el imán al centro son `scroll-snap` nativo; en
 >   JS sólo se calcula cuál es la del medio (para resaltarla y los puntitos).
+> - **Es infinito**: las fechas se dibujan 3 veces (`copia | reales | copia`) y se arranca
+>   en la tanda del medio; cuando el scroll se detiene (140 ms sin eventos) en una de las
+>   tandas de los costados se salta, sin animación, a la misma fecha de la del medio. El
+>   salto es invisible porque las tandas son idénticas. **El estilo de "elegida" va por la
+>   fecha y no por la posición**: si fuera por la posición, el salto haría animar la tarjeta
+>   (0.93 → 1) justo después de saltar. Las copias van `aria-hidden` y con `tabindex=-1`.
+>   Con una sola fecha no se repite nada. Las flechas y los puntitos dan la vuelta por el
+>   camino más corto.
+> - No se pudo ver el deslizar con el dedo en el navegador de pruebas (con la pestaña
+>   oculta Chrome no despacha eventos de scroll): el salto se verificó disparando el
+>   evento a mano desde cada tanda.
 > - **Tocar una vecina NO navega: la trae al centro** (captura del click). Un toque
 >   que roza una tarjeta a medio ver no tiene que abrir una compra.
 > - **Por qué el carrusel no repite el problema que hizo pasar al grid**: antes
