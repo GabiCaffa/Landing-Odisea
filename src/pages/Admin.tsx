@@ -1545,6 +1545,7 @@ const EventFormModal = ({
     instagramUrl: initial?.instagramUrl ?? "https://www.instagram.com/odisea.uy/",
     groupKey: initial?.groupKey ?? "",
     groupName: initial?.groupName ?? "",
+    badge: initial?.badge ?? "",
   });
 
   /**
@@ -1662,8 +1663,12 @@ const EventFormModal = ({
     }
     setSaving(true);
     try {
+      // La etiqueta (v34) sólo viaja si hay algo que guardar o borrar. Si no, se
+      // omite: así un evento se puede guardar aunque la migración no esté corrida.
+      const { badge, ...sinEtiqueta } = form;
+      const hayEtiqueta = (badge ?? "").trim() !== "" || !!initial?.badge;
       await onSave({
-        ...form,
+        ...(hayEtiqueta ? { ...sinEtiqueta, badge: badge ?? "" } : sinEtiqueta),
         // datetime-local (hora local) → ISO UTC; vacío → "" (se guarda null)
         saleEndsAt: form.saleEndsAt ? new Date(form.saleEndsAt).toISOString() : "",
       }, promosSel);
@@ -1856,6 +1861,22 @@ const EventFormModal = ({
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Pasada esta fecha y hora, el card se muestra “Agotado” y se deshabilita la compra automáticamente.
+              </p>
+            </FormField>
+
+            <FormField label="Etiqueta destacada (opcional)">
+              <input
+                type="text"
+                maxLength={30}
+                value={form.badge ?? ""}
+                onChange={(e) => setForm({ ...form, badge: e.target.value })}
+                className="input-techno"
+                placeholder="FREE ANTES DE 1:30"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Se ve como una pastilla sobre el flyer de la tarjeta y en la página del
+                evento. Es sólo un letrero: no cambia el precio ni las entradas. Máximo 30
+                caracteres.
               </p>
             </FormField>
 
