@@ -1524,8 +1524,9 @@ hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google S
 ### Etiqueta destacada por evento (v34)
 
 Un texto corto propio de cada evento ("FREE ANTES DE 1:30", "LADIES FREE") que se ve
-como pastilla **negra** arriba a la derecha del flyer en la tarjeta de la home (las
-promos se apilan debajo) y como pastilla naranja junto a la fecha en la página del
+como pastilla **negra** ABAJO a la izquierda del flyer en la tarjeta de la home (arriba
+va la fecha, a la izquierda, y las promos a la derecha: arriba la etiqueta le pisaba la
+fecha en una tarjeta de 300 px) y como pastilla naranja junto a la fecha en la página del
 evento. Se carga en el formulario del evento ("Etiqueta destacada", máx. 30).
 
 - **Es sólo un letrero**: no calcula nada ni toca el precio, a diferencia de las promos
