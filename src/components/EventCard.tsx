@@ -191,12 +191,15 @@ const EventCard = ({
 
           Tres como mucho: a partir de ahí la pila tapa el flyer.
         */}
-        {/* La etiqueta del evento va primero (arriba a la derecha) y las promos
-            se apilan debajo. En negro y no en naranja para distinguirla de una
-            promo: no descuenta nada, sólo avisa. Con el evento agotado no va. */}
+        {/* La etiqueta del evento va ABAJO a la izquierda del flyer. Arriba chocaba:
+            la fecha ("7 NOVIEMBRE 2026") ocupa casi todo el ancho de una tarjeta
+            de 300 px y la pastilla le quedaba encima. Abajo no compite con la
+            fecha ni con las promos (arriba a la derecha) y el degradé del flyer
+            le da fondo. En negro y no en naranja para distinguirla de una promo:
+            no descuenta nada, sólo avisa. Con el evento agotado no va. */}
         {etiqueta && !isSoldOut && (
           <div
-            className={`evento-promo absolute right-3 top-3 z-[2] max-w-[70%] rounded-full bg-black/80 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/25 backdrop-blur ${
+            className={`evento-promo absolute bottom-3 left-3 z-[2] max-w-[calc(100%-1.5rem)] rounded-full bg-black/80 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/25 backdrop-blur ${
               vertical ? "block" : "hidden sm:block"
             }`}
           >
@@ -209,7 +212,7 @@ const EventCard = ({
             className={`evento-promo absolute right-3 z-[2] rounded-full bg-celeste px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-accent-foreground shadow-sm ${
               vertical ? "block" : "hidden sm:block"
             }`}
-            style={{ top: `${0.75 + (i + (etiqueta && !isSoldOut ? 1 : 0)) * 2.25}rem` }}
+            style={{ top: `${0.75 + i * 2.25}rem` }}
           >
             {nombre}
           </div>
