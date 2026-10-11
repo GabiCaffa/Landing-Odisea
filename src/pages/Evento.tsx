@@ -228,6 +228,13 @@ const Evento = () => {
                     {evento.location}
                   </span>
                 </p>
+                {!agotado && evento.badge && (
+                  // La etiqueta del evento (v34): va visible junto a la fecha y
+                  // el lugar, que es donde se mira. Sólo un letrero.
+                  <p className="inline-flex w-fit items-center rounded-full bg-celeste px-3 py-1 text-xs font-bold uppercase tracking-wide text-accent-foreground">
+                    {evento.badge}
+                  </p>
+                )}
                 {!agotado && desde > 0 && (
                   // El precio arriba del pliegue: es lo que decide, y antes
                   // estaba a una pantalla de scroll de distancia.

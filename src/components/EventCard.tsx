@@ -59,6 +59,8 @@ interface EventCardProps {
    * es cuántas entradas sino **qué día**, y conviene decirlo antes de entrar.
    */
   dias?: number;
+  /** Etiqueta destacada del evento (v34): "FREE ANTES DE 1:30". Sólo un letrero. */
+  etiqueta?: string;
   /**
    * Tarjeta vertical a cualquier ancho, para el carrusel de la home: flyer
    * grande arriba (4:5) y los datos abajo. Sin esto, por debajo de `sm:` la
@@ -84,6 +86,7 @@ const EventCard = ({
   saleEndsAt,
   dias = 1,
   vertical = false,
+  etiqueta,
 }: EventCardProps) => {
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
   const destino = destinoPropio ?? (slug ? urlDeEvento(slug) : null);
@@ -188,13 +191,25 @@ const EventCard = ({
 
           Tres como mucho: a partir de ahí la pila tapa el flyer.
         */}
+        {/* La etiqueta del evento va primero (arriba a la derecha) y las promos
+            se apilan debajo. En negro y no en naranja para distinguirla de una
+            promo: no descuenta nada, sólo avisa. Con el evento agotado no va. */}
+        {etiqueta && !isSoldOut && (
+          <div
+            className={`evento-promo absolute right-3 top-3 z-[2] max-w-[70%] rounded-full bg-black/80 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/25 backdrop-blur ${
+              vertical ? "block" : "hidden sm:block"
+            }`}
+          >
+            {etiqueta}
+          </div>
+        )}
         {etiquetas.map((nombre, i) => (
           <div
             key={nombre}
             className={`evento-promo absolute right-3 z-[2] rounded-full bg-celeste px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-accent-foreground shadow-sm ${
               vertical ? "block" : "hidden sm:block"
             }`}
-            style={{ top: `${0.75 + i * 2.25}rem` }}
+            style={{ top: `${0.75 + (i + (etiqueta && !isSoldOut ? 1 : 0)) * 2.25}rem` }}
           >
             {nombre}
           </div>

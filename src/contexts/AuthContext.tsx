@@ -138,6 +138,11 @@ export interface AdminEvent {
    * = sin orden elegido: va por fecha, después de los que tienen número.
    */
   homeOrder?: number;
+  /**
+   * v34: etiqueta corta ("FREE ANTES DE 1:30"), pastilla sobre el flyer y en la
+   * página del evento. Es sólo un letrero: no calcula nada ni toca el precio.
+   */
+  badge?: string;
   createdAt: string;
 }
 
@@ -247,6 +252,7 @@ function eventFromDb(row: any): AdminEvent {
     groupKey: row.group_key ?? undefined,
     groupName: row.group_name ?? undefined,
     homeOrder: row.home_order ?? undefined,
+    badge: row.badge ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -274,6 +280,9 @@ function eventToDb(e: Partial<NewEventInput>) {
   // trigger de v26 lo limpia igual; esto es el lado de acá de la misma regla.)
   if (e.groupKey !== undefined) out.group_key = e.groupKey?.trim() || null;
   if (e.groupName !== undefined) out.group_name = e.groupName?.trim() || null;
+  // Vacío = sin etiqueta. El formulario sólo manda este campo si cambió (ver
+  // `handleSubmit`), así guardar un evento antes de correr v34 sigue andando.
+  if (e.badge !== undefined) out.badge = e.badge.trim() || null;
   return out;
 }
 

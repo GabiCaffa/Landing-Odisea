@@ -100,7 +100,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
-`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql`.
+`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1520,6 +1520,22 @@ hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google S
 - Probado con 13 casos del lector (CSV sucio, filas rotas, miles, datos personales que
   no viajan) y del servicio (sin variable, URL ajena, Google 500, sin red) más la
   pantalla con una hoja simulada. **No probado contra una hoja real de Google.**
+
+### Etiqueta destacada por evento (v34)
+
+Un texto corto propio de cada evento ("FREE ANTES DE 1:30", "LADIES FREE") que se ve
+como pastilla **negra** arriba a la derecha del flyer en la tarjeta de la home (las
+promos se apilan debajo) y como pastilla naranja junto a la fecha en la página del
+evento. Se carga en el formulario del evento ("Etiqueta destacada", máx. 30).
+
+- **Es sólo un letrero**: no calcula nada ni toca el precio, a diferencia de las promos
+  (v21/v24). Tampoco es el cartel global (`cartel_eventos`, v19), que es uno solo para
+  todo el sitio. Columna `events.badge` (nullable; correr v34 no cambia ningún evento).
+- **Tolera la migración sin correr**: el formulario sólo manda `badge` si hay algo que
+  guardar o borrar; si no, se omite. Cargar una etiqueta sin migrar da un error de la base.
+- Con el evento agotado la pastilla de la tarjeta no se muestra.
+- **No está en el formulario de fiestas de varios días** (`FiestaFormModal`): se carga
+  editando cada día.
 
 ### Galería de eventos anteriores y botones del header (v33)
 

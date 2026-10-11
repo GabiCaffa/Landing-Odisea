@@ -116,6 +116,7 @@ const EventsSection = () => {
                     tickets={entrada.dias.flatMap((d) => d.tickets.filter((t) => t.active))}
                     promos={entrada.dias.flatMap((d) => d.promos)}
                     dias={entrada.dias.length}
+                    etiqueta={entrada.destino.badge}
                     vertical
                   />
                 </div>
