@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import HeroBanners from "./HeroBanners";
+import PromoDestacada from "./PromoDestacada";
 import { SiteBanner, fetchBannersActivos } from "@/lib/banners";
 import { playThud } from "@/lib/spookySound";
 import { useAuth } from "@/contexts/AuthContext";
@@ -61,6 +62,10 @@ const HeroDelSitio = () => {
       )}
 
       <div className="bg-papel px-4 pb-2 pt-4 md:pt-5">
+        {/* La promo más urgente, a la vista apenas se entra. Sin promo vigente no
+            se renderiza (ni el hueco). */}
+        <PromoDestacada />
+
         <div className="mx-auto flex max-w-md items-center justify-center gap-3">
           <a
             href="#eventos"

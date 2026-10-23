@@ -600,6 +600,17 @@ inusable) y con el dato en el `aria-label`. "Comprar" abre el mismo
 `TicketPurchaseModal` del evento, que aplica el descuento con la misma
 `promoVigente`.
 
+**Destacado en la primera pantalla (`PromoDestacada`).** "Promos activas" queda bajo el
+banner y los dos atajos; una promo que vence en pocos días tiene que verse apenas se
+entra. Por eso, bajo el banner y sobre "Ver eventos / Ver promociones", va una tarjeta
+naranja con **la promo que vence antes** (el mismo orden de la sección). Sale de los
+**mismos datos**: no hay un texto aparte que mantener. Muestra el evento, el nombre de la
+promo (hasta 2 líneas) y **el cierre entero en su propia línea** ("Hasta el mar 27/10,
+23:59", o "Termina en 2d 03h 12m" en las últimas 72 hs). Tocarla abre directo la compra
+de ese evento. Sin promo vigente no se renderiza nada. La cuenta de ofertas vive en
+`src/lib/ofertasActivas.ts` (`useOfertas`), compartida con `PromosActivasSection`.
+**Conviene un nombre de promo corto** ("5X4", "1 ENTRA DE REGALO"): es el título de la tarjeta.
+
 > **`fetchDeliveries` ahora TIRA si la consulta falla.** La v18 nunca se había
 > corrido en producción: el embed fallaba, devolvía `[]` y la pestaña Entregas
 > se veía vacía sin ningún error. Ahora el panel muestra el error.
