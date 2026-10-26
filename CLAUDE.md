@@ -603,7 +603,8 @@ inusable) y con el dato en el `aria-label`. "Comprar" abre el mismo
 **Destacado en la primera pantalla (`PromoDestacada`).** "Promos activas" queda bajo el
 banner y los dos atajos; una promo que vence en pocos días tiene que verse apenas se
 entra. Por eso, bajo el banner y sobre "Ver eventos / Ver promociones", va una tarjeta
-naranja con **la promo que vence antes** (el mismo orden de la sección). Sale de los
+naranja por **cada promo vigente**, hasta 3, la que vence antes arriba (el mismo orden
+de la sección; las demás quedan en "Promos activas"). Sale de los
 **mismos datos**: no hay un texto aparte que mantener. Muestra el evento, el nombre de la
 promo (hasta 2 líneas) y **el cierre entero en su propia línea** ("Hasta el mar 27/10,
 23:59", o "Termina en 2d 03h 12m" en las últimas 72 hs). Tocarla abre directo la compra
