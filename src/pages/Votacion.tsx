@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Check, Loader2, Trophy } from "lucide-react";
 import Header from "@/components/Header";
@@ -20,7 +20,9 @@ import {
   Concurso,
   Participante,
   estaAbierto,
-  fetchConcursoVisible,
+  fetchConcursoPorClave,
+  fetchConcursosVisibles,
+  rutaDeConcurso,
   fetchConteos,
   fetchMiVoto,
   fetchParticipantes,
@@ -63,6 +65,11 @@ const Votacion = () => {
   const { currentUser } = useAuth();
   const confirm = useConfirm();
   const navigate = useNavigate();
+  const { clave } = useParams();
+  // Para volver acá después de ingresar: con varias votaciones, cada una tiene su ruta.
+  const aqui = useLocation().pathname;
+  // Sin `clave` (/votacion) y con VARIAS votaciones abiertas: se elige cuál.
+  const [lista, setLista] = useState<Concurso[] | null>(null);
 
   // undefined = cargando; null = no hay ninguna votación.
   const [concurso, setConcurso] = useState<Concurso | null | undefined>(undefined);
@@ -78,17 +85,30 @@ const Votacion = () => {
 
   useEffect(() => {
     const previo = document.title;
-    document.title = "Votá el mejor disfraz · ODÍSEA";
+    document.title = `${concurso?.title ?? "Votación"} · ODÍSEA`;
     return () => {
       document.title = previo;
     };
-  }, []);
+  }, [concurso?.title]);
 
   useEffect(() => {
     let vivo = true;
     (async () => {
       try {
-        const c = await fetchConcursoVisible();
+        let c: Concurso | null;
+        if (clave) {
+          c = await fetchConcursoPorClave(clave);
+        } else {
+          // /votacion a secas: con una sola votación se abre directo (así siguen
+          // andando los links de antes); con varias se muestra el listado.
+          const todas = await fetchConcursosVisibles();
+          if (!vivo) return;
+          if (todas.length > 1) {
+            setLista(todas);
+            return setConcurso(null);
+          }
+          c = todas[0] ?? null;
+        }
         if (!vivo) return;
         if (!c) return setConcurso(null);
         const [ps, cs] = await Promise.all([fetchParticipantes(c.id), fetchConteos(c.id)]);
@@ -106,7 +126,7 @@ const Votacion = () => {
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [clave]);
 
   // Mi voto, cuando hay sesión.
   useEffect(() => {
@@ -163,7 +183,7 @@ const Votacion = () => {
       } catch (err) {
         toast.error(mensajeDeVoto(err));
         // Si la base dice que cerró, la pantalla se pone al día.
-        fetchConcursoVisible()
+        fetchConcursoPorClave(concurso.id)
           .then((c) => c && setConcurso(c))
           .catch(() => undefined);
       } finally {
@@ -192,6 +212,42 @@ const Votacion = () => {
         <div className="container-odisea">
           {concurso === undefined ? (
             <p className="py-20 text-center text-muted-foreground">Cargando…</p>
+          ) : concurso === null && lista ? (
+            // Varias votaciones abiertas a la vez: se elige una.
+            <div className="mx-auto max-w-xl">
+              <div className="mb-6 text-center">
+                <p className="eyebrow mb-2">Votaciones</p>
+                <h1 className="title-sport text-4xl text-tinta sm:text-5xl">Elegí dónde votar</h1>
+              </div>
+              <div className="space-y-3">
+                {lista.map((c) => {
+                  const abierta = estaAbierto(c, ahora);
+                  return (
+                    <Link
+                      key={c.id}
+                      to={rutaDeConcurso(c)}
+                      className="flex min-h-[72px] items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-celeste"
+                    >
+                      <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-celeste text-accent-foreground">
+                        <Trophy className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-sport text-xl font-black uppercase leading-tight tracking-wide text-tinta">
+                          {c.title}
+                        </span>
+                        <span className="block text-xs font-semibold uppercase tracking-wide text-celeste-deep">
+                          {abierta
+                            ? c.closesAt
+                              ? `Abierta · hasta el ${formatoCierre(c.closesAt)}`
+                              : "Abierta"
+                            : "Cerrada · ver resultados"}
+                        </span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           ) : concurso === null ? (
             <div className="mx-auto max-w-md py-20 text-center">
               <Trophy className="mx-auto mb-4 h-10 w-10 text-celeste-deep" aria-hidden="true" />
@@ -234,7 +290,7 @@ const Votacion = () => {
                         Para votar necesitás una cuenta. Es <b>un voto por persona</b>.
                       </p>
                       <div className="flex flex-wrap justify-center gap-2">
-                        <Link to="/login" state={{ from: "/votacion" }} className="btn-celeste min-h-[44px] px-5 text-xs">
+                        <Link to="/login" state={{ from: aqui }} className="btn-celeste min-h-[44px] px-5 text-xs">
                           Ingresar
                         </Link>
                         <Link to="/registro" className="btn-techno-outline min-h-[44px] px-5 text-xs">
@@ -357,14 +413,14 @@ const Votacion = () => {
             </button>
             <button
               type="button"
-              onClick={() => navigate("/registro", { state: { from: "/votacion" } })}
+              onClick={() => navigate("/registro", { state: { from: aqui } })}
               className="btn-techno-outline min-h-[44px] px-5 text-xs"
             >
               Crear cuenta
             </button>
             <button
               type="button"
-              onClick={() => navigate("/login", { state: { from: "/votacion" } })}
+              onClick={() => navigate("/login", { state: { from: aqui } })}
               className="btn-celeste min-h-[44px] px-5 text-xs"
             >
               Ingresar
