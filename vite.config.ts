@@ -65,9 +65,15 @@ function bakeTheme(url?: string, key?: string): Plugin {
          *
          * Los dos dependen del tema, y el tema sólo se conoce acá.
          */
-        const oscuro = theme === "halloween";
+        const fondos: Record<string, string> = {
+          halloween: "#0B1D22",
+          navidad: "#0C2018",
+          "anio-nuevo": "#0B0B10",
+        };
+        const fondo = fondos[theme];
+        const oscuro = Boolean(fondo);
         const extras =
-          `<meta name="theme-color" content="${oscuro ? "#0B1D22" : "#FFFFFF"}">\n    ` +
+          `<meta name="theme-color" content="${fondo ?? "#FFFFFF"}">\n    ` +
           `<link rel="preload" as="image" href="/email-logo-${oscuro ? "white" : "black"}.png">\n    `;
 
         return html

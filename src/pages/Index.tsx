@@ -6,6 +6,7 @@ import PromosSection from "@/components/PromosSection";
 import GaleriaAnteriores from "@/components/GaleriaAnteriores";
 import Footer from "@/components/Footer";
 import SpookyLayer from "@/components/SpookyLayer";
+import ClimaTema from "@/components/ClimaTema";
 import SoundToggle from "@/components/SoundToggle";
 
 /**
@@ -22,7 +23,7 @@ import SoundToggle from "@/components/SoundToggle";
  */
 const Index = () => {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="isolate min-h-screen bg-background">
       <Header />
       <main>
         {/* El de siempre o el slider de banners, según el interruptor del
@@ -43,6 +44,7 @@ const Index = () => {
           con el tema apagado, y van sólo acá: en el registro o el login
           distraerían de lo único que esas páginas tienen que lograr. */}
       <SpookyLayer />
+      <ClimaTema />
       <SoundToggle />
     </div>
   );

@@ -143,6 +143,7 @@
     --charrua: 6 100% 64%;        /* #FF5A47 */
 
     --espectro: 166 59% 56%;      /* #4FD1B3 · el reflejo fosforescente */
+    --resplandor: var(--celeste);  /* el brillo interior de las cards */
 
     /* Estos tokens de shadcn no son alias de la paleta: hay que repetirlos. */
     --card: 195 53% 13%;
@@ -162,6 +163,83 @@
     --shadow-md: 0 4px 14px hsl(193 80% 2% / 0.55);
     --shadow-lg: 0 14px 36px hsl(193 80% 2% / 0.6);
     --shadow-xl: 0 28px 64px hsl(193 80% 2% / 0.7);
+  }
+
+  /* ─── Tema Navidad ────────────────────────────────────────────────────────
+     Pino de noche, rojo y dorado. Mismo molde que Halloween: sólo tokens.
+
+     El rojo va claro y con texto oscuro encima porque ese token pinta botones
+     Y texto chico sobre el fondo: con un rojo profundo y letra blanca el botón
+     se lee, pero las etiquetas rojas sobre el pino quedan en 3,5:1. */
+  :root[data-theme="navidad"] {
+    --papel: 156 45% 9%;          /* #0C2018 · pino de noche */
+    --tinta: 42 41% 92%;          /* #F3EEE2 · crema */
+
+    --celeste: 2 84% 60%;         /* #EF4A43 · rojo navidad */
+    --celeste-deep: 2 69% 46%;    /* #C62A25 · para hover */
+    --celeste-soft: 158 48% 14%;
+
+    --sol: 158 48% 14%;           /* #123327 */
+    --sol-deep: 145 13% 66%;      /* #9DB3A6 */
+
+    /* Separado del rojo del acento: un error no puede verse como un botón. */
+    --charrua: 6 100% 71%;        /* #FF7A6B */
+
+    --espectro: 42 74% 63%;       /* #E6BC5A · dorado */
+    /* Dorado y no rojo: rojo sobre verde da un marrón embarrado. */
+    --resplandor: var(--espectro);
+
+    --card: 156 40% 12%;
+    --secondary: 158 48% 14%;
+    --muted: 156 30% 17%;
+    --muted-foreground: 145 13% 66%;
+    --border: 156 28% 22%;
+    --input: 156 28% 26%;
+
+    --accent-foreground: 156 45% 5%;
+
+    --velo: 156 50% 3%;
+
+    --shadow-sm: 0 1px 2px hsl(156 70% 2% / 0.5), 0 1px 3px hsl(156 70% 2% / 0.45);
+    --shadow-md: 0 4px 14px hsl(156 70% 2% / 0.55);
+    --shadow-lg: 0 14px 36px hsl(156 70% 2% / 0.6);
+    --shadow-xl: 0 28px 64px hsl(156 70% 2% / 0.7);
+  }
+
+  /* ─── Tema Año Nuevo ──────────────────────────────────────────────────────
+     Negro y dorado, champagne de secundario. El id va sin ñ porque el script
+     de index.html sólo acepta [a-z-]. */
+  :root[data-theme="anio-nuevo"] {
+    --papel: 240 19% 5%;          /* #0B0B10 · negro de medianoche */
+    --tinta: 41 47% 93%;          /* #F6F1E6 · marfil */
+
+    --celeste: 41 73% 59%;        /* #E3B34C · dorado */
+    --celeste-deep: 39 62% 45%;   /* #B8862B · para hover */
+    --celeste-soft: 240 13% 12%;
+
+    --sol: 240 13% 12%;           /* #1A1A22 */
+    --sol-deep: 256 7% 67%;       /* #A8A5B0 */
+
+    --charrua: 6 100% 64%;        /* #FF5A47 */
+
+    --espectro: 43 74% 83%;       /* #F4E2B5 · champagne */
+    --resplandor: var(--celeste);
+
+    --card: 240 14% 9%;
+    --secondary: 240 13% 12%;
+    --muted: 240 10% 15%;
+    --muted-foreground: 256 7% 67%;
+    --border: 240 8% 21%;
+    --input: 240 8% 25%;
+
+    --accent-foreground: 240 30% 5%;
+
+    --velo: 240 30% 2%;
+
+    --shadow-sm: 0 1px 2px hsl(240 40% 1% / 0.6), 0 1px 3px hsl(240 40% 1% / 0.55);
+    --shadow-md: 0 4px 14px hsl(240 40% 1% / 0.65);
+    --shadow-lg: 0 14px 36px hsl(240 40% 1% / 0.7);
+    --shadow-xl: 0 28px 64px hsl(240 40% 1% / 0.8);
   }
 
   /* La tipografía estacional va SÓLO en la vidriera (la home). El color del
@@ -448,29 +526,29 @@
 /* El resplandor va como box-shadow INSET y no como una capa ::after encima:
    una sombra interior se pinta sobre el fondo pero DEBAJO del contenido, así
    que no le tira naranja al texto ni a los botones. */
-:root[data-theme="halloween"] .evento-card {
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .evento-card {
   transition: box-shadow 320ms ease, border-color 320ms ease, transform 300ms ease;
   /* Queda algo prendida siempre: en celular no hay hover, y si el efecto
      dependiera sólo de él, desde un teléfono no existiría. */
   box-shadow:
-    inset 0 -46px 56px -34px hsl(var(--celeste) / 0.3),
+    inset 0 -46px 56px -34px hsl(var(--resplandor) / 0.3),
     var(--shadow-sm);
 }
 
-:root[data-theme="halloween"] .evento-card:hover,
-:root[data-theme="halloween"] .evento-card:focus-within,
-:root[data-theme="halloween"] .evento-card:active {
-  border-color: hsl(var(--celeste) / 0.5);
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .evento-card:hover,
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .evento-card:focus-within,
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .evento-card:active {
+  border-color: hsl(var(--resplandor) / 0.5);
   box-shadow:
-    inset 0 -56px 68px -30px hsl(var(--celeste) / 0.55),
-    0 0 40px -8px hsl(var(--celeste) / 0.42),
+    inset 0 -56px 68px -30px hsl(var(--resplandor) / 0.55),
+    0 0 40px -8px hsl(var(--resplandor) / 0.42),
     var(--shadow-lg);
 }
 
 /* ── Viñeteado de la foto ── */
 /* Sin esto la imagen es un rectángulo pegado sobre la noche. Oscureciendo los
    bordes hacia el color de la card, la foto se funde con ella. */
-:root[data-theme="halloween"] .evento-media::after {
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .evento-media::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -487,11 +565,21 @@
   box-shadow: 0 0 20px -3px hsl(var(--celeste) / 0.65);
 }
 
+:root[data-theme="navidad"] .evento-fecha {
+  background: linear-gradient(140deg, #FF9A8C 0%, hsl(var(--celeste)) 72%);
+  box-shadow: 0 0 20px -3px hsl(var(--celeste) / 0.65);
+}
+
+:root[data-theme="anio-nuevo"] .evento-fecha {
+  background: linear-gradient(140deg, #F7E3A8 0%, hsl(var(--celeste)) 60%, hsl(var(--celeste-deep)) 100%);
+  box-shadow: 0 0 20px -3px hsl(var(--celeste) / 0.65);
+}
+
 /* ── AGOTADO, como un sello de lacre ── */
 /* El rojo del tema (#FF5A47) es claro para que un mensaje de error grite sobre
    la noche, pero con texto blanco encima da 2.8:1. Acá el sello usa un rojo
    profundo propio para que el blanco se lea. */
-:root[data-theme="halloween"] .evento-agotado {
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .evento-agotado {
   background: radial-gradient(circle at 34% 26%, #C2341F 0%, #9A2414 52%, #6E1509 100%);
   box-shadow:
     inset 0 2px 5px hsl(0 0% 100% / 0.22),
@@ -504,28 +592,35 @@
    Enganchar el CSS del tema a una utilidad de Tailwind es frágil: esa clase
    existe para pintar un fondo, no para identificar una variante, y cualquiera
    que cambie el fondo de esa card rompe el tema sin darse cuenta. */
-:root[data-theme="halloween"] .promo-card {
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .promo-card {
   transition: box-shadow 320ms ease, border-color 320ms ease, transform 700ms ease;
   box-shadow:
-    inset 0 -46px 56px -34px hsl(var(--celeste) / 0.24),
+    inset 0 -46px 56px -34px hsl(var(--resplandor) / 0.24),
     var(--shadow-sm);
 }
 
-:root[data-theme="halloween"] .promo-card:hover,
-:root[data-theme="halloween"] .promo-card:focus-within {
-  border-color: hsl(var(--celeste) / 0.5);
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .promo-card:hover,
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .promo-card:focus-within {
+  border-color: hsl(var(--resplandor) / 0.5);
   box-shadow:
-    inset 0 -56px 68px -30px hsl(var(--celeste) / 0.5),
-    0 0 40px -8px hsl(var(--celeste) / 0.4),
+    inset 0 -56px 68px -30px hsl(var(--resplandor) / 0.5),
+    0 0 40px -8px hsl(var(--resplandor) / 0.4),
     var(--shadow-lg);
 }
 
 /* La destacada (03) ya viene con fondo naranja: un resplandor naranja adentro
    no se vería, así que sólo se le enciende el contorno. */
-:root[data-theme="halloween"] .promo-card--destacada,
-:root[data-theme="halloween"] .promo-card--destacada:hover,
-:root[data-theme="halloween"] .promo-card--destacada:focus-within {
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .promo-card--destacada,
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .promo-card--destacada:hover,
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .promo-card--destacada:focus-within {
   box-shadow: 0 0 48px -6px hsl(var(--celeste) / 0.55), var(--shadow-lg);
+}
+
+/* El título usa `text-tinta`, que en estos temas es claro: sobre el dorado o el
+   naranja casi no se leía. Va sólo al título: cambiar el token entero dejaba el
+   botón `bg-tinta text-papel` oscuro sobre oscuro y la flecha desaparecía. */
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) .promo-card--destacada .promo-card__titulo {
+  color: hsl(var(--accent-foreground));
 }
 
 /* ── Bloques que se invierten contra la página ── */
@@ -540,6 +635,93 @@
 :root[data-theme="halloween"] .bloque-invertido {
   --tinta: 193 64% 5%;
   --papel: 171 18% 92%;
+}
+
+:root[data-theme="navidad"] .bloque-invertido {
+  --tinta: 156 50% 5%;
+  --papel: 42 41% 92%;
+}
+
+:root[data-theme="anio-nuevo"] .bloque-invertido {
+  --tinta: 240 20% 3%;
+  --papel: 41 47% 93%;
+}
+
+/* ── Nieve y polvo dorado (ClimaTema) ── */
+/* Cada capa es un mosaico de puntos que se desplaza exactamente un alto de
+   baldosa y vuelve a empezar: por eso el corte no se nota. Si se cambia
+   --baldosa, el recorrido cambia solo. Al ser todo `transform` no repinta. */
+.clima {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.clima__capa {
+  position: absolute;
+  top: calc(var(--baldosa) * -1);
+  bottom: calc(var(--baldosa) * -1);
+  left: 0;
+  right: 0;
+  background-size: var(--baldosa) var(--baldosa);
+  will-change: transform;
+  animation: clima-baja var(--duracion) linear infinite;
+}
+
+.clima__capa--lejos { --baldosa: 280px; --duracion: 34s; opacity: 0.45; }
+.clima__capa--cerca { --baldosa: 460px; --duracion: 26s; opacity: 0.8; }
+
+.clima--navidad .clima__capa--lejos {
+  background-image:
+    radial-gradient(circle at 12% 18%, #F3EEE2 1px, transparent 1.8px),
+    radial-gradient(circle at 44% 62%, #F3EEE2 1.3px, transparent 2.1px),
+    radial-gradient(circle at 71% 9%, #F3EEE2 1px, transparent 1.8px),
+    radial-gradient(circle at 86% 74%, #F3EEE2 1.2px, transparent 2px),
+    radial-gradient(circle at 28% 88%, #F3EEE2 1px, transparent 1.8px);
+}
+
+.clima--navidad .clima__capa--cerca {
+  background-image:
+    radial-gradient(circle at 18% 34%, #F3EEE2 1.8px, transparent 3px),
+    radial-gradient(circle at 63% 12%, #F3EEE2 2.2px, transparent 3.6px),
+    radial-gradient(circle at 82% 58%, #F3EEE2 1.6px, transparent 2.8px),
+    radial-gradient(circle at 38% 81%, #F3EEE2 2px, transparent 3.2px);
+}
+
+/* El polvo dorado sube, como las burbujas, y va más lento que la nieve. */
+.clima--anio-nuevo .clima__capa { animation-name: clima-sube; animation-duration: calc(var(--duracion) * 1.5); }
+
+.clima--anio-nuevo .clima__capa--lejos {
+  background-image:
+    radial-gradient(circle at 16% 22%, #E3B34C 1px, transparent 1.8px),
+    radial-gradient(circle at 52% 68%, #F4E2B5 1.2px, transparent 2px),
+    radial-gradient(circle at 74% 14%, #E3B34C 0.9px, transparent 1.7px),
+    radial-gradient(circle at 90% 79%, #F4E2B5 1px, transparent 1.8px),
+    radial-gradient(circle at 33% 91%, #E3B34C 1.1px, transparent 1.9px);
+}
+
+.clima--anio-nuevo .clima__capa--cerca {
+  background-image:
+    radial-gradient(circle at 22% 41%, #E3B34C 1.6px, transparent 2.8px),
+    radial-gradient(circle at 58% 16%, #F4E2B5 1.9px, transparent 3.2px),
+    radial-gradient(circle at 84% 63%, #E3B34C 1.4px, transparent 2.6px),
+    radial-gradient(circle at 41% 86%, #F4E2B5 1.7px, transparent 3px);
+}
+
+@keyframes clima-baja {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, var(--baldosa), 0); }
+}
+
+@keyframes clima-sube {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, calc(var(--baldosa) * -1), 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clima__capa { animation: none; }
 }
 
 /* ── Animaciones de Lottie ── */

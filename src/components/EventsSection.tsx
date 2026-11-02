@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { agruparEventos, compararParaHome } from "@/lib/grupos";
 import { RUTA_APARTE, esFiestaAparte } from "@/lib/fiestasAparte";
 import { useStockHoja } from "@/lib/stockHoja";
+import { useTheme } from "@/contexts/ThemeContext";
 import SpookySpiders from "./SpookySpiders";
 
 /**
@@ -20,6 +21,7 @@ import SpookySpiders from "./SpookySpiders";
  */
 const EventsSection = () => {
   const { events } = useAuth();
+  const { theme } = useTheme();
   // Las entradas que quedan según las ventas anotadas en el Google Sheets.
   const stockHoja = useStockHoja();
   const { ref: headerRef, isVisible: headerVisible } = useScrollReveal({ threshold: 0.3 });
@@ -57,8 +59,11 @@ const EventsSection = () => {
     <section id="eventos" className="section-padding scroll-mt-16 bg-secondary/40 relative overflow-hidden">
       {/* Va ANTES del contenido y en z-0; el contenedor de abajo lleva z-10.
           Así, cuando la araña pasa por detrás de una tarjeta, gana la tarjeta:
-          es la regla que la decoración anterior no respetaba. */}
-      <SpookySpiders />
+          es la regla que la decoración anterior no respetaba.
+          Sólo con Halloween: su `position: absolute` vive en el CSS de ese tema
+          y, con cualquier otro, sus cajas de 420 px quedaban en el flujo y
+          abrían ~1.700 px de vacío antes del título. */}
+      {theme === "halloween" && <SpookySpiders />}
 
       <div className="container-odisea relative z-10">
         {/* Section header */}
