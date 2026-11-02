@@ -1556,9 +1556,11 @@ primera pantalla de la home mientras haya una votación abierta (`VotacionDestac
   abierta (`estaAbierto` en `votacion.ts` dice lo mismo que la base).
 - **Fotos** al bucket `gallery` (v33), carpeta `disfraces/`; se achican a 1200 px. Borrar
   una foto borra también sus votos (cascada) y el panel avisa cuántos tenía.
-- El visor es el de la galería (`Visor`, ahora exportado). Quien llega sin sesión toca
-  "Ingresar" y **vuelve a `/votacion`** (el login respeta `state.from`); desde "Crear
-  cuenta" hay que confirmar el email y volver a mano.
+- El visor es el de la galería (`Visor`, ahora exportado). **Tocar "Votar" sin sesión no
+  manda directo al login: salta un aviso** ("Tenés que tener una cuenta para votar", un
+  voto por persona, email confirmado) con "Ahora no", "Crear cuenta" e "Ingresar". "Ingresar"
+  **vuelve a `/votacion`** (el login respeta `state.from`); desde "Crear cuenta" hay que
+  confirmar el email y volver a mano.
 - **Fotos de personas**: conviene tener el OK de quien aparece, sobre todo si se muestra
   su @ de Instagram. El campo de nombre del panel es opcional ("Disfraz #12").
 - Límite conocido: 1 voto por cuenta no frena a quien se hace varias cuentas con emails

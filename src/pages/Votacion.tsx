@@ -6,6 +6,13 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Visor } from "@/components/GaleriaAnteriores";
 import { useConfirm } from "@/components/ConfirmDialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import type { GaleriaItem } from "@/lib/galeria";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
@@ -65,6 +72,8 @@ const Votacion = () => {
   const [votando, setVotando] = useState<string | null>(null);
   const [visor, setVisor] = useState<number | null>(null);
   const [error, setError] = useState(false);
+  // Aviso de "hace falta cuenta" que salta al tocar Votar sin sesión.
+  const [pideCuenta, setPideCuenta] = useState(false);
   const [ahora, setAhora] = useState(() => Date.now());
 
   useEffect(() => {
@@ -130,7 +139,10 @@ const Votacion = () => {
     async (p: Participante) => {
       if (!concurso) return;
       if (!currentUser) {
-        navigate("/login", { state: { from: "/votacion" } });
+        // Antes se mandaba directo al login, sin explicar nada: quien tocaba
+        // "Votar" aparecía de golpe en otra pantalla. Ahora salta un aviso que
+        // dice por qué, y de ahí elige ingresar o crear cuenta.
+        setPideCuenta(true);
         return;
       }
       if (miVoto === p.id) return;
@@ -158,7 +170,7 @@ const Votacion = () => {
         setVotando(null);
       }
     },
-    [concurso, currentUser, miVoto, confirm, navigate]
+    [concurso, currentUser, miVoto, confirm]
   );
 
   // Cerrada: ordenadas por votos para mostrar el podio. Abierta: siempre en el
@@ -324,6 +336,42 @@ const Votacion = () => {
         </div>
       </main>
       <Footer />
+
+      <AlertDialog open={pideCuenta} onOpenChange={setPideCuenta}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <Trophy className="mx-auto h-8 w-8 text-celeste-deep sm:mx-0" aria-hidden="true" />
+            <AlertDialogTitle>Tenés que tener una cuenta para votar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Es <b>un voto por persona</b> y solo cuentan los votos de cuentas registradas con el
+              email confirmado. Ingresá o creá tu cuenta (tarda un minuto) y volvés a la votación.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setPideCuenta(false)}
+              className="btn-techno-outline min-h-[44px] px-5 text-xs"
+            >
+              Ahora no
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/registro", { state: { from: "/votacion" } })}
+              className="btn-techno-outline min-h-[44px] px-5 text-xs"
+            >
+              Crear cuenta
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/login", { state: { from: "/votacion" } })}
+              className="btn-celeste min-h-[44px] px-5 text-xs"
+            >
+              Ingresar
+            </button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {visor !== null && (
         <Visor items={items} indice={visor} onCambiar={setVisor} onCerrar={() => setVisor(null)} />
