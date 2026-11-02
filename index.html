@@ -85,6 +85,10 @@
       html { background: #FFFFFF; }
       html[data-theme="halloween"],
       html[data-theme="halloween"] body { background: #0B1D22; color: #E8EFEE; }
+      html[data-theme="navidad"],
+      html[data-theme="navidad"] body { background: #0C2018; color: #F3EEE2; }
+      html[data-theme="anio-nuevo"],
+      html[data-theme="anio-nuevo"] body { background: #0B0B10; color: #F6F1E6; }
 
       /* ─── Pantalla de arranque ──────────────────────────────────────────
          Este sitio es una SPA: el HTML que llega trae `<div id="root">` VACÍO,
@@ -120,6 +124,14 @@
       }
       html[data-theme="halloween"] #arranque {
         background-color: #0B1D22;
+        background-image: url("/email-logo-white.png");
+      }
+      html[data-theme="navidad"] #arranque {
+        background-color: #0C2018;
+        background-image: url("/email-logo-white.png");
+      }
+      html[data-theme="anio-nuevo"] #arranque {
+        background-color: #0B0B10;
         background-image: url("/email-logo-white.png");
       }
       #arranque.arranque--listo { opacity: 0; pointer-events: none; }

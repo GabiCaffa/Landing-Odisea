@@ -14,7 +14,7 @@ import { useGaleria } from "@/lib/galeria";
 const Header = () => {
   // El logo negro se pierde sobre el fondo oscuro del tema estacional.
   const { theme } = useTheme();
-  const odiseaLogo = theme === "halloween" ? odiseaLogoLight : odiseaLogoDark;
+  const odiseaLogo = theme !== "base" ? odiseaLogoLight : odiseaLogoDark;
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
