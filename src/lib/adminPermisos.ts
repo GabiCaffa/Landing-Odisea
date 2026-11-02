@@ -19,6 +19,7 @@ import { useAuth, type UserRole } from "@/contexts/AuthContext";
  *   apariencia:cartel→ site_settings_write_cartel_manager  (v30)
  *   banners          → site_banners_write_manager          (v30)
  *   galeria          → gallery_items_write_manager         (v33)
+ *   votacion         → contests*_write_manager             (v35)
  *   entregas         → is_staff()                          (v11)
  *   cumples          → is_birthday_staff()                 (v20)
  *   evento:cuenta    → trigger events_payment_account_lock (v22)
@@ -37,6 +38,7 @@ export type AdminTab =
   | "appearance"
   | "banners"
   | "gallery"
+  | "voting"
   | "deliveries"
   | "birthdays";
 
@@ -88,6 +90,8 @@ export type Permiso =
    * banners: es contenido que se carga a medida que pasan las fiestas.
    */
   | "galeria"
+  /** Votación de disfraces (v35). Admin y operador: la base lo enforza con `is_manager()`. */
+  | "votacion"
   /** Entregas de entradas (incluye ver la recaudación). */
   | "entregas"
   /** Promo de cumpleaños. */
@@ -109,6 +113,7 @@ const TODOS: readonly Permiso[] = [
   "apariencia:cartel",
   "banners",
   "galeria",
+  "votacion",
   "entregas",
   "cumples",
 ];
@@ -130,6 +135,7 @@ const PERMISOS: Record<UserRole, readonly Permiso[]> = {
     "usuarios",
     "banners",
     "galeria",
+    "votacion",
     "apariencia:cartel",
     "entregas",
     "cumples",
@@ -172,6 +178,7 @@ export const PERMISO_DE_TAB: Record<AdminTab, Permiso> = {
   appearance: "apariencia:cartel",
   banners: "banners",
   gallery: "galeria",
+  voting: "votacion",
   deliveries: "entregas",
   birthdays: "cumples",
 };
@@ -188,6 +195,7 @@ export const ORDEN_TABS: readonly AdminTab[] = [
   "users",
   "banners",
   "gallery",
+  "voting",
   "appearance",
 ];
 
