@@ -49,7 +49,7 @@ const Miniatura = ({ item, grande }: { item: GaleriaItem; grande: boolean }) => 
 };
 
 /** El visor a pantalla completa: la foto grande o el video con controles. */
-const Visor = ({
+export const Visor = ({
   items,
   indice,
   onCambiar,

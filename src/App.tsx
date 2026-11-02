@@ -28,6 +28,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
+const Votacion = lazy(() => import("./pages/Votacion"));
 
 const queryClient = new QueryClient();
 
@@ -64,6 +65,8 @@ const App = () => (
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/perfil" element={<Profile />} />
               <Route path="/admin" element={<Admin />} />
+              {/* Votación de disfraces (v35). */}
+              <Route path="/votacion" element={<Votacion />} />
               <Route path="/terminos" element={<Terms />} />
               <Route path="/privacidad" element={<Privacy />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

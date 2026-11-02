@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -8,6 +8,8 @@ import { toast } from "sonner";
 
 const Login = () => {
   const navigate = useNavigate();
+  // Quien llega desde una página que pide cuenta (p. ej. la votación) vuelve ahí.
+  const volverA = (useLocation().state as { from?: string } | null)?.from;
   const { login, resendConfirmation } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,7 +29,7 @@ const Login = () => {
       return;
     }
     toast.success(`Hola ${result.user?.firstName}!`);
-    navigate(result.user?.role === "admin" ? "/admin" : "/");
+    navigate(volverA ?? (result.user?.role === "admin" ? "/admin" : "/"));
   };
 
   const handleResend = async () => {

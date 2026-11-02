@@ -14,6 +14,7 @@ import {
   Send,
   Tag,
   Ticket,
+  Trophy,
   Users,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -109,6 +110,12 @@ const TAB_META: Record<AdminTab, TabMeta> = {
     icon: <Film className="h-4 w-4" />,
     kicker: "Eventos anteriores",
     title: "GALERÍA",
+  },
+  voting: {
+    label: "Votación",
+    icon: <Trophy className="h-4 w-4" />,
+    kicker: "Concurso de disfraces",
+    title: "VOTACIÓN",
   },
   appearance: {
     label: "Apariencia",

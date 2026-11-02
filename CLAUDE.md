@@ -100,7 +100,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
-`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql`.
+`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1532,6 +1532,38 @@ hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google S
 - Probado con 13 casos del lector (CSV sucio, filas rotas, miles, datos personales que
   no viajan) y del servicio (sin variable, URL ajena, Google 500, sin red) más la
   pantalla con una hoja simulada. **No probado contra una hoja real de Google.**
+
+### Votación de disfraces (v35)
+
+Concurso con fotos de la gente disfrazada y premios: página **`/votacion`**, pestaña
+**Votación** en el panel (admin y operador) y un aviso negro con borde de acento en la
+primera pantalla de la home mientras haya una votación abierta (`VotacionDestacada`).
+
+- **Quién vota: sólo con cuenta, un voto por persona** (decisión del autor), y **lo
+  impone la base, no la pantalla**. `contest_votes` tiene clave (concurso, usuario) y NO
+  tiene política de insert/update: se vota únicamente por la función `cast_vote()`
+  (security definer), que valida sesión, **perfil existente** (el perfil sólo se crea con
+  el email confirmado, v7: una dirección inventada no vota), que la foto exista y esté
+  activa y que el concurso esté `open` y antes de `closes_at`. Se puede **cambiar** el voto
+  mientras esté abierto (la pantalla pide confirmación). Verificado en un Postgres temporal
+  con roles: anon, sin sesión, sin perfil, insert directo, concurso cerrado y vencido.
+- **Contador en vivo** (decisión del autor): `contest_results()` devuelve votos por foto,
+  público y sin decir quién votó; cada usuario sólo lee su propio voto. La página se
+  refresca cada 20 s mientras está abierta (no consulta con la pestaña en segundo plano) y
+  **no reordena las fotos** al cambiar los números, para que no salten.
+- **Estados**: borrador (sólo staff) → abierta → cerrada. Cerrada: se ordena por votos y se
+  marcan 1°, 2° y 3°. `closes_at` opcional corta los votos solo, aunque el estado siga en
+  abierta (`estaAbierto` en `votacion.ts` dice lo mismo que la base).
+- **Fotos** al bucket `gallery` (v33), carpeta `disfraces/`; se achican a 1200 px. Borrar
+  una foto borra también sus votos (cascada) y el panel avisa cuántos tenía.
+- El visor es el de la galería (`Visor`, ahora exportado). Quien llega sin sesión toca
+  "Ingresar" y **vuelve a `/votacion`** (el login respeta `state.from`); desde "Crear
+  cuenta" hay que confirmar el email y volver a mano.
+- **Fotos de personas**: conviene tener el OK de quien aparece, sobre todo si se muestra
+  su @ de Instagram. El campo de nombre del panel es opcional ("Disfraz #12").
+- Límite conocido: 1 voto por cuenta no frena a quien se hace varias cuentas con emails
+  distintos. Sube el costo de hacer trampa (hay que confirmar cada email) pero no lo
+  elimina; el staff puede borrar votos sospechosos (política `delete` de `is_manager()`).
 
 ### Etiqueta destacada por evento (v34)
 
