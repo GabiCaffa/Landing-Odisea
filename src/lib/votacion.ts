@@ -13,6 +13,8 @@ export type EstadoConcurso = "draft" | "open" | "closed";
 
 export interface Concurso {
   id: string;
+  /** v36: dirección propia (/votacion/colonia). Vacío = se abre por su id. */
+  slug?: string;
   title: string;
   description: string;
   status: EstadoConcurso;
@@ -32,6 +34,7 @@ export interface Participante {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const concursoDesdeDb = (r: any): Concurso => ({
   id: r.id,
+  slug: r.slug ?? undefined,
   title: r.title,
   description: r.description ?? "",
   status: r.status,
@@ -56,14 +59,33 @@ const participanteDesdeDb = (r: any): Participante => ({
 export const estaAbierto = (c: Concurso, ahora = Date.now()): boolean =>
   c.status === "open" && !(c.closesAt && ahora >= Date.parse(c.closesAt));
 
-/** El concurso que muestra la web: el más reciente que no sea borrador. */
-export async function fetchConcursoVisible(): Promise<Concurso | null> {
+/** Dónde vive una votación. Con dos a la vez, cada una tiene su propia página. */
+export const rutaDeConcurso = (c: Pick<Concurso, "id" | "slug">) => `/votacion/${c.slug || c.id}`;
+
+const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Las votaciones que muestra la web: las que no son borrador, la más reciente
+ * primero. Puede haber varias a la vez (por ejemplo, una por ciudad).
+ */
+export async function fetchConcursosVisibles(): Promise<Concurso[]> {
   const { data, error } = await supabase
     .from("contests")
     .select("*")
     .neq("status", "draft")
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(concursoDesdeDb);
+}
+
+/**
+ * Una votación por su dirección (`colonia`) o por su id. Si la clave parece un
+ * uuid se busca SÓLO por id: así funciona aunque la migración v36 (la columna
+ * `slug`) todavía no esté corrida.
+ */
+export async function fetchConcursoPorClave(clave: string): Promise<Concurso | null> {
+  const q = supabase.from("contests").select("*").neq("status", "draft");
+  const { data, error } = await (ES_UUID.test(clave) ? q.eq("id", clave) : q.eq("slug", clave)).limit(1);
   if (error) throw error;
   return data?.[0] ? concursoDesdeDb(data[0]) : null;
 }
@@ -124,10 +146,15 @@ export async function fetchConcursos(): Promise<Concurso[]> {
   return (data ?? []).map(concursoDesdeDb);
 }
 
-export async function createConcurso(c: { title: string; description: string }): Promise<string> {
+export async function createConcurso(c: {
+  title: string;
+  description: string;
+  slug?: string;
+}): Promise<string> {
   const { data, error } = await supabase
     .from("contests")
-    .insert({ title: c.title, description: c.description, status: "draft" })
+    // `slug` sólo viaja si hay uno: sin la migración v36 la columna no existe.
+    .insert({ title: c.title, description: c.description, status: "draft", ...(c.slug ? { slug: c.slug } : {}) })
     .select("id")
     .single();
   if (error) throw error;
@@ -136,9 +163,10 @@ export async function createConcurso(c: { title: string; description: string }):
 
 export async function updateConcurso(
   id: string,
-  c: Partial<{ title: string; description: string; status: EstadoConcurso; closesAt: string }>
+  c: Partial<{ title: string; description: string; status: EstadoConcurso; closesAt: string; slug: string }>
 ): Promise<void> {
   const out: Record<string, unknown> = {};
+  if (c.slug !== undefined) out.slug = c.slug || null;
   if (c.title !== undefined) out.title = c.title;
   if (c.description !== undefined) out.description = c.description;
   if (c.status !== undefined) out.status = c.status;
@@ -213,20 +241,20 @@ export async function uploadParticipante(file: File): Promise<string> {
 }
 
 /**
- * Para la home: ¿hay una votación abierta ahora? Una sola consulta por carga
- * de página. `null` = todavía no contestó o no hay.
+ * Para la home: las votaciones abiertas ahora (puede haber más de una). Una sola
+ * consulta por carga de página. Vacío = todavía no contestó o no hay.
  */
-let pendiente: Promise<Concurso | null> | null = null;
+let pendiente: Promise<Concurso[]> | null = null;
 
-export const useConcursoAbierto = (): Concurso | null => {
-  const [concurso, setConcurso] = useState<Concurso | null>(null);
+export const useConcursosAbiertos = (): Concurso[] => {
+  const [concursos, setConcursos] = useState<Concurso[]>([]);
   useEffect(() => {
     let vivo = true;
-    pendiente ??= fetchConcursoVisible().catch(() => null);
-    pendiente.then((c) => vivo && setConcurso(c && estaAbierto(c) ? c : null));
+    pendiente ??= fetchConcursosVisibles().catch(() => []);
+    pendiente.then((cs) => vivo && setConcursos(cs.filter((c) => estaAbierto(c))));
     return () => {
       vivo = false;
     };
   }, []);
-  return concurso;
+  return concursos;
 };

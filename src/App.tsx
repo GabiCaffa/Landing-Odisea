@@ -67,6 +67,8 @@ const App = () => (
               <Route path="/admin" element={<Admin />} />
               {/* Votación de disfraces (v35). */}
               <Route path="/votacion" element={<Votacion />} />
+              {/* Con varias votaciones a la vez, cada una tiene su página (v36). */}
+              <Route path="/votacion/:clave" element={<Votacion />} />
               <Route path="/terminos" element={<Terms />} />
               <Route path="/privacidad" element={<Privacy />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

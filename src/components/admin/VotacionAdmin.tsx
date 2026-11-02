@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Loader2, Trash2, Trophy, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { claveDeGrupo } from "@/lib/grupos";
 import {
   Concurso,
   EstadoConcurso,
@@ -33,6 +34,9 @@ const mensajeDeError = (err: unknown, accion: string) => {
   if (ERRORES_DE_MIGRACION.includes(code ?? "")) {
     return "Falta correr la migración v35_votacion_disfraces.sql en Supabase.";
   }
+  // 42703 = la columna no existe; 23505 = la dirección ya la usa otra votación.
+  if (code === "42703") return "Falta correr la migración v36_votacion_slug.sql en Supabase.";
+  if (code === "23505") return "Esa dirección ya la usa otra votación. Probá con otra.";
   const msg = (err as Error | null)?.message;
   if (msg && /foto/.test(msg)) return msg;
   return `No se pudo ${accion}. ¿Seguís con la sesión iniciada?`;
@@ -63,6 +67,7 @@ const VotacionAdmin = () => {
   const [progreso, setProgreso] = useState<string | null>(null);
   const [titulo, setTitulo] = useState("Mejor disfraz de Halloween");
   const [descripcion, setDescripcion] = useState("");
+  const [direccion, setDireccion] = useState("");
 
   const concurso = concursos.find((c) => c.id === elegido) ?? null;
 
@@ -112,7 +117,11 @@ const VotacionAdmin = () => {
   const crear = async () => {
     if (!titulo.trim()) return toast.error("Poné un título");
     try {
-      const id = await createConcurso({ title: titulo.trim(), description: descripcion.trim() });
+      const id = await createConcurso({
+        title: titulo.trim(),
+        description: descripcion.trim(),
+        slug: claveDeGrupo(direccion) || undefined,
+      });
       await recargarConcursos();
       setElegido(id);
       toast.success("Votación creada en borrador");
@@ -154,6 +163,7 @@ const VotacionAdmin = () => {
               ...(campos.title !== undefined && { title: campos.title }),
               ...(campos.description !== undefined && { description: campos.description }),
               ...(campos.closesAt !== undefined && { closesAt: campos.closesAt || undefined }),
+              ...(campos.slug !== undefined && { slug: campos.slug || undefined }),
             }
           : c
       )
@@ -276,6 +286,21 @@ const VotacionAdmin = () => {
                 placeholder="El más votado se lleva el premio. Un voto por persona."
               />
             </div>
+            <div>
+              <label className="label-techno" htmlFor="v-dir">Dirección (opcional)</label>
+              <input
+                id="v-dir"
+                className="input-techno w-full"
+                value={direccion}
+                maxLength={40}
+                onChange={(e) => setDireccion(e.target.value)}
+                placeholder="colonia"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Para el link: odiseaoficial.com/votacion/<b>{claveDeGrupo(direccion) || "colonia"}</b>. Si hay
+                más de una votación a la vez, ponele una a cada una.
+              </p>
+            </div>
             <button type="button" onClick={() => void crear()} className="btn-celeste px-5 py-3 text-xs">
               Crear en borrador
             </button>
@@ -340,6 +365,22 @@ const VotacionAdmin = () => {
                 maxLength={160}
                 onBlur={(e) => void guardarConcurso({ description: e.target.value.trim() })}
               />
+            </div>
+            <div>
+              <label className="label-techno" htmlFor="v-dir-e">Dirección del link</label>
+              <input
+                id="v-dir-e"
+                className="input-techno w-full"
+                defaultValue={concurso.slug ?? ""}
+                key={`s-${concurso.id}`}
+                maxLength={40}
+                placeholder="colonia"
+                onBlur={(e) => void guardarConcurso({ slug: claveDeGrupo(e.target.value) })}
+              />
+              <p className="mt-1 break-all text-[11px] text-muted-foreground">
+                Link para compartir:{" "}
+                <b>odiseaoficial.com/votacion/{concurso.slug || concurso.id}</b>
+              </p>
             </div>
             <div>
               <label className="label-techno" htmlFor="v-cierre">Cierra automáticamente (opcional)</label>
