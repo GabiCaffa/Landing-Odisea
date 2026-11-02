@@ -1547,6 +1547,12 @@ primera pantalla de la home mientras haya una votación abierta (`VotacionDestac
   activa y que el concurso esté `open` y antes de `closes_at`. Se puede **cambiar** el voto
   mientras esté abierto (la pantalla pide confirmación). Verificado en un Postgres temporal
   con roles: anon, sin sesión, sin perfil, insert directo, concurso cerrado y vencido.
+- **"Los más votados"** (top 4): mientras la votación está abierta, una franja sobre la
+  grilla con las 4 fotos con más votos, marcadas 1°-4°, en vivo y **con su propio botón de
+  votar** (el mismo que el de la grilla). Sólo entran las que tienen algún voto (un top con
+  cero votos sería azar) y desempata el orden cargado. Cerrada, no hay franja: la grilla
+  entera ya va ordenada con el podio. La grilla de abajo NO se reordena, así que una foto
+  puede aparecer en las dos; cada lista abre el visor con sus propias fotos.
 - **Contador en vivo** (decisión del autor): `contest_results()` devuelve votos por foto,
   público y sin decir quién votó; cada usuario sólo lee su propio voto. La página se
   refresca cada 20 s mientras está abierta (no consulta con la pestaña en segundo plano) y
