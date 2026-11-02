@@ -2245,7 +2245,8 @@ acepta `[a-z-]`. No hizo falta migrar: `site_settings` no valida el valor a prop
 - **`ClimaTema`** pinta nieve o polvo dorado con puntos de CSS, sin figuras, sin librería y
   sólo en la home. Va en `z-index: -1`, por eso el contenedor de `Index` lleva `isolate`: sin
   esa clase, su `bg-background` taparía la capa. Se ve donde la sección es translúcida (la de
-  eventos); las de fondo `bg-papel` la tapan.
+  eventos); las de fondo `bg-papel` la tapan. Las baldosas son anchas y de medidas distintas
+  entre capas: con 280 y 460 px, en una pantalla de 1900 px la nieve formaba filas parejas.
 
 > **Las arañas abrían ~1.700 px de vacío con cualquier tema que no fuera Halloween, también
 > con el normal.** Su `position: absolute` vive en el CSS de Halloween, pero
