@@ -100,7 +100,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
-`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql`.
+`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1606,6 +1606,33 @@ evento. Se carga en el formulario del evento ("Etiqueta destacada", máx. 30).
 - Con el evento agotado la pastilla de la tarjeta no se muestra.
 - **No está en el formulario de fiestas de varios días** (`FiestaFormModal`): se carga
   editando cada día.
+
+### Álbumes de fotos por evento (v37)
+
+Banners "Fotos Halloween Colonia" / "Fotos Halloween Paysandú" arriba de la galería de
+"Eventos anteriores"; cada uno abre **`/fotos/<slug>`** con todas las fotos de ese evento.
+
+- **`gallery_albums`** (`slug` único, `title`, `sort_order`, `active`; lectura pública,
+  escritura `is_manager()`) y **`gallery_items.album_id`** (NULL = suelta). Borrar un álbum
+  **no borra sus fotos**: quedan sueltas (`on delete set null`). La migración crea ya los
+  álbumes `halloween-colonia` y `halloween-paysandu`.
+- **Las fotos de un álbum NO entran al mosaico general** de la home (serían cientos): el
+  mosaico sólo muestra las sueltas. Un álbum **sin fotos activas no muestra banner**, y la
+  sección entera sigue la regla de siempre (nada que mostrar = no se renderiza); el botón
+  "Eventos anteriores" del header usa la misma condición.
+- El banner dice "Fotos " + el título del álbum (se escribe sin "Fotos"); la portada es la
+  primera foto. `GaleriaAnteriores` espera a las dos consultas (fotos y álbumes) antes de
+  pintar, para que el mosaico no salte cuando lleguen los banners.
+- **Página `Fotos.tsx`**: grilla pareja (3 columnas en celular, 5 en escritorio), 30 por
+  tanda con "Ver más", mismo `Visor` que la home. Miniaturas redimensionadas y `lazy`.
+- **Panel → Galería**: sección "Álbumes por evento" (crear, renombrar, activar, borrar, link
+  al álbum y **"Subir fotos" directo a cada álbum**), un filtro (Todo / Sueltas / álbum) y un
+  selector de álbum por foto. El orden con filtro puesto intercambia con el vecino de la lista
+  visible. Las fotos nuevas siguen quedando primero.
+- **Tolera v37 sin correr**: `album_id` sólo se manda si hay álbum elegido, los álbumes que
+  fallan dan lista vacía en la home y el panel avisa "Falta correr la migración v37".
+- Probado en navegador con datos de prueba (banners, página, visor) y typecheck/lint/build.
+  **El panel no se vio con sesión real** y la migración **no se corrió en un Postgres**.
 
 ### Galería de eventos anteriores y botones del header (v33)
 

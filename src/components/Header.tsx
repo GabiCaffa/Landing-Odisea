@@ -8,7 +8,7 @@ import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { useAuth, isStaffRole } from "@/contexts/AuthContext";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
-import { useGaleria } from "@/lib/galeria";
+import { useAlbumes, useGaleria } from "@/lib/galeria";
 
 
 const Header = () => {
@@ -24,7 +24,13 @@ const Header = () => {
   const { pathname } = useLocation();
   // "Eventos anteriores" sólo existe si la galería tiene algo cargado: un botón
   // que lleva a una sección que no se muestra es peor que no tenerlo.
-  const hayGaleria = (useGaleria()?.length ?? 0) > 0;
+  // Misma condición que la sección: fotos sueltas o algún álbum activo con fotos.
+  const itemsGaleria = useGaleria();
+  const albumesGaleria = useAlbumes();
+  const hayGaleria =
+    !!itemsGaleria &&
+    !!albumesGaleria &&
+    itemsGaleria.some((i) => !i.albumId || albumesGaleria.some((a) => a.id === i.albumId));
 
   /**
    * En la home, ir a una sección es scrollear, no navegar: un `<Link to="/#x">`
