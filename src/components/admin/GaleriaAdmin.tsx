@@ -34,7 +34,8 @@ const mensajeDeError = (err: unknown, accion: string) => {
     return "Falta correr la migración v33_galeria_eventos_anteriores.sql en Supabase.";
   }
   // 42703 = columna inexistente (album_id sin v37). 23505 = dirección repetida.
-  if (code === "42703") return "Falta correr la migración v37_galeria_albumes.sql en Supabase.";
+  if (code === "42703") return "Falta correr la migración v37 o v38 (galeria_albumes / album_link_externo) en Supabase.";
+  if (code === "23514") return "El link tiene que empezar con https://";
   if (code === "23505") return "Ya hay un álbum con ese nombre.";
   // Los errores propios (video muy pesado, tipo de archivo) ya vienen claros.
   const msg = (err as Error | null)?.message;
@@ -215,7 +216,7 @@ const GaleriaAdmin = () => {
       <h3 className="font-sport text-xl font-black tracking-wide text-tinta">ÁLBUMES POR EVENTO</h3>
       <p className="mb-4 mt-1 text-xs leading-relaxed text-muted-foreground">
         Cada álbum es un banner en la home ("Fotos Halloween Colonia") que abre su propia página con
-        todas las fotos. Subí las fotos del evento directo al álbum. Un álbum sin fotos no se muestra.
+        todas las fotos. Podés subir las fotos al álbum o, si viven en otro lado (Adobe, Drive), pegar su link: el banner lo abre en otra pestaña. Un álbum sin fotos ni link no se muestra.
       </p>
       <div className="mb-4 space-y-3">
         {albumes.map((al) => {
@@ -237,8 +238,34 @@ const GaleriaAdmin = () => {
                   onBlur={(e) => e.target.value.trim() && void guardarAlbum(al.id, { title: e.target.value })}
                   className="input-techno w-full"
                 />
+                <label className="label-techno mt-2 block" htmlFor={`lnk-${al.id}`}>
+                  Link externo (opcional, ej. carpeta de Adobe)
+                </label>
+                <input
+                  id={`lnk-${al.id}`}
+                  type="url"
+                  inputMode="url"
+                  maxLength={500}
+                  value={al.linkUrl}
+                  onChange={(e) =>
+                    setAlbumes((prev) => prev.map((x) => (x.id === al.id ? { ...x, linkUrl: e.target.value } : x)))
+                  }
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v && !/^https:\/\/\S+$/.test(v)) {
+                      toast.error("El link tiene que empezar con https://");
+                      void recargar();
+                      return;
+                    }
+                    void guardarAlbum(al.id, { linkUrl: v });
+                  }}
+                  placeholder="https://..."
+                  className="input-techno w-full"
+                />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {n} {n === 1 ? "archivo" : "archivos"} · /fotos/{al.slug}
+                  {al.linkUrl
+                    ? "El banner abre este link en otra pestaña."
+                    : `${n} ${n === 1 ? "archivo" : "archivos"} · /fotos/${al.slug}`}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">

@@ -34,6 +34,8 @@ export interface GaleriaAlbum {
   title: string;
   sortOrder: number;
   active: boolean;
+  /** v38: link externo (p. ej. carpeta de Adobe). Si existe, el banner abre eso. */
+  linkUrl: string;
 }
 
 /** El tope del bucket (v33). Se chequea antes de subir para avisar claro. */
@@ -258,12 +260,14 @@ const albumDesdeDb = (row: {
   title: string;
   sort_order: number;
   active: boolean;
+  link_url?: string | null;
 }): GaleriaAlbum => ({
   id: row.id,
   slug: row.slug,
   title: row.title,
   sortOrder: row.sort_order,
   active: row.active,
+  linkUrl: row.link_url ?? "",
 });
 
 /** Dirección válida a partir de un título: "Halloween Paysandú" → "halloween-paysandu". */
@@ -309,12 +313,14 @@ export async function createAlbum(titulo: string, orden: number): Promise<void> 
 
 export async function updateAlbum(
   id: string,
-  cambios: Partial<Pick<GaleriaAlbum, "title" | "active" | "sortOrder">>
+  cambios: Partial<Pick<GaleriaAlbum, "title" | "active" | "sortOrder" | "linkUrl">>
 ): Promise<void> {
   const out: Record<string, unknown> = {};
   if (cambios.title !== undefined) out.title = cambios.title.trim();
   if (cambios.active !== undefined) out.active = cambios.active;
   if (cambios.sortOrder !== undefined) out.sort_order = cambios.sortOrder;
+  // Sólo si se manda: sin v38 corrida, el resto de los cambios sigue andando.
+  if (cambios.linkUrl !== undefined) out.link_url = cambios.linkUrl.trim() || null;
   const { error } = await supabase.from("gallery_albums").update(out).eq("id", id);
   if (error) throw error;
 }

@@ -100,7 +100,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
-`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql`.
+`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1631,6 +1631,12 @@ Banners "Fotos Halloween Colonia" / "Fotos Halloween Paysandú" arriba de la gal
   visible. Las fotos nuevas siguen quedando primero.
 - **Tolera v37 sin correr**: `album_id` sólo se manda si hay álbum elegido, los álbumes que
   fallan dan lista vacía en la home y el panel avisa "Falta correr la migración v37".
+- **Link externo (v38)**: `gallery_albums.link_url` (https). Si un álbum lo tiene, su banner
+  abre ese link en otra pestaña (`target=_blank`, `noopener`) en vez de `/fotos/<slug>`, y el
+  álbum **no necesita fotos cargadas** (portada de marca con una cámara). Se pensó para
+  carpetas compartidas de Adobe Creative Cloud cuando falló el hosteo de imágenes. Se carga
+  en el panel (campo "Link externo" de cada álbum); sin v38 corrida, guardarlo da el aviso de
+  migración y el resto sigue andando.
 - Probado en navegador con datos de prueba (banners, página, visor) y typecheck/lint/build.
   **El panel no se vio con sesión real** y la migración **no se corrió en un Postgres**.
 

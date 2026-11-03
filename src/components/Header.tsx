@@ -30,7 +30,8 @@ const Header = () => {
   const hayGaleria =
     !!itemsGaleria &&
     !!albumesGaleria &&
-    itemsGaleria.some((i) => !i.albumId || albumesGaleria.some((a) => a.id === i.albumId));
+    (albumesGaleria.some((a) => a.linkUrl) ||
+      itemsGaleria.some((i) => !i.albumId || albumesGaleria.some((a) => a.id === i.albumId)));
 
   /**
    * En la home, ir a una sección es scrollear, no navegar: un `<Link to="/#x">`

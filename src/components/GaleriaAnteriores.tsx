@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { ArrowRight, ChevronLeft, ChevronRight, Play, X } from "lucide-react";
+import { ArrowRight, Camera, ChevronLeft, ChevronRight, ExternalLink, Play, X } from "lucide-react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { GaleriaAlbum, GaleriaItem, useAlbumes, useGaleria } from "@/lib/galeria";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
@@ -159,13 +159,13 @@ export const Visor = ({
  */
 const BannerAlbum = ({ album, fotos }: { album: GaleriaAlbum; fotos: GaleriaItem[] }) => {
   const portada = fotos.find((f) => f.kind === "image") ?? fotos[0];
-  const imagen = portada.kind === "video" ? portada.posterUrl : portada.url;
-  return (
-    <Link
-      to={`/fotos/${album.slug}`}
-      className="group relative block aspect-[16/8] overflow-hidden rounded-2xl bg-tinta sm:aspect-[4/3]"
-    >
-      {imagen && (
+  const imagen = portada ? (portada.kind === "video" ? portada.posterUrl : portada.url) : "";
+  const externo = !!album.linkUrl;
+  const clase =
+    "group relative block aspect-[16/8] overflow-hidden rounded-2xl bg-tinta sm:aspect-[4/3]";
+  const contenido = (
+    <>
+      {imagen ? (
         <img
           src={imagenRedimensionada(imagen, 800)}
           srcSet={srcSetRedimensionado(imagen) || undefined}
@@ -175,21 +175,38 @@ const BannerAlbum = ({ album, fotos }: { album: GaleriaAlbum; fotos: GaleriaItem
           decoding="async"
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
+      ) : (
+        // Sin fotos propias (álbum con link externo): fondo de marca con una cámara.
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-tinta to-celeste/40">
+          <Camera className="h-16 w-16 text-white/25" />
+        </div>
       )}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 md:p-5">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-white/70">
-            {fotos.length} {fotos.length === 1 ? "foto" : "fotos"}
+            {externo || fotos.length === 0
+              ? "Ver todas"
+              : `${fotos.length} ${fotos.length === 1 ? "foto" : "fotos"}`}
           </p>
           <h3 className="title-sport text-2xl leading-none text-white sm:text-3xl">
             Fotos {album.title}
           </h3>
         </div>
         <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-celeste text-accent-foreground transition-transform duration-300 group-hover:translate-x-1">
-          <ArrowRight className="h-5 w-5" />
+          {externo ? <ExternalLink className="h-5 w-5" /> : <ArrowRight className="h-5 w-5" />}
         </span>
       </div>
+    </>
+  );
+  // Con link externo (v38) se abre en otra pestaña; si no, la página del álbum.
+  return externo ? (
+    <a href={album.linkUrl} target="_blank" rel="noopener noreferrer" className={clase}>
+      {contenido}
+    </a>
+  ) : (
+    <Link to={`/fotos/${album.slug}`} className={clase}>
+      {contenido}
     </Link>
   );
 };
@@ -307,10 +324,10 @@ const GaleriaAnteriores = () => {
   // aparecería y los banners lo empujarían hacia abajo.
   if (!todos || !albumes) return null;
   const sueltos = todos.filter((i) => !i.albumId);
-  // Un álbum sin fotos activas no se muestra (banner vacío = ruido).
+  // Un álbum sin fotos activas ni link no se muestra (banner vacío = ruido).
   const conFotos = albumes
     .map((album) => ({ album, fotos: todos.filter((i) => i.albumId === album.id) }))
-    .filter((a) => a.fotos.length > 0);
+    .filter((a) => a.fotos.length > 0 || !!a.album.linkUrl);
   if (sueltos.length === 0 && conFotos.length === 0) return null;
   return <Contenido items={sueltos} albumes={conFotos} />;
 };
