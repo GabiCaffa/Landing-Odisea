@@ -63,6 +63,7 @@ const aItem = (p: Participante): GaleriaItem => ({
   caption: p.label,
   sortOrder: p.sortOrder,
   active: true,
+  albumId: null,
 });
 
 const Votacion = () => {

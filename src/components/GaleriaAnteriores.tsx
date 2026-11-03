@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Play, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight, Camera, ChevronLeft, ChevronRight, ExternalLink, Play, X } from "lucide-react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
-import { GaleriaItem, useGaleria } from "@/lib/galeria";
+import { GaleriaAlbum, GaleriaItem, useAlbumes, useGaleria } from "@/lib/galeria";
 import { imagenRedimensionada, srcSetRedimensionado } from "@/lib/imagenes";
 import { claseDeMosaico, tamanosDeMosaico } from "@/lib/mosaico";
 
@@ -22,7 +23,7 @@ import { claseDeMosaico, tamanosDeMosaico } from "@/lib/mosaico";
 
 const DE_A = 8;
 
-const Miniatura = ({ item, grande }: { item: GaleriaItem; grande: boolean }) => {
+export const Miniatura = ({ item, grande }: { item: GaleriaItem; grande: boolean }) => {
   const imagen = item.kind === "video" ? item.posterUrl : item.url;
 
   return imagen ? (
@@ -153,12 +154,76 @@ export const Visor = ({
 };
 
 /**
+ * Banner de un álbum (v37): "Fotos Halloween Colonia". La portada es la primera
+ * foto del álbum; al tocarlo se abre /fotos/<slug>.
+ */
+const BannerAlbum = ({ album, fotos }: { album: GaleriaAlbum; fotos: GaleriaItem[] }) => {
+  const portada = fotos.find((f) => f.kind === "image") ?? fotos[0];
+  const imagen = portada ? (portada.kind === "video" ? portada.posterUrl : portada.url) : "";
+  const externo = !!album.linkUrl;
+  const clase =
+    "group relative block aspect-[16/8] overflow-hidden rounded-2xl bg-tinta sm:aspect-[4/3]";
+  const contenido = (
+    <>
+      {imagen ? (
+        <img
+          src={imagenRedimensionada(imagen, 800)}
+          srcSet={srcSetRedimensionado(imagen) || undefined}
+          sizes="(min-width: 768px) 50vw, 100vw"
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : (
+        // Sin fotos propias (álbum con link externo): fondo de marca con una cámara.
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-tinta to-celeste/40">
+          <Camera className="h-16 w-16 text-white/25" />
+        </div>
+      )}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 md:p-5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-white/70">
+            {externo || fotos.length === 0
+              ? "Ver todas"
+              : `${fotos.length} ${fotos.length === 1 ? "foto" : "fotos"}`}
+          </p>
+          <h3 className="title-sport text-2xl leading-none text-white sm:text-3xl">
+            Fotos {album.title}
+          </h3>
+        </div>
+        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-celeste text-accent-foreground transition-transform duration-300 group-hover:translate-x-1">
+          {externo ? <ExternalLink className="h-5 w-5" /> : <ArrowRight className="h-5 w-5" />}
+        </span>
+      </div>
+    </>
+  );
+  // Con link externo (v38) se abre en otra pestaña; si no, la página del álbum.
+  return externo ? (
+    <a href={album.linkUrl} target="_blank" rel="noopener noreferrer" className={clase}>
+      {contenido}
+    </a>
+  ) : (
+    <Link to={`/fotos/${album.slug}`} className={clase}>
+      {contenido}
+    </Link>
+  );
+};
+
+/**
  * El contenido va en su propio componente, que sólo se monta cuando ya hay
  * items: `useScrollReveal` engancha su observer en el primer efecto, y si el
  * título todavía no existe (los datos llegan async) el ref está vacío y nunca
  * se engancha — el título quedaría invisible para siempre.
  */
-const Contenido = ({ items }: { items: GaleriaItem[] }) => {
+const Contenido = ({
+  items,
+  albumes,
+}: {
+  items: GaleriaItem[];
+  albumes: { album: GaleriaAlbum; fotos: GaleriaItem[] }[];
+}) => {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.1 });
   const [visibles, setVisibles] = useState(DE_A);
   const [abierto, setAbierto] = useState<number | null>(null);
@@ -181,6 +246,15 @@ const Contenido = ({ items }: { items: GaleriaItem[] }) => {
           </h2>
         </div>
 
+        {albumes.length > 0 && (
+          <div className={`grid gap-3 sm:grid-cols-2 ${items.length ? "mb-6 md:mb-8" : ""}`}>
+            {albumes.map(({ album, fotos }) => (
+              <BannerAlbum key={album.id} album={album} fotos={fotos} />
+            ))}
+          </div>
+        )}
+
+        {items.length > 0 && (
         <div className="grid grid-cols-2 gap-2 [grid-auto-flow:dense] md:grid-cols-4 md:gap-3">
           {mostrados.map((item, i) => {
             const grande = tamanos[i] === "g";
@@ -216,6 +290,7 @@ const Contenido = ({ items }: { items: GaleriaItem[] }) => {
             );
           })}
         </div>
+        )}
 
         {visibles < items.length && (
           <div className="mt-5 flex justify-center">
@@ -243,9 +318,18 @@ const Contenido = ({ items }: { items: GaleriaItem[] }) => {
 };
 
 const GaleriaAnteriores = () => {
-  const items = useGaleria();
-  if (!items || items.length === 0) return null;
-  return <Contenido items={items} />;
+  const todos = useGaleria();
+  const albumes = useAlbumes();
+  // Esperar a las dos consultas: si los álbumes llegaran después, el mosaico
+  // aparecería y los banners lo empujarían hacia abajo.
+  if (!todos || !albumes) return null;
+  const sueltos = todos.filter((i) => !i.albumId);
+  // Un álbum sin fotos activas ni link no se muestra (banner vacío = ruido).
+  const conFotos = albumes
+    .map((album) => ({ album, fotos: todos.filter((i) => i.albumId === album.id) }))
+    .filter((a) => a.fotos.length > 0 || !!a.album.linkUrl);
+  if (sueltos.length === 0 && conFotos.length === 0) return null;
+  return <Contenido items={sueltos} albumes={conFotos} />;
 };
 
 export default GaleriaAnteriores;

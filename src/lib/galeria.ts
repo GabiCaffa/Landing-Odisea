@@ -23,6 +23,19 @@ export interface GaleriaItem {
   caption: string;
   sortOrder: number;
   active: boolean;
+  /** v37: álbum al que pertenece. null = suelta (mosaico general de la home). */
+  albumId: string | null;
+}
+
+/** v37: un álbum de fotos de un evento (banner en la home → /fotos/<slug>). */
+export interface GaleriaAlbum {
+  id: string;
+  slug: string;
+  title: string;
+  sortOrder: number;
+  active: boolean;
+  /** v38: link externo (p. ej. carpeta de Adobe). Si existe, el banner abre eso. */
+  linkUrl: string;
 }
 
 /** El tope del bucket (v33). Se chequea antes de subir para avisar claro. */
@@ -38,6 +51,7 @@ const desdeDb = (row: {
   caption: string | null;
   sort_order: number;
   active: boolean;
+  album_id?: string | null;
 }): GaleriaItem => ({
   id: row.id,
   kind: row.kind,
@@ -46,6 +60,7 @@ const desdeDb = (row: {
   caption: row.caption ?? "",
   sortOrder: row.sort_order,
   active: row.active,
+  albumId: row.album_id ?? null,
 });
 
 /**
@@ -74,7 +89,7 @@ export async function fetchGaleria(): Promise<GaleriaItem[]> {
   return (data ?? []).map(desdeDb);
 }
 
-export type GaleriaInput = Omit<GaleriaItem, "id">;
+export type GaleriaInput = Omit<GaleriaItem, "id" | "albumId"> & { albumId?: string | null };
 
 const haciaDb = (g: Partial<GaleriaInput>) => {
   const out: Record<string, unknown> = {};
@@ -84,6 +99,8 @@ const haciaDb = (g: Partial<GaleriaInput>) => {
   if (g.caption !== undefined) out.caption = g.caption;
   if (g.sortOrder !== undefined) out.sort_order = g.sortOrder;
   if (g.active !== undefined) out.active = g.active;
+  // Sólo si se manda: sin v37 corrida, guardar el resto de los campos sigue andando.
+  if (g.albumId !== undefined) out.album_id = g.albumId;
   return out;
 };
 
@@ -233,4 +250,99 @@ export const useGaleria = (): GaleriaItem[] | null => {
     };
   }, []);
   return items;
+};
+
+// ─── Álbumes (v37) ──────────────────────────────────────────────────────────
+
+const albumDesdeDb = (row: {
+  id: string;
+  slug: string;
+  title: string;
+  sort_order: number;
+  active: boolean;
+  link_url?: string | null;
+}): GaleriaAlbum => ({
+  id: row.id,
+  slug: row.slug,
+  title: row.title,
+  sortOrder: row.sort_order,
+  active: row.active,
+  linkUrl: row.link_url ?? "",
+});
+
+/** Dirección válida a partir de un título: "Halloween Paysandú" → "halloween-paysandu". */
+export const slugDeAlbum = (titulo: string): string =>
+  titulo
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+
+/** Los de la home. Sin v37 (o sin red) devuelve vacío: no rompe nada. */
+export async function fetchAlbumesActivos(): Promise<GaleriaAlbum[]> {
+  try {
+    const { data, error } = await supabase
+      .from("gallery_albums")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order");
+    if (error) throw error;
+    return (data ?? []).map(albumDesdeDb);
+  } catch {
+    return [];
+  }
+}
+
+/** Todos, para el panel. Tira: el staff tiene que enterarse si falla. */
+export async function fetchAlbumes(): Promise<GaleriaAlbum[]> {
+  const { data, error } = await supabase.from("gallery_albums").select("*").order("sort_order");
+  if (error) throw error;
+  return (data ?? []).map(albumDesdeDb);
+}
+
+export async function createAlbum(titulo: string, orden: number): Promise<void> {
+  const slug = slugDeAlbum(titulo);
+  if (!slug) throw new Error("Escribí un nombre para el álbum.");
+  const { error } = await supabase
+    .from("gallery_albums")
+    .insert({ slug, title: titulo.trim(), sort_order: orden });
+  if (error) throw error;
+}
+
+export async function updateAlbum(
+  id: string,
+  cambios: Partial<Pick<GaleriaAlbum, "title" | "active" | "sortOrder" | "linkUrl">>
+): Promise<void> {
+  const out: Record<string, unknown> = {};
+  if (cambios.title !== undefined) out.title = cambios.title.trim();
+  if (cambios.active !== undefined) out.active = cambios.active;
+  if (cambios.sortOrder !== undefined) out.sort_order = cambios.sortOrder;
+  // Sólo si se manda: sin v38 corrida, el resto de los cambios sigue andando.
+  if (cambios.linkUrl !== undefined) out.link_url = cambios.linkUrl.trim() || null;
+  const { error } = await supabase.from("gallery_albums").update(out).eq("id", id);
+  if (error) throw error;
+}
+
+/** Las fotos del álbum quedan sueltas (on delete set null): no se borra ningún archivo. */
+export async function deleteAlbum(id: string): Promise<void> {
+  const { error } = await supabase.from("gallery_albums").delete().eq("id", id);
+  if (error) throw error;
+}
+
+let albumesPendientes: Promise<GaleriaAlbum[]> | null = null;
+
+/** Álbumes activos, con una sola consulta por carga. `null` = todavía no contestó. */
+export const useAlbumes = (): GaleriaAlbum[] | null => {
+  const [albumes, setAlbumes] = useState<GaleriaAlbum[] | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    albumesPendientes ??= fetchAlbumesActivos();
+    albumesPendientes.then((r) => vivo && setAlbumes(r));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  return albumes;
 };
