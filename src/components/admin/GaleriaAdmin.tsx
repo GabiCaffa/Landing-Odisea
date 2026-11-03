@@ -36,11 +36,17 @@ const mensajeDeError = (err: unknown, accion: string) => {
   // 42703 = columna inexistente (album_id sin v37). 23505 = dirección repetida.
   if (code === "42703") return "Falta correr la migración v37 o v38 (galeria_albumes / album_link_externo) en Supabase.";
   if (code === "23514") return "El link tiene que empezar con https://";
+  // PGRST204 = la API todavía no ve la columna (migración corrida pero caché sin recargar).
+  if (code === "PGRST204") {
+    return "Supabase todavía no ve la columna nueva. Corré en el SQL Editor: notify pgrst, 'reload schema';";
+  }
+  if (code === "42501") return "No tenés permiso para cambiar esto (hace falta ser admin u operador).";
   if (code === "23505") return "Ya hay un álbum con ese nombre.";
   // Los errores propios (video muy pesado, tipo de archivo) ya vienen claros.
   const msg = (err as Error | null)?.message;
   if (msg && /MB|foto o un video/.test(msg)) return msg;
-  return `No se pudo ${accion}. ¿Seguís con la sesión iniciada?`;
+  // Se muestra el detalle real: un mensaje genérico no deja ver qué falló.
+  return `No se pudo ${accion}${msg ? ` (${msg})` : ""}. ¿Seguís con la sesión iniciada?`;
 };
 
 const GaleriaAdmin = () => {
