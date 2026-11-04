@@ -4757,6 +4757,14 @@ const THEME_SWATCHES: Record<SiteTheme, { colors: string[]; caption: string }> =
     colors: ["#0B1D22", "#E8EFEE", "#FA7A1E", "#4FD1B3"],
     caption: "Noche verde azulada y fuego de calabaza, tomado del flyer de Halloween Colonia.",
   },
+  navidad: {
+    colors: ["#0C2018", "#F3EEE2", "#EF4A43", "#E6BC5A"],
+    caption: "Pino de noche, rojo y dorado, con nieve de fondo en la home.",
+  },
+  "anio-nuevo": {
+    colors: ["#0B0B10", "#F6F1E6", "#E3B34C", "#F4E2B5"],
+    caption: "Negro de medianoche y dorado, con polvo dorado de fondo en la home.",
+  },
 };
 
 const AppearanceAdmin = () => {

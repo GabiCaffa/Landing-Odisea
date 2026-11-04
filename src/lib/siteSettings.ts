@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase";
 
 /** Temas que el CSS sabe pintar. Tiene que coincidir con los bloques
  *  `[data-theme="..."]` de src/index.css. */
-export const SITE_THEMES = ["base", "halloween"] as const;
+export const SITE_THEMES = ["base", "halloween", "navidad", "anio-nuevo"] as const;
 export type SiteTheme = (typeof SITE_THEMES)[number];
 
 export const DEFAULT_THEME: SiteTheme = "base";
@@ -23,6 +23,8 @@ export const isSiteTheme = (value: unknown): value is SiteTheme =>
 export const THEME_LABELS: Record<SiteTheme, string> = {
   base: "ODÍSEA",
   halloween: "Halloween",
+  navidad: "Navidad",
+  "anio-nuevo": "Año Nuevo",
 };
 
 // ─── Acceso a datos ─────────────────────────────────────────────────────────

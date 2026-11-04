@@ -601,6 +601,18 @@ inusable) y con el dato en el `aria-label`. "Comprar" abre el mismo
 `TicketPurchaseModal` del evento, que aplica el descuento con la misma
 `promoVigente`.
 
+**Destacado en la primera pantalla (`PromoDestacada`).** "Promos activas" queda bajo el
+banner y los dos atajos; una promo que vence en pocos días tiene que verse apenas se
+entra. Por eso, bajo el banner y sobre "Ver eventos / Ver promociones", va una tarjeta
+naranja por **cada promo vigente**, hasta 3, la que vence antes arriba (el mismo orden
+de la sección; las demás quedan en "Promos activas"). Sale de los
+**mismos datos**: no hay un texto aparte que mantener. Muestra el evento, el nombre de la
+promo (hasta 2 líneas) y **el cierre entero en su propia línea** ("Hasta el mar 27/10,
+23:59", o "Termina en 2d 03h 12m" en las últimas 72 hs). Tocarla abre directo la compra
+de ese evento. Sin promo vigente no se renderiza nada. La cuenta de ofertas vive en
+`src/lib/ofertasActivas.ts` (`useOfertas`), compartida con `PromosActivasSection`.
+**Conviene un nombre de promo corto** ("5X4", "1 ENTRA DE REGALO"): es el título de la tarjeta.
+
 > **`fetchDeliveries` ahora TIRA si la consulta falla.** La v18 nunca se había
 > corrido en producción: el embed fallaba, devolvía `[]` y la pestaña Entregas
 > se veía vacía sin ningún error. Ahora el panel muestra el error.
@@ -2283,6 +2295,43 @@ archivo del bucket.
 > **Retención:** las fotos de documento se guardan **sin plazo de borrado**. Fue una decisión
 > explícita del autor, tomada después de plantearle un job de limpieza a 30/90 días. Si
 > alguna vez se quiere un vencimiento, el molde es el `pg_cron` de `v8_cleanup_unconfirmed`.
+
+### Temas Navidad y Año Nuevo (sin migración)
+
+Dos temas más en el interruptor de v19: `navidad` (pino de noche, rojo y dorado) y
+`anio-nuevo` (negro y dorado). Se prenden desde **Apariencia** y antes se pueden ver con
+`?tema=navidad` o `?tema=anio-nuevo`. El id va sin ñ porque el script de `index.html` sólo
+acepta `[a-z-]`. No hizo falta migrar: `site_settings` no valida el valor a propósito.
+
+- **Un tema nuevo se agrega en cinco lugares:** `SITE_THEMES` y `THEME_LABELS`
+  (`siteSettings.ts`), los tokens y lo específico en `index.css`, el fondo en el `<style>`
+  crítico de `index.html`, `fondos` en `bakeTheme` (`vite.config.ts`) y `THEME_SWATCHES` en
+  `Admin.tsx`. TypeScript avisa sólo si falta el último.
+- **El rojo de Navidad va claro y con texto oscuro.** El mismo token pinta botones y texto
+  chico: con rojo profundo y letra blanca las etiquetas rojas quedan en 3,5:1 sobre el pino.
+  Medido así: 4,57 sobre el fondo y 5,18 el texto del botón. Sobre una tarjeta da 4,09, que
+  alcanza para texto grande pero no para letra chica. Año Nuevo queda por encima de 7:1.
+- **`--resplandor`** es el brillo interior de las cards. En Navidad es dorado porque rojo
+  sobre verde daba un marrón embarrado.
+- **`ClimaTema`** pinta nieve o polvo dorado con puntos de CSS, sin figuras, sin librería y
+  sólo en la home. Va en `z-index: -1`, por eso el contenedor de `Index` lleva `isolate`: sin
+  esa clase, su `bg-background` taparía la capa. Se ve donde la sección es translúcida (la de
+  eventos); las de fondo `bg-papel` la tapan.
+
+> **Las arañas abrían ~1.700 px de vacío con cualquier tema que no fuera Halloween, también
+> con el normal.** Su `position: absolute` vive en el CSS de Halloween, pero
+> `SpookySpiders` se montaba siempre y sus cajas de 420 px quedaban en el flujo. Medido en
+> celular: 4.335 px de página contra 2.655. Era un bug esperando a que se apagara Halloween;
+> ahora se monta sólo con ese tema.
+
+> **El título de la promo destacada no se leía en los temas oscuros** (`text-tinta` claro
+> sobre el acento). Se corrige con `.promo-card__titulo` y no cambiando `--tinta` en toda la
+> tarjeta: eso dejaba el botón oscuro sobre oscuro y la flecha desaparecía.
+
+**El tema cambia la paleta, no el contenido.** Los banners y los flyers son imágenes que se
+cargan desde el panel: sin banners de Navidad, el hero sigue mostrando los que estén activos.
+
+**No se probó** la pestaña Apariencia con una sesión real de admin: sólo compila.
 
 ---
 ## 6.4 Rendimiento de la landing

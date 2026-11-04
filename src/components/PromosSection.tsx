@@ -330,7 +330,7 @@ const PromoCard = ({
         >
           {promo.tag}
         </span>
-        <span className="block font-sport text-xl font-black uppercase leading-tight tracking-wide text-tinta md:text-2xl">
+        <span className="promo-card__titulo block font-sport text-xl font-black uppercase leading-tight tracking-wide text-tinta md:text-2xl">
           {promo.title}
         </span>
         <span
