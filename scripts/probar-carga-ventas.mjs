@@ -185,6 +185,41 @@ const candidata = (over) => ({
   check("evento de hoy → nada", revisarEvento({ date: "2026-10-19", status: "activo" }, ahora).length === 0);
 }
 
+// ─── Pedidos de la web (v36) ────────────────────────────────────────────────
+{
+  const conPedido = buildPurchaseMessage({
+    fullName: "Juan Pérez",
+    email: "juan@mail.com",
+    phoneE164: "+59899111222",
+    eventName: "NAVIDAD COLONIA",
+    eventDate: "24 de diciembre",
+    items: [{ name: "General", qty: 2, price: 700 }],
+    total: 1400,
+    account: null,
+    orderCode: "K7Q2XM",
+  });
+  check("el mensaje lleva el número de pedido", conPedido.includes("Pedido: #K7Q2XM"));
+  const p = parsePurchaseMessage(conPedido);
+  check("…y el panel lo lee", p.data.orderCode === "K7Q2XM", p.data.orderCode);
+  check("…sin romper el resto", p.usable && p.data.total === 1400 && p.data.quantity === 2);
+  check("mensaje viejo sin número → null", parsePurchaseMessage(m1).data.orderCode === null);
+  const pegado = parsePurchaseMessage(
+    conPedido.split("\n").map((l) => `[21:03, 19/12/2026] Juan: ${l}`).join("\n")
+  );
+  check("…también copiado de WhatsApp Web", pegado.data.orderCode === "K7Q2XM", pegado.data.orderCode);
+}
+{
+  const pedido = venta({ id: "p1", status: "por_confirmar", orderCode: "K7Q2XM" });
+  const r = revisarDuplicados(candidata({ excluirId: "p1" }), [pedido], { ahora });
+  check("confirmar un pedido no avisa que se repite con sí mismo", r.length === 0, JSON.stringify(r));
+  const r2 = revisarDuplicados(candidata(), [pedido], { ahora });
+  check(
+    "sin número, un pedido abierto igual avisa (y dice que es un pedido)",
+    r2.length === 1 && r2[0].nivel === "fuerte" && r2[0].texto.includes("pedido sin confirmar"),
+    JSON.stringify(r2)
+  );
+}
+
 // ─── Respuesta al cliente ───────────────────────────────────────────────────
 {
   const texto = buildConfirmacionVenta({ nombre: "Juan Pérez", cantidad: 2, evento: "HALLOWEEN COLONIA", email: "juan@mail.com" });

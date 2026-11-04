@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Check, ChevronDown } from "lucide-react";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import PhoneInput from "./PhoneInput";
@@ -20,6 +20,7 @@ import {
 import { useComisionTicketera } from "@/contexts/ThemeContext";
 import { precioConComision } from "@/lib/siteSettings";
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
+import { generarCodigoPedido, prepararPedidoWeb, registrarPedidoWeb } from "@/lib/pedidosWeb";
 import { rastrear } from "@/lib/pixel";
 import { esFiestaAparte } from "@/lib/fiestasAparte";
 import { toast } from "sonner";
@@ -117,6 +118,18 @@ const CompraEntradas = ({
 
   // Cuenta de cobro del evento (la carga el admin desde el panel).
   const [account, setAccount] = useState<PaymentAccount | null>(null);
+
+  /**
+   * Número del pedido que se registra al tocar "Enviar" (v36). Uno por
+   * apertura: si la persona toca dos veces, o vuelve y cambia el carrito, es el
+   * MISMO pedido y la base lo reemplaza en vez de duplicarlo.
+   */
+  const codigoPedido = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    codigoPedido.current = generarCodigoPedido();
+    prepararPedidoWeb();
+  }, [isOpen, currentUser]);
 
   // Si el user ya está logueado, saltamos el prompt y prellenamos
   useEffect(() => {
@@ -265,6 +278,8 @@ const CompraEntradas = ({
         })),
       total,
       account,
+      // Sin evento no hay pedido que registrar, y entonces tampoco número.
+      orderCode: eventId ? codigoPedido.current : null,
     });
   };
 
@@ -282,6 +297,28 @@ const CompraEntradas = ({
     if (!message) return;
     const url = `https://wa.me/59892592179?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
+    // El pedido "por confirmar" (v36) sale DESPUÉS de abrir WhatsApp: esperar
+    // la respuesta antes haría que el celular bloquee la ventana nueva. Si no
+    // se guarda, el staff carga la venta a mano como siempre.
+    if (eventId && codigoPedido.current) {
+      void registrarPedidoWeb({
+        code: codigoPedido.current,
+        eventId,
+        fullName: formData.name,
+        email: formData.email,
+        phoneE164,
+        documentId: usableDocumentId(currentUser?.documentId),
+        lines: lineas
+          .filter((l) => l.qty > 0)
+          .map((l) => ({
+            ticketTypeId: l.ticket.ticketTypeId,
+            quantity: l.qty,
+            unitPrice: l.ticket.price,
+            promoId: l.descuento?.promo.promoId ?? null,
+          })),
+        total,
+      });
+    }
     // Píxel de Meta: la compra se cierra por WhatsApp, así que no hay un
     // "Purchase" real que medir. Mandar el mensaje es el momento de mayor
     // intención, y es lo que se le da a Meta para optimizar los anuncios.

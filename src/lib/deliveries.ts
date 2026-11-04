@@ -7,7 +7,31 @@ import { supabase } from "@/lib/supabase";
  * sólo admin vía RLS). Ver supabase/v9_ticket_deliveries.sql.
  */
 
-export type DeliveryStatus = "pending" | "sent";
+/**
+ * Estados de una venta (v36). `pending` y `sent` son los de siempre (v9);
+ * `por_confirmar` y `vencido` son de los pedidos que registra la web.
+ *
+ * - `por_confirmar`: el cliente tocó "Enviar" en la web. NO es una venta:
+ *   nadie vio el comprobante.
+ * - `pending`: "pendiente de enviar". El staff vio el comprobante.
+ * - `sent`: se mandaron las entradas.
+ * - `vencido`: pedido sin comprobante a las 48 hs. Se puede confirmar igual.
+ */
+export type DeliveryStatus = "por_confirmar" | "pending" | "sent" | "vencido";
+
+export const ESTADO_LABEL: Record<DeliveryStatus, string> = {
+  por_confirmar: "Por confirmar",
+  pending: "Por enviar",
+  sent: "Enviada",
+  vencido: "Vencido",
+};
+
+/**
+ * Venta confirmada: el pago se vio. Es lo único que cuenta como recaudación,
+ * como "ya compró" en la ficha de un usuario y para los cupos de promo.
+ */
+export const esConfirmada = (d: { status: DeliveryStatus }) =>
+  d.status === "pending" || d.status === "sent";
 
 /**
  * Una línea del desglose: qué tipo de entrada compró y a qué precio (v18).
@@ -52,6 +76,10 @@ export interface TicketDelivery {
   receiptPath?: string;
   /** SHA-256 del archivo del comprobante, para avisar si se carga dos veces (v35). */
   receiptHash?: string;
+  /** Número de pedido de la web ("K7Q2XM", v36). */
+  orderCode?: string;
+  /** `web` = lo registró el sitio; `manual` = lo cargó el staff (v36). */
+  origin: "manual" | "web";
   createdAt: string;
 }
 
@@ -115,6 +143,9 @@ function fromDb(row: any): TicketDelivery {
     notes: row.notes ?? undefined,
     receiptPath: row.receipt_path ?? undefined,
     receiptHash: row.receipt_hash ?? undefined,
+    orderCode: row.order_code ?? undefined,
+    // Sin v36 la columna no existe: todo lo cargado hasta ahí es manual.
+    origin: row.origin === "web" ? "web" : "manual",
     createdAt: row.created_at,
   };
 }
@@ -265,7 +296,18 @@ export async function deleteDelivery(
   return { ok: true };
 }
 
-/** Marca una entrega como enviada (sella sent_at) o la devuelve a pendiente. */
+/** Sin la migración v36, la base no conoce los estados nuevos. */
+function errorDeEstado(message: string): string {
+  if (/status_check|por_confirmar|vencido/i.test(message)) {
+    return "Falta correr la migración v36 para los estados de las ventas.";
+  }
+  return message;
+}
+
+/**
+ * Cambia el estado de una venta. Con v36 la base sella `sent_at` y
+ * `confirmed_at` sola, y rechaza marcar como enviado un pedido sin confirmar.
+ */
 export async function setDeliveryStatus(
   id: string,
   status: DeliveryStatus
@@ -277,6 +319,33 @@ export async function setDeliveryStatus(
       sent_at: status === "sent" ? new Date().toISOString() : null,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: errorDeEstado(error.message) };
+  return { ok: true };
+}
+
+/**
+ * Llegó el comprobante de un pedido de la web: pasa a "por enviar" con los
+ * datos del mensaje y el comprobante (v36). Es UNA sola escritura, así no
+ * puede quedar confirmado sin comprobante ni con comprobante sin confirmar.
+ */
+export async function confirmarPedido(
+  id: string,
+  patch: Partial<DeliveryInput>,
+  lines?: DeliveryTicketLine[]
+): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase
+    .from("ticket_deliveries")
+    .update({ ...toDb(patch), status: "pending" })
+    .eq("id", id);
+  if (error) return { ok: false, error: errorDeEstado(traducirError(error.message)) };
+  if (lines?.length) {
+    const tickets = await saveDeliveryTickets(id, lines);
+    if (!tickets.ok) {
+      return {
+        ok: false,
+        error: `Se confirmó el pedido, pero no el tipo de entrada: ${tickets.error}. Editalo para completarlo.`,
+      };
+    }
+  }
   return { ok: true };
 }

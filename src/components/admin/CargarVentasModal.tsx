@@ -11,7 +11,9 @@ import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { foldText } from "@/lib/utils";
 import { parsePurchaseMessage, splitPurchaseMessages } from "@/lib/purchaseMessage";
 import {
+  confirmarPedido,
   createDeliveryWithTickets,
+  ESTADO_LABEL,
   type DeliveryInput,
   type DeliveryTicketLine,
   type TicketDelivery,
@@ -93,9 +95,21 @@ interface EstadoVenta {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Mensaje → evento, usuario, desglose y promos del catálogo. */
-function interpretar(texto: string, events: AdminEvent[], users: User[], pickedEventId: string) {
+function interpretar(
+  texto: string,
+  events: AdminEvent[],
+  users: User[],
+  pickedEventId: string,
+  existing: TicketDelivery[]
+) {
   const parsed = parsePurchaseMessage(texto);
   const data = parsed.data;
+
+  // El pedido que registró la web al tocar Enviar (v36). Si está, guardar lo
+  // CONFIRMA en vez de cargar una venta nueva.
+  const pedido = data.orderCode
+    ? existing.find((d) => d.orderCode === data.orderCode) ?? null
+    : null;
 
   // Evento: sin tildes ni mayúsculas, y aceptando que uno contenga al otro
   // porque el nombre suele venir con adornos.
@@ -191,6 +205,7 @@ function interpretar(texto: string, events: AdminEvent[], users: User[], pickedE
   return {
     parsed,
     data,
+    pedido,
     matchedEvent,
     eventId,
     selectedEvent,
@@ -278,9 +293,9 @@ const CargarVentasModal = ({
   const actual = useMemo(
     () =>
       fase === "revisar" && ventas[index] !== undefined
-        ? interpretar(ventas[index], events, users, estado?.pickedEventId ?? "")
+        ? interpretar(ventas[index], events, users, estado?.pickedEventId ?? "", existing)
         : null,
-    [fase, ventas, index, events, users, estado?.pickedEventId]
+    [fase, ventas, index, events, users, estado?.pickedEventId, existing]
   );
 
   const setEstado = (i: number, patch: Partial<EstadoVenta>) =>
@@ -299,7 +314,7 @@ const CargarVentasModal = ({
       guardadaId: revisada.id ?? "formulario",
       comprobante: null,
       respuesta: v
-        ? respuestaPara(interpretar(v, events, users, previo?.pickedEventId ?? ""))
+        ? respuestaPara(interpretar(v, events, users, previo?.pickedEventId ?? "", existing))
         : undefined,
     });
     setIndex(revisada.index);
@@ -354,8 +369,19 @@ const CargarVentasModal = ({
 
   const avisos: AvisoVenta[] = useMemo(() => {
     if (!actual || estado?.guardadaId) return [];
-    const { data, eventId, selectedEvent, lines, value } = actual;
+    const { data, eventId, selectedEvent, lines, value, pedido } = actual;
+    // El pedido ya está confirmado: guardar cargaría la misma venta otra vez.
+    const yaConfirmado: AvisoVenta[] =
+      pedido && (pedido.status === "pending" || pedido.status === "sent")
+        ? [
+            {
+              nivel: "fuerte",
+              texto: `El pedido #${pedido.orderCode} ya está confirmado (${ESTADO_LABEL[pedido.status].toLowerCase()}).`,
+            },
+          ]
+        : [];
     return [
+      ...yaConfirmado,
       ...revisarDuplicados(
         {
           eventId,
@@ -364,6 +390,7 @@ const CargarVentasModal = ({
           quantity: data.quantity,
           value,
           receiptHash: estado?.comprobante?.hash,
+          excluirId: pedido?.id,
         },
         existing,
         { nombreEvento: (id) => events.find((e) => e.id === id)?.name ?? "otro evento" }
@@ -417,7 +444,13 @@ const CargarVentasModal = ({
     };
 
     setGuardando(true);
-    const result = await createDeliveryWithTickets(input, lines);
+    // Con pedido de la web sin confirmar, se confirma ESE pedido (v36): queda
+    // en Por enviar con el comprobante, y no aparece una venta repetida.
+    const pedido = actual.pedido;
+    const result =
+      pedido && (pedido.status === "por_confirmar" || pedido.status === "vencido")
+        ? { ...(await confirmarPedido(pedido.id, input, lines)), id: pedido.id }
+        : await createDeliveryWithTickets(input, lines);
     setGuardando(false);
     if (!result.id) {
       toast.error(result.error ?? "No se pudo guardar la venta");
@@ -634,6 +667,17 @@ const CargarVentasModal = ({
           </div>
         ) : (
           <>
+            {actual.pedido && (actual.pedido.status === "por_confirmar" || actual.pedido.status === "vencido") && (
+              <div className="border border-celeste/40 bg-celeste/10 p-3 text-sm">
+                <p className="font-semibold">
+                  Pedido #{actual.pedido.orderCode} de la web ·{" "}
+                  {ESTADO_LABEL[actual.pedido.status].toLowerCase()}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  Al guardar se confirma ese pedido y pasa a Por enviar. No se carga una venta nueva.
+                </p>
+              </div>
+            )}
             <div className="divide-y divide-border border border-border">
               <div className="flex items-center justify-between bg-secondary/50 px-4 py-2.5">
                 <span className="text-xs font-bold uppercase tracking-wider">Lo que entendí</span>

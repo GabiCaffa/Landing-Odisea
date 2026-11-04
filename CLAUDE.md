@@ -101,7 +101,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` →
-`v35_comprobantes_ventas.sql`.
+`v35_comprobantes_ventas.sql` → `v36_ventas_por_estado.sql`.
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1534,6 +1534,52 @@ hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google S
   no viajan) y del servicio (sin variable, URL ajena, Google 500, sin red) más la
   pantalla con una hoja simulada. **No probado contra una hoja real de Google.**
 
+### Ventas por estado: el pedido de la web se registra solo (v36)
+
+Pedido del autor: que la venta exista en la web desde que el cliente escribe, y que
+avance por estados. Sin la API de WhatsApp (en pausa, tiene costo), el momento que el
+sitio SÍ ve es el toque en **"Enviar por WhatsApp"**: ahí se registra el pedido.
+
+| Estado | Cuándo | Quién |
+|---|---|---|
+| `por_confirmar` | El cliente toca Enviar en la web | Automático (`crear_pedido_web`) |
+| `pending` "Por enviar" | El staff vio el comprobante | Staff: "Confirmar pago" o Cargar ventas |
+| `sent` | Se mandaron las entradas | Staff, como siempre |
+| `vencido` | 48 hs sin confirmar | `pg_cron` cada hora; se puede confirmar igual |
+
+`pending` y `sent` conservan el nombre de v9: las ventas cargadas antes no cambian.
+
+- **Un pedido NO es una venta.** No suma a la recaudación del panel, ni a "ya compró"
+  en Usuarios, ni gasta cupo de promo (`promo_cupos_restantes` cuenta sólo `pending`
+  y `sent`; si contara, alguien agotaría una promo tocando Enviar sin pagar). Un
+  trigger impide pasar de `por_confirmar`/`vencido` a `sent` sin confirmar.
+- **El número de pedido lo genera el navegador** (`src/lib/pedidosWeb.ts`) y va en el
+  mensaje como `Pedido: #K7Q2XM`. No lo genera la base porque `window.open` tiene que
+  pasar en el mismo toque: esperar la respuesta hace que el celular bloquee WhatsApp.
+  El pedido se manda en paralelo con `fetch` + `keepalive`. Si no llega a guardarse,
+  el staff carga la venta a mano como antes: nada se rompe.
+- **Mismo número = mismo pedido**: tocar dos veces o volver y cambiar el carrito lo
+  reemplaza mientras siga por confirmar (y sea del mismo teléfono).
+- **La función valida contra la base**: evento `activo` y con venta abierta, tipos que
+  el evento vende **al precio de lista de hoy**, promo asignada, total ≤ suma de lista,
+  hasta 20 por tipo y 30 en total, y hasta 5 pedidos abiertos por teléfono. El que
+  compra puede no tener cuenta, por eso es una función `security definer` y no se abre
+  la tabla a `anon`.
+- **Cargar ventas busca el pedido por el número**: si el mensaje pegado lo trae y está
+  por confirmar o vencido, Guardar **confirma ese pedido** con el comprobante (no crea
+  otra venta) y no avisa "duplicado" contra sí mismo.
+- **Panel**: pestañas Por confirmar · Por enviar · Enviadas · Vencidos; abre en Por
+  confirmar si hay pedidos. Cada pedido muestra `#número`, hace cuánto espera y
+  "vence en N h" (en rojo las últimas 6).
+- **Privacidad**: la política declara que el pedido se guarda al tocar Enviar.
+
+**Probado:** la migración contra un Postgres temporal (pglite) con 33 chequeos —corre
+dos veces, valida precios/promos/evento/abuso, reemplazo por número, cupos, estados y
+vencimiento—, `probar-carga-ventas.mjs` (+7 chequeos del número de pedido) y en
+navegador el toque en Enviar con la red interceptada (mensaje con número, pedido con
+`keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
+panel con sesión de staff.**
+
 ### Cargar ventas: varios mensajes, comprobante y respuesta (v35)
 
 **El problema era de tiempo, no de datos.** El flujo real: el cliente manda por
@@ -1543,7 +1589,8 @@ guardarlos", y otra manda las entradas marcándolas en el Excel. En venta masiva
 mensajes quedaban **días sin contestar**. Se evaluó que el cliente subiera el
 comprobante a la web y **se descartó** (el autor: el cliente no iba a entender
 descargarlo, entrar al sitio y subirlo). El cliente no cambia nada; se ordena el lado
-del staff. No hay pasarela de pagos ni se piensa agregar: se sigue con transferencias.
+del staff. Se sigue con transferencias: el staff revisa el comprobante, no el banco.
+(Una pasarela con Mercado Pago está en evaluación, sujeta a lo que diga el contador.)
 
 "Pegar mensaje" pasó a ser **"Cargar ventas"** (`components/admin/CargarVentasModal.tsx`,
 fuera de `Admin.tsx`):

@@ -34,6 +34,11 @@ export interface VentaCandidata {
   quantity: number;
   value: number | null;
   receiptHash?: string | null;
+  /**
+   * El pedido de la web que esta venta viene a confirmar (v36). No se compara
+   * contra sí mismo: sería avisar que la venta está repetida con su propio pedido.
+   */
+  excluirId?: string | null;
 }
 
 /** Ventana en la que "misma persona, misma cantidad, mismo total" es la misma compra. */
@@ -50,7 +55,15 @@ const nombreDe = (d: TicketDelivery) => `${d.firstName} ${d.lastName}`.trim();
 
 const entradas = (n: number) => `${n} entrada${n === 1 ? "" : "s"}`;
 
-const estadoDe = (d: TicketDelivery) => (d.status === "sent" ? "ya enviada" : "por enviar");
+// Escrito acá y no importado de deliveries.ts: ese archivo trae Supabase, y
+// éste se prueba con node.
+const ESTADOS: Record<TicketDelivery["status"], string> = {
+  por_confirmar: "pedido sin confirmar",
+  pending: "por enviar",
+  sent: "ya enviada",
+  vencido: "pedido vencido",
+};
+const estadoDe = (d: TicketDelivery) => ESTADOS[d.status] ?? d.status;
 
 function hace(iso: string, ahora: Date): string {
   const horas = Math.max(0, (ahora.getTime() - new Date(iso).getTime()) / 3_600_000);
@@ -74,10 +87,11 @@ export function revisarDuplicados(
   const avisos: AvisoVenta[] = [];
   // Una venta existente genera UN solo aviso, el más fuerte que le toque.
   const vistas = new Set<string>();
+  if (candidata.excluirId) vistas.add(candidata.excluirId);
 
   if (candidata.receiptHash) {
     for (const d of existentes) {
-      if (d.receiptHash !== candidata.receiptHash) continue;
+      if (vistas.has(d.id) || d.receiptHash !== candidata.receiptHash) continue;
       vistas.add(d.id);
       const dondeEsta = d.eventId === candidata.eventId ? "este evento" : evento(d.eventId);
       fuertes.push({

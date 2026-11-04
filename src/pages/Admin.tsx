@@ -40,6 +40,7 @@ import {
   Star,
   ClipboardPaste,
   Receipt,
+  Clock,
   AlertTriangle,
   Palette,
 } from "lucide-react";
@@ -95,6 +96,9 @@ import {
   setDeliveryStatus,
   saveDeliveryTickets,
   ticketsSummary,
+  ESTADO_LABEL,
+  esConfirmada,
+  type DeliveryStatus,
 } from "@/lib/deliveries";
 import {
   BirthdaySignup,
@@ -2096,6 +2100,7 @@ const DeliveryActions = ({
   eventName,
   onSent,
   onPending,
+  onConfirm,
   onEdit,
   onDelete,
   onVerComprobante,
@@ -2104,10 +2109,12 @@ const DeliveryActions = ({
   eventName: string;
   onSent: (d: TicketDelivery) => void;
   onPending: (d: TicketDelivery) => void;
+  onConfirm: (d: TicketDelivery) => void;
   onEdit: (d: TicketDelivery) => void;
   onDelete: (d: TicketDelivery) => void;
   onVerComprobante: (d: TicketDelivery) => void;
 }) => {
+  const sinConfirmar = d.status === "por_confirmar" || d.status === "vencido";
   // Volver a mandar la confirmación (v35): el aviso sale al cargar la venta,
   // pero puede no haberse mandado ahí. Sólo mientras está por enviar.
   const urlRespuesta =
@@ -2124,7 +2131,16 @@ const DeliveryActions = ({
       : null;
   return (
   <div className="flex flex-wrap items-center gap-1">
-    {d.status === "pending" ? (
+    {sinConfirmar ? (
+      // Un pedido de la web no se envía sin antes confirmar el pago (v36).
+      <button
+        onClick={() => onConfirm(d)}
+        className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-green-600 px-3 text-xs font-semibold text-green-700 transition-colors hover:bg-green-600 hover:text-white"
+        title="Ya vi el comprobante: pasa a Por enviar"
+      >
+        <CheckCircle2 className="w-4 h-4" /> Confirmar pago
+      </button>
+    ) : d.status === "pending" ? (
       <button
         onClick={() => onSent(d)}
         className="p-2 hover:bg-green-600 hover:text-white transition-colors"
@@ -2193,12 +2209,40 @@ const DeliveryActions = ({
   );
 };
 
+/** Horas que espera un pedido de la web antes de vencer. Espejo de v36. */
+const HORAS_VENCE_PEDIDO = 48;
+
+/**
+ * Número de pedido, origen y cuánto hace que espera (v36). Un pedido que se
+ * acerca a vencer se pinta en rojo: es el que hay que mirar primero.
+ */
+const PedidoInfo = ({ d }: { d: TicketDelivery }) => {
+  if (d.origin !== "web" && !d.orderCode) return null;
+  const horas = Math.max(0, (Date.now() - new Date(d.createdAt).getTime()) / 3_600_000);
+  const quedan = Math.ceil(HORAS_VENCE_PEDIDO - horas);
+  const espera =
+    horas < 1 ? "hace menos de 1 h" : horas < 48 ? `hace ${Math.floor(horas)} h` : `hace ${Math.floor(horas / 24)} días`;
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+        #{d.orderCode ?? "—"}
+      </span>
+      <span>Web · {espera}</span>
+      {d.status === "por_confirmar" && (
+        <span className={quedan <= 6 ? "font-semibold text-charrua" : ""}>
+          · vence en {Math.max(quedan, 0)} h
+        </span>
+      )}
+    </p>
+  );
+};
+
 const DeliveriesAdmin = () => {
   const { events, users } = useAuth();
   const confirm = useConfirm();
   const [deliveries, setDeliveries] = useState<TicketDelivery[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<"pending" | "sent">("pending");
+  const [statusFilter, setStatusFilter] = useState<DeliveryStatus>("pending");
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<TicketDelivery | null>(null);
@@ -2215,11 +2259,19 @@ const DeliveriesAdmin = () => {
   // distinto. Lo que ya estaba cargado se conserva.
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Al entrar, si hay pedidos nuevos de la web se abre ahí: es donde empieza
+  // el trabajo. Una sola vez, para no sacar a nadie de la pestaña que eligió.
+  const primeraCarga = useRef(true);
+
   const reload = async () => {
     try {
       const data = await fetchDeliveries();
       setDeliveries(data);
       setLoadError(null);
+      if (primeraCarga.current) {
+        primeraCarga.current = false;
+        if (data.some((d) => d.status === "por_confirmar")) setStatusFilter("por_confirmar");
+      }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -2243,10 +2295,10 @@ const DeliveriesAdmin = () => {
   }, []);
 
   // Los contadores de cada pestaña reflejan la búsqueda: al tipear ves cuántos
-  // coinciden en "Por enviar" y en "Enviadas" al mismo tiempo.
+  // coinciden en cada estado al mismo tiempo.
   const term = search.trim().toLowerCase();
-  const pendingCount = deliveries.filter((d) => d.status === "pending" && deliveryMatches(d, term)).length;
-  const sentCount = deliveries.filter((d) => d.status === "sent" && deliveryMatches(d, term)).length;
+  const cuantos = (s: DeliveryStatus) =>
+    deliveries.filter((d) => d.status === s && deliveryMatches(d, term)).length;
 
   // Filtramos por estado + búsqueda y agrupamos por evento (ordenados por fecha).
   const groups = useMemo(() => {
@@ -2275,16 +2327,19 @@ const DeliveriesAdmin = () => {
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
   }, [deliveries, statusFilter, term, events]);
 
-  // Resumen general (todas las entregas, sin importar pestaña ni búsqueda).
-  const summary = useMemo(
-    () => ({
-      totalTickets: deliveries.reduce((a, d) => a + d.quantity, 0),
-      totalValue: deliveries.reduce((a, d) => a + d.value, 0),
+  // Resumen general (sin importar pestaña ni búsqueda). La plata y las entradas
+  // cuentan sólo lo CONFIRMADO: un pedido de la web sin comprobante no es una
+  // venta, y sumarlo inflaría la recaudación con gente que nunca pagó (v36).
+  const summary = useMemo(() => {
+    const confirmadas = deliveries.filter(esConfirmada);
+    return {
+      totalTickets: confirmadas.reduce((a, d) => a + d.quantity, 0),
+      totalValue: confirmadas.reduce((a, d) => a + d.value, 0),
+      porConfirmar: deliveries.filter((d) => d.status === "por_confirmar").length,
       pending: deliveries.filter((d) => d.status === "pending").length,
       sent: deliveries.filter((d) => d.status === "sent").length,
-    }),
-    [deliveries]
-  );
+    };
+  }, [deliveries]);
 
   // Exporta a CSV la lista visible (pestaña actual + búsqueda), lista para Excel.
   const exportCsv = () => {
@@ -2297,7 +2352,8 @@ const DeliveriesAdmin = () => {
     }
     const headers = [
       "Evento", "Ubicación evento", "Nombre completo", "Email", "Teléfono",
-      "Tipo de entrada", "Entradas", "Total", "Estado", "Enviada", "Registrado", "Comprobante", "Notas",
+      "Tipo de entrada", "Entradas", "Total", "Estado", "Enviada", "Registrado", "Comprobante",
+      "Pedido", "Notas",
     ];
     const lines = rows.map(({ d, eventName, eventLocation }) =>
       [
@@ -2305,15 +2361,16 @@ const DeliveriesAdmin = () => {
         d.phone ? formatPhoneDisplay(d.phone) : "",
         ticketsSummary(d.tickets),
         d.quantity, d.value,
-        d.status === "sent" ? "Enviada" : "Pendiente",
+        ESTADO_LABEL[d.status],
         d.sentAt ? d.sentAt.slice(0, 10) : "",
         d.userId ? "Sí" : "No",
         d.receiptPath ? "Sí" : "No",
+        d.orderCode ?? "",
         d.notes ?? "",
       ]
     );
     descargarCsv(
-      `odisea-entregas-${statusFilter === "pending" ? "por-enviar" : "enviadas"}`,
+      `odisea-entregas-${ESTADO_LABEL[statusFilter].toLowerCase().replace(/\s+/g, "-")}`,
       headers,
       lines
     );
@@ -2335,6 +2392,27 @@ const DeliveriesAdmin = () => {
     if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
     await reload();
     toast.success("Marcada como enviada");
+  };
+  /**
+   * El staff vio el comprobante de un pedido de la web (v36). Se pregunta
+   * porque es justo el paso que convierte un pedido en una venta: un mensaje o
+   * una captura no lo confirman solos.
+   */
+  const handleConfirm = async (d: TicketDelivery) => {
+    const ok = await confirm({
+      title: "Confirmar pago",
+      description: `¿Viste el comprobante de ${d.firstName} ${d.lastName} por ${fmtMoney(d.value)}? Pasa a Por enviar.${
+        d.receiptPath
+          ? ""
+          : " No tiene el comprobante cargado: lo podés adjuntar después editando la venta, o confirmarlo con Cargar ventas pegando el mensaje y el comprobante."
+      }`,
+      confirmText: "Sí, lo vi",
+    });
+    if (!ok) return;
+    const result = await setDeliveryStatus(d.id, "pending");
+    if (!result.ok) return toast.error(result.error ?? "No se pudo confirmar");
+    await reload();
+    toast.success("Pago confirmado: pasó a Por enviar");
   };
   const handleMarkPending = async (d: TicketDelivery) => {
     const result = await setDeliveryStatus(d.id, "pending");
@@ -2382,34 +2460,28 @@ const DeliveriesAdmin = () => {
       {/* Resumen general */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MiniStat icon={<DollarSign className="w-4 h-4" />} label="Recaudado" value={fmtMoney(summary.totalValue)} />
-        <MiniStat icon={<Ticket className="w-4 h-4" />} label="Entradas" value={String(summary.totalTickets)} />
+        <MiniStat icon={<Clock className="w-4 h-4" />} label="Por confirmar" value={String(summary.porConfirmar)} />
         <MiniStat icon={<Send className="w-4 h-4" />} label="Por enviar" value={String(summary.pending)} />
         <MiniStat icon={<CheckCircle2 className="w-4 h-4" />} label="Enviadas" value={String(summary.sent)} />
       </div>
 
       {/* Toolbar */}
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
-        <div className="inline-flex rounded-lg border border-border overflow-hidden self-start">
-          <button
-            onClick={() => setStatusFilter("pending")}
-            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
-              statusFilter === "pending"
-                ? "bg-foreground text-background"
-                : "bg-background text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            Por enviar ({pendingCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter("sent")}
-            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
-              statusFilter === "sent"
-                ? "bg-foreground text-background"
-                : "bg-background text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            Enviadas ({sentCount})
-          </button>
+        {/* El orden es el del camino de una venta (v36). */}
+        <div className="flex flex-wrap rounded-lg border border-border overflow-hidden self-start">
+          {(["por_confirmar", "pending", "sent", "vencido"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 sm:px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
+                statusFilter === s
+                  ? "bg-foreground text-background"
+                  : "bg-background text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              {ESTADO_LABEL[s].replace("Enviada", "Enviadas").replace("Vencido", "Vencidos")} ({cuantos(s)})
+            </button>
+          ))}
         </div>
 
         <div className="flex flex-1 gap-3 lg:justify-end">
@@ -2446,9 +2518,16 @@ const DeliveriesAdmin = () => {
       {/* Grupos por evento */}
       {groups.length === 0 ? (
         <div className="bg-card border border-border py-16 text-center text-muted-foreground text-sm">
-          {statusFilter === "pending"
-            ? "No hay clientes por enviar. Cargá uno pegando su mensaje de WhatsApp o con el botón Agregar."
-            : "Todavía no marcaste ninguna entrega como enviada."}
+          {
+            {
+              por_confirmar:
+                "No hay pedidos por confirmar. Aparecen solos cuando alguien toca Enviar por WhatsApp en la web.",
+              pending:
+                "No hay clientes por enviar. Cargá uno pegando su mensaje de WhatsApp o con el botón Agregar.",
+              sent: "Todavía no marcaste ninguna entrega como enviada.",
+              vencido: "No hay pedidos vencidos. Un pedido vence si a las 48 hs no se confirmó el pago.",
+            }[statusFilter]
+          }
         </div>
       ) : (
         groups.map((g) => (
@@ -2497,6 +2576,7 @@ const DeliveriesAdmin = () => {
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground space-y-0.5">
+                    <PedidoInfo d={d} />
                     {d.tickets.length > 0 && (
                       <p className="text-foreground">{ticketsSummary(d.tickets)}</p>
                     )}
@@ -2511,6 +2591,7 @@ const DeliveriesAdmin = () => {
                       eventName={g.eventName}
                       onSent={handleMarkSent}
                       onPending={handleMarkPending}
+                      onConfirm={handleConfirm}
                       onEdit={openEdit}
                       onDelete={handleDelete}
                       onVerComprobante={setVerComprobante}
@@ -2541,6 +2622,9 @@ const DeliveriesAdmin = () => {
                           {d.firstName} {d.lastName}
                           {d.userId && <RegBadge />}
                         </p>
+                        <div className="text-xs text-muted-foreground">
+                          <PedidoInfo d={d} />
+                        </div>
                       </Td>
                       <Td>
                         <p className="text-xs font-mono">{d.email}</p>
@@ -2570,6 +2654,7 @@ const DeliveriesAdmin = () => {
                           eventName={g.eventName}
                           onSent={handleMarkSent}
                           onPending={handleMarkPending}
+                          onConfirm={handleConfirm}
                           onEdit={openEdit}
                           onDelete={handleDelete}
                           onVerComprobante={setVerComprobante}

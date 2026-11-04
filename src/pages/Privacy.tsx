@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 // Compartido por Terms.tsx y Privacy.tsx
-export const LEGAL_LAST_UPDATED = "5 de octubre de 2026";
+export const LEGAL_LAST_UPDATED = "3 de noviembre de 2026";
 
 export const LegalSection = ({
   n,
@@ -60,7 +60,10 @@ const Privacy = () => {
               de nacimiento, documento de identidad (cédula o equivalente), correo
               electrónico, número de teléfono, país y departamento/provincia, y de forma
               opcional una foto de perfil. También procesamos datos técnicos mínimos
-              necesarios para mantener tu sesión.
+              necesarios para mantener tu sesión. Si comprás entradas desde el sitio, con
+              o sin cuenta, al tocar «Enviar por WhatsApp» guardamos tu pedido: nombre,
+              correo, teléfono, documento si está en tu perfil, las entradas que elegiste y
+              el total. Lo usamos para registrar la venta cuando confirmamos tu pago.
             </LegalSection>
 
             <LegalSection n="3" title="Finalidad del tratamiento">

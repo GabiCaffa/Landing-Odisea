@@ -49,6 +49,12 @@ export const MSG = {
    * VIP sin promo, o dos tipos con promos distintas.
    */
   promo: "PROMO:",
+  /**
+   * Número de pedido (v36). Lo genera el sitio al tocar "Enviar" y con él
+   * queda registrado el pedido "por confirmar"; el panel lo busca por acá para
+   * actualizar ESE pedido en vez de cargar otra venta.
+   */
+  order: "Pedido:",
   dataHeader: "Mis datos:",
   fullName: "Nombre completo:",
   email: "Email:",
@@ -106,6 +112,8 @@ export interface PurchaseMessageInput {
   promos?: PurchaseMessagePromo[];
   /** Cuenta de cobro del evento (v13). Sin cuenta, el mensaje la pide. */
   account?: PaymentAccount | null;
+  /** Número del pedido registrado en la web (v36). Sin número no va la línea. */
+  orderCode?: string | null;
 }
 
 export function buildPurchaseMessage(input: PurchaseMessageInput): string {
@@ -125,6 +133,7 @@ export function buildPurchaseMessage(input: PurchaseMessageInput): string {
     msg += `${MSG.promo} ${p.label} en ${p.ticketName} (-$${p.monto})\n`;
   }
   msg += `\n${MSG.total} $${input.total}\n`;
+  if (input.orderCode) msg += `${MSG.order} #${input.orderCode}\n`;
   // La promo de cumpleaños NO se escribe acá: no se reclama desde la compra.
   // Ver el comentario de MSG.birthdayPromo.
   msg += `\n${MSG.dataHeader}\n`;
@@ -204,6 +213,8 @@ export interface ParsedPurchase {
   promoLines: ParsedPromoLine[];
   /** Desglose legible ("2 General · 1 VIP"), para el campo Notas. */
   itemsSummary: string;
+  /** Número de pedido de la web (v36), sin el "#". null en los mensajes viejos. */
+  orderCode: string | null;
 }
 
 export interface ParsePurchaseResult {
@@ -235,6 +246,7 @@ const CHAT_STAMP = new RegExp(
 const ITEM_RE = /^-\s*(\d+)\s+entradas?\s+(.+?)\s*\(\s*\$?\s*([\d.,]+)\s*\)\s*$/i;
 const EVENT_RE = /^quiero comprar para\s+(.+?)\s*\(([^)]*)\)\s*:?\s*$/i;
 const TOTAL_RE = /^total:\s*\$?\s*([\d.,]+)\s*$/i;
+const ORDER_RE = /^pedido:\s*#?\s*([a-z0-9]{6})\s*$/i;
 /**
  * Lo que sigue a "PROMO:", tal como lo arma `buildPurchaseMessage`:
  * "2x1 en General (-$700)". El nombre de la promo es GOLOSO a propósito: si el
@@ -362,8 +374,14 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
   let eventName: string | null = null;
   let eventDateLabel: string | null = null;
   let total: number | null = null;
+  let orderCode: string | null = null;
 
   for (const line of lines) {
+    const order = ORDER_RE.exec(line);
+    if (order) {
+      orderCode = order[1].toUpperCase();
+      continue;
+    }
     const event = EVENT_RE.exec(line);
     if (event) {
       eventName = event[1].trim() || null;
@@ -453,6 +471,7 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
       promos,
       promoLines,
       itemsSummary,
+      orderCode,
     },
     warnings,
   };
