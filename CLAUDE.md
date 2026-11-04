@@ -100,8 +100,12 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v23_profile_city.sql` → `v24_promo_windows.sql` → `v25_event_slug.sql` →
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
-`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` →
-`v35_comprobantes_ventas.sql` → `v36_ventas_por_estado.sql`.
+`v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
+`v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql`.
+> **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
+> de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
+> un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
+
 Todas idempotentes y pensadas para pegarse en el SQL Editor. Al agregar una nueva,
 seguir la numeración `vN_...` y documentar arriba qué hace.
 
@@ -1534,7 +1538,7 @@ hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google S
   no viajan) y del servicio (sin variable, URL ajena, Google 500, sin red) más la
   pantalla con una hoja simulada. **No probado contra una hoja real de Google.**
 
-### Ventas por estado: el pedido de la web se registra solo (v36)
+### Ventas por estado: el pedido de la web se registra solo (v40)
 
 Pedido del autor: que la venta exista en la web desde que el cliente escribe, y que
 avance por estados. Sin la API de WhatsApp (en pausa, tiene costo), el momento que el
@@ -1580,7 +1584,7 @@ navegador el toque en Enviar con la red interceptada (mensaje con número, pedid
 `keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
 panel con sesión de staff.**
 
-### Cargar ventas: varios mensajes, comprobante y respuesta (v35)
+### Cargar ventas: varios mensajes, comprobante y respuesta (v39)
 
 **El problema era de tiempo, no de datos.** El flujo real: el cliente manda por
 WhatsApp el mensaje que arma el sitio + el comprobante; UNA persona verifica, copia
@@ -1641,8 +1645,8 @@ fuera de `Admin.tsx`):
   comprobante del bucket.
 
 **Tolera la migración sin correr**: las columnas del comprobante sólo se mandan si hay
-comprobante, así que sin v35 todo se guarda igual salvo eso; con comprobante, el error
-dice "Falta correr la migración v35".
+comprobante, así que sin v39 todo se guarda igual salvo eso; con comprobante, el error
+dice "Falta correr la migración v39".
 
 **Probado:** `scripts/probar-carga-ventas.mjs` (31 chequeos: separar mensajes, los dos
 formatos de sello, duplicados, precios, respuesta) y en navegador con un banco de
@@ -1650,6 +1654,63 @@ pruebas y Supabase simulado (celular y escritorio: pegar varios, comprobante por
 Ctrl+V, guardar, responder, cierre con pendientes). **No probado contra la base real**
 ni con el panel logueado. Pendiente para después: cuánto hace que espera cada venta en
 "Por enviar" y exportar a `.xlsx`.
+
+### Votación de disfraces (v35)
+
+Concurso con fotos de la gente disfrazada y premios: página **`/votacion`**, pestaña
+**Votación** en el panel (admin y operador) y un aviso negro con borde de acento en la
+primera pantalla de la home mientras haya una votación abierta (`VotacionDestacada`).
+
+- **Quién vota: sólo con cuenta, un voto por persona** (decisión del autor), y **lo
+  impone la base, no la pantalla**. `contest_votes` tiene clave (concurso, usuario) y NO
+  tiene política de insert/update: se vota únicamente por la función `cast_vote()`
+  (security definer), que valida sesión, **perfil existente** (el perfil sólo se crea con
+  el email confirmado, v7: una dirección inventada no vota), que la foto exista y esté
+  activa y que el concurso esté `open` y antes de `closes_at`. Se puede **cambiar** el voto
+  mientras esté abierto (la pantalla pide confirmación). Verificado en un Postgres temporal
+  con roles: anon, sin sesión, sin perfil, insert directo, concurso cerrado y vencido.
+- **"Los más votados"** (top 4): mientras la votación está abierta, una franja sobre la
+  grilla con las 4 fotos con más votos, marcadas 1°-4°, en vivo y **con su propio botón de
+  votar** (el mismo que el de la grilla). Sólo entran las que tienen algún voto (un top con
+  cero votos sería azar) y desempata el orden cargado. Cerrada, no hay franja: la grilla
+  entera ya va ordenada con el podio. La grilla de abajo NO se reordena, así que una foto
+  puede aparecer en las dos; cada lista abre el visor con sus propias fotos.
+- **Contador en vivo** (decisión del autor): `contest_results()` devuelve votos por foto,
+  público y sin decir quién votó; cada usuario sólo lee su propio voto. La página se
+  refresca cada 20 s mientras está abierta (no consulta con la pestaña en segundo plano) y
+  **no reordena las fotos** al cambiar los números, para que no salten.
+- **Estados**: borrador (sólo staff) → abierta → cerrada. Cerrada: se ordena por votos y se
+  marcan 1°, 2° y 3°. `closes_at` opcional corta los votos solo, aunque el estado siga en
+  abierta (`estaAbierto` en `votacion.ts` dice lo mismo que la base).
+- **Fotos** al bucket `gallery` (v33), carpeta `disfraces/`; se achican a 1200 px. Borrar
+  una foto borra también sus votos (cascada) y el panel avisa cuántos tenía.
+- El visor es el de la galería (`Visor`, ahora exportado). **Tocar "Votar" sin sesión no
+  manda directo al login: salta un aviso** ("Tenés que tener una cuenta para votar", un
+  voto por persona, email confirmado) con "Ahora no", "Crear cuenta" e "Ingresar". "Ingresar"
+  **vuelve a `/votacion`** (el login respeta `state.from`); desde "Crear cuenta" hay que
+  confirmar el email y volver a mano.
+- **Fotos de personas**: conviene tener el OK de quien aparece, sobre todo si se muestra
+  su @ de Instagram. El campo de nombre del panel es opcional ("Disfraz #12").
+- Límite conocido: 1 voto por cuenta no frena a quien se hace varias cuentas con emails
+  distintos. Sube el costo de hacer trampa (hay que confirmar cada email) pero no lo
+  elimina; el staff puede borrar votos sospechosos (política `delete` de `is_manager()`).
+
+### Varias votaciones a la vez (v36)
+
+La base ya lo permitía desde v35 (cada votación tiene sus fotos y la clave del voto es
+**(votación, usuario)**: un voto por persona POR votación, así que votar en una no toca
+la otra). Lo que faltaba era la web:
+
+- **`/votacion`** con una sola votación visible la abre directo (los links de antes
+  siguen andando); con varias muestra **"Elegí dónde votar"**. Cada una vive en
+  **`/votacion/:clave`**, donde la clave es su dirección (`colonia`) o su id.
+- **v36** agrega `contests.slug` (opcional, único, `[a-z0-9-]`, máx. 40). Sin correrla,
+  la votación se abre igual por su id: `fetchConcursoPorClave` busca sólo por id cuando la
+  clave parece un uuid. El panel avisa si falta la migración o si la dirección ya está usada.
+- **La home muestra un aviso negro por cada votación abierta** (hasta 2; `MAX` en
+  `VotacionDestacada`), cada una con su link.
+- El login/registro vuelven a la ruta exacta de la votación (`state.from = pathname`).
+- Panel: el campo **Dirección** (al crear y al editar) y el link para compartir.
 
 ### Etiqueta destacada por evento (v34)
 
@@ -1667,6 +1728,39 @@ evento. Se carga en el formulario del evento ("Etiqueta destacada", máx. 30).
 - Con el evento agotado la pastilla de la tarjeta no se muestra.
 - **No está en el formulario de fiestas de varios días** (`FiestaFormModal`): se carga
   editando cada día.
+
+### Álbumes de fotos por evento (v37)
+
+Banners "Fotos Halloween Colonia" / "Fotos Halloween Paysandú" arriba de la galería de
+"Eventos anteriores"; cada uno abre **`/fotos/<slug>`** con todas las fotos de ese evento.
+
+- **`gallery_albums`** (`slug` único, `title`, `sort_order`, `active`; lectura pública,
+  escritura `is_manager()`) y **`gallery_items.album_id`** (NULL = suelta). Borrar un álbum
+  **no borra sus fotos**: quedan sueltas (`on delete set null`). La migración crea ya los
+  álbumes `halloween-colonia` y `halloween-paysandu`.
+- **Las fotos de un álbum NO entran al mosaico general** de la home (serían cientos): el
+  mosaico sólo muestra las sueltas. Un álbum **sin fotos activas no muestra banner**, y la
+  sección entera sigue la regla de siempre (nada que mostrar = no se renderiza); el botón
+  "Eventos anteriores" del header usa la misma condición.
+- El banner dice "Fotos " + el título del álbum (se escribe sin "Fotos"); la portada es la
+  primera foto. `GaleriaAnteriores` espera a las dos consultas (fotos y álbumes) antes de
+  pintar, para que el mosaico no salte cuando lleguen los banners.
+- **Página `Fotos.tsx`**: grilla pareja (3 columnas en celular, 5 en escritorio), 30 por
+  tanda con "Ver más", mismo `Visor` que la home. Miniaturas redimensionadas y `lazy`.
+- **Panel → Galería**: sección "Álbumes por evento" (crear, renombrar, activar, borrar, link
+  al álbum y **"Subir fotos" directo a cada álbum**), un filtro (Todo / Sueltas / álbum) y un
+  selector de álbum por foto. El orden con filtro puesto intercambia con el vecino de la lista
+  visible. Las fotos nuevas siguen quedando primero.
+- **Tolera v37 sin correr**: `album_id` sólo se manda si hay álbum elegido, los álbumes que
+  fallan dan lista vacía en la home y el panel avisa "Falta correr la migración v37".
+- **Link externo (v38)**: `gallery_albums.link_url` (https). Si un álbum lo tiene, su banner
+  abre ese link en otra pestaña (`target=_blank`, `noopener`) en vez de `/fotos/<slug>`, y el
+  álbum **no necesita fotos cargadas** (portada de marca con una cámara). Se pensó para
+  carpetas compartidas de Adobe Creative Cloud cuando falló el hosteo de imágenes. Se carga
+  en el panel (campo "Link externo" de cada álbum); sin v38 corrida, guardarlo da el aviso de
+  migración y el resto sigue andando.
+- Probado en navegador con datos de prueba (banners, página, visor) y typecheck/lint/build.
+  **El panel no se vio con sesión real** y la migración **no se corrió en un Postgres**.
 
 ### Galería de eventos anteriores y botones del header (v33)
 
@@ -2363,7 +2457,8 @@ acepta `[a-z-]`. No hizo falta migrar: `site_settings` no valida el valor a prop
 - **`ClimaTema`** pinta nieve o polvo dorado con puntos de CSS, sin figuras, sin librería y
   sólo en la home. Va en `z-index: -1`, por eso el contenedor de `Index` lleva `isolate`: sin
   esa clase, su `bg-background` taparía la capa. Se ve donde la sección es translúcida (la de
-  eventos); las de fondo `bg-papel` la tapan.
+  eventos); las de fondo `bg-papel` la tapan. Las baldosas son anchas y de medidas distintas
+  entre capas: con 280 y 460 px, en una pantalla de 1900 px la nieve formaba filas parejas.
 
 > **Las arañas abrían ~1.700 px de vacío con cualquier tema que no fuera Halloween, también
 > con el normal.** Su `position: absolute` vive en el CSS de Halloween, pero

@@ -40,7 +40,7 @@ import { buildConfirmacionVenta, whatsappUrl } from "@/lib/ventaMessage";
  *   y se pegan juntos; se cargan de a uno ("Venta 2 de 5"). Ver
  *   `splitPurchaseMessages`.
  * - **El comprobante se pega en la misma pantalla** (Ctrl+V) y queda en la
- *   venta (v35). Reemplaza al grupo de comprobantes.
+ *   venta (v39). Reemplaza al grupo de comprobantes.
  * - **Guardar directo**, sin pasar por el formulario, cuando el mensaje se
  *   entendió entero. Si falta algo, "Revisar en formulario" abre el de siempre
  *   con todo cargado y la cola queda esperando.
@@ -70,7 +70,7 @@ export interface DeliveryPrefill {
   notes: string;
   /** Desglose por tipo de entrada ya cruzado con el catálogo (v18). */
   lines: DeliveryTicketLine[];
-  /** Comprobante ya subido desde la cola (v35). */
+  /** Comprobante ya subido desde la cola (v39). */
   receipt?: ComprobanteValor | null;
 }
 
@@ -105,7 +105,7 @@ function interpretar(
   const parsed = parsePurchaseMessage(texto);
   const data = parsed.data;
 
-  // El pedido que registró la web al tocar Enviar (v36). Si está, guardar lo
+  // El pedido que registró la web al tocar Enviar (v40). Si está, guardar lo
   // CONFIRMA en vez de cargar una venta nueva.
   const pedido = data.orderCode
     ? existing.find((d) => d.orderCode === data.orderCode) ?? null
@@ -437,14 +437,14 @@ const CargarVentasModal = ({
       quantity: data.quantity,
       value: value ?? 0,
       notes: notes || null,
-      // Sólo si hay: sin la migración v35, una venta sin comprobante se guarda igual.
+      // Sólo si hay: sin la migración v39, una venta sin comprobante se guarda igual.
       ...(estado.comprobante
         ? { receiptPath: estado.comprobante.path, receiptHash: estado.comprobante.hash ?? null }
         : {}),
     };
 
     setGuardando(true);
-    // Con pedido de la web sin confirmar, se confirma ESE pedido (v36): queda
+    // Con pedido de la web sin confirmar, se confirma ESE pedido (v40): queda
     // en Por enviar con el comprobante, y no aparece una venta repetida.
     const pedido = actual.pedido;
     const result =

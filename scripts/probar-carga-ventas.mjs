@@ -1,5 +1,5 @@
 /**
- * Prueba de "Cargar ventas" (v35): separar varios mensajes pegados juntos y
+ * Prueba de "Cargar ventas" (v39): separar varios mensajes pegados juntos y
  * los avisos de duplicado. Para correrla:
  *
  *   npx esbuild scripts/carga-ventas.entry.ts --bundle --format=esm --platform=node \
@@ -185,7 +185,7 @@ const candidata = (over) => ({
   check("evento de hoy → nada", revisarEvento({ date: "2026-10-19", status: "activo" }, ahora).length === 0);
 }
 
-// ─── Pedidos de la web (v36) ────────────────────────────────────────────────
+// ─── Pedidos de la web (v40) ────────────────────────────────────────────────
 {
   const conPedido = buildPurchaseMessage({
     fullName: "Juan Pérez",

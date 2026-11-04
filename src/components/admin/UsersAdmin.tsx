@@ -259,7 +259,7 @@ const UsersAdmin = () => {
   useEffect(() => {
     let vivo = true;
     fetchDeliveries()
-      // Un pedido de la web sin confirmar no es una compra (v36).
+      // Un pedido de la web sin confirmar no es una compra (v40).
       .then((d) => vivo && setDeliveries(d.filter(esConfirmada)))
       .catch(() => {});
     fetchBirthdays()

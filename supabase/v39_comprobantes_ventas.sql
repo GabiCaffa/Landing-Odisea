@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- v35 — El comprobante de la transferencia, adjunto a la venta
+-- v39 — El comprobante de la transferencia, adjunto a la venta
 -- ════════════════════════════════════════════════════════════════════════════
 --
 -- Hasta acá el comprobante vivía en DOS lugares fuera del sitio: el chat del
@@ -42,9 +42,9 @@ create index if not exists deliveries_receipt_hash_idx
   where receipt_hash is not null;
 
 comment on column public.ticket_deliveries.receipt_path is
-  'v35: ruta del comprobante en el bucket privado `comprobantes`. NULL = sin comprobante.';
+  'v39: ruta del comprobante en el bucket privado `comprobantes`. NULL = sin comprobante.';
 comment on column public.ticket_deliveries.receipt_hash is
-  'v35: SHA-256 (hex) del archivo del comprobante, para avisar si se carga dos veces.';
+  'v39: SHA-256 (hex) del archivo del comprobante, para avisar si se carga dos veces.';
 
 -- 2) Bucket privado. 10 MB alcanza de sobra: las imágenes se achican antes de
 --    subir y un PDF de comprobante pesa menos de 1 MB.

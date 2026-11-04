@@ -120,7 +120,7 @@ const CompraEntradas = ({
   const [account, setAccount] = useState<PaymentAccount | null>(null);
 
   /**
-   * Número del pedido que se registra al tocar "Enviar" (v36). Uno por
+   * Número del pedido que se registra al tocar "Enviar" (v40). Uno por
    * apertura: si la persona toca dos veces, o vuelve y cambia el carrito, es el
    * MISMO pedido y la base lo reemplaza en vez de duplicarlo.
    */
@@ -297,7 +297,7 @@ const CompraEntradas = ({
     if (!message) return;
     const url = `https://wa.me/59892592179?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
-    // El pedido "por confirmar" (v36) sale DESPUÉS de abrir WhatsApp: esperar
+    // El pedido "por confirmar" (v40) sale DESPUÉS de abrir WhatsApp: esperar
     // la respuesta antes haría que el celular bloquee la ventana nueva. Si no
     // se guarda, el staff carga la venta a mano como siempre.
     if (eventId && codigoPedido.current) {

@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
  */
 
 /**
- * Estados de una venta (v36). `pending` y `sent` son los de siempre (v9);
+ * Estados de una venta (v40). `pending` y `sent` son los de siempre (v9);
  * `por_confirmar` y `vencido` son de los pedidos que registra la web.
  *
  * - `por_confirmar`: el cliente tocó "Enviar" en la web. NO es una venta:
@@ -72,13 +72,13 @@ export interface TicketDelivery {
   status: DeliveryStatus;
   sentAt?: string;
   notes?: string;
-  /** Ruta del comprobante en el bucket privado `comprobantes` (v35). */
+  /** Ruta del comprobante en el bucket privado `comprobantes` (v39). */
   receiptPath?: string;
-  /** SHA-256 del archivo del comprobante, para avisar si se carga dos veces (v35). */
+  /** SHA-256 del archivo del comprobante, para avisar si se carga dos veces (v39). */
   receiptHash?: string;
-  /** Número de pedido de la web ("K7Q2XM", v36). */
+  /** Número de pedido de la web ("K7Q2XM", v40). */
   orderCode?: string;
-  /** `web` = lo registró el sitio; `manual` = lo cargó el staff (v36). */
+  /** `web` = lo registró el sitio; `manual` = lo cargó el staff (v40). */
   origin: "manual" | "web";
   createdAt: string;
 }
@@ -99,7 +99,7 @@ export interface DeliveryInput {
   value: number;
   notes?: string | null;
   /**
-   * Comprobante (v35). `undefined` = no tocar; `null` = quitarlo. Sólo se manda
+   * Comprobante (v39). `undefined` = no tocar; `null` = quitarlo. Sólo se manda
    * a la base cuando viene, así que sin la migración corrida todo lo demás
    * sigue guardándose (mismo criterio que `stock_remaining` en v29).
    */
@@ -144,7 +144,7 @@ function fromDb(row: any): TicketDelivery {
     receiptPath: row.receipt_path ?? undefined,
     receiptHash: row.receipt_hash ?? undefined,
     orderCode: row.order_code ?? undefined,
-    // Sin v36 la columna no existe: todo lo cargado hasta ahí es manual.
+    // Sin v40 la columna no existe: todo lo cargado hasta ahí es manual.
     origin: row.origin === "web" ? "web" : "manual",
     createdAt: row.created_at,
   };
@@ -170,10 +170,10 @@ function toDb(input: Partial<DeliveryInput>): Record<string, any> {
   return out;
 }
 
-/** Sin la migración v35, la base no conoce las columnas del comprobante. */
+/** Sin la migración v39, la base no conoce las columnas del comprobante. */
 function traducirError(message: string): string {
   if (/receipt_(path|hash)/i.test(message)) {
-    return "Falta correr la migración v35 para guardar el comprobante.";
+    return "Falta correr la migración v39 para guardar el comprobante.";
   }
   return message;
 }
@@ -296,16 +296,16 @@ export async function deleteDelivery(
   return { ok: true };
 }
 
-/** Sin la migración v36, la base no conoce los estados nuevos. */
+/** Sin la migración v40, la base no conoce los estados nuevos. */
 function errorDeEstado(message: string): string {
   if (/status_check|por_confirmar|vencido/i.test(message)) {
-    return "Falta correr la migración v36 para los estados de las ventas.";
+    return "Falta correr la migración v40 para los estados de las ventas.";
   }
   return message;
 }
 
 /**
- * Cambia el estado de una venta. Con v36 la base sella `sent_at` y
+ * Cambia el estado de una venta. Con v40 la base sella `sent_at` y
  * `confirmed_at` sola, y rechaza marcar como enviado un pedido sin confirmar.
  */
 export async function setDeliveryStatus(
@@ -325,7 +325,7 @@ export async function setDeliveryStatus(
 
 /**
  * Llegó el comprobante de un pedido de la web: pasa a "por enviar" con los
- * datos del mensaje y el comprobante (v36). Es UNA sola escritura, así no
+ * datos del mensaje y el comprobante (v40). Es UNA sola escritura, así no
  * puede quedar confirmado sin comprobante ni con comprobante sin confirmar.
  */
 export async function confirmarPedido(

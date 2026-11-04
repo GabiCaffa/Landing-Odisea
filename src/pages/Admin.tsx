@@ -117,6 +117,7 @@ import { birthdayMessageFor, buildBirthdayWhatsAppUrl } from "@/lib/birthdayMess
 import PromosAdmin from "@/components/admin/PromosAdmin";
 import BannersAdmin from "@/components/admin/BannersAdmin";
 import GaleriaAdmin from "@/components/admin/GaleriaAdmin";
+import VotacionAdmin from "@/components/admin/VotacionAdmin";
 import OrdenHomeEventos from "@/components/admin/OrdenHomeEventos";
 import FiestaFormModal from "@/components/admin/FiestaFormModal";
 import {
@@ -220,6 +221,7 @@ const Admin = () => {
       {activeTab === "users" && <UsersAdmin />}
       {activeTab === "banners" && <BannersAdmin />}
       {activeTab === "gallery" && <GaleriaAdmin />}
+      {activeTab === "voting" && <VotacionAdmin />}
       {activeTab === "appearance" && <AppearanceAdmin />}
       {activeTab === "deliveries" && <DeliveriesAdmin />}
       {activeTab === "birthdays" && <BirthdaysAdmin />}
@@ -2115,7 +2117,7 @@ const DeliveryActions = ({
   onVerComprobante: (d: TicketDelivery) => void;
 }) => {
   const sinConfirmar = d.status === "por_confirmar" || d.status === "vencido";
-  // Volver a mandar la confirmación (v35): el aviso sale al cargar la venta,
+  // Volver a mandar la confirmación (v39): el aviso sale al cargar la venta,
   // pero puede no haberse mandado ahí. Sólo mientras está por enviar.
   const urlRespuesta =
     d.status === "pending"
@@ -2132,7 +2134,7 @@ const DeliveryActions = ({
   return (
   <div className="flex flex-wrap items-center gap-1">
     {sinConfirmar ? (
-      // Un pedido de la web no se envía sin antes confirmar el pago (v36).
+      // Un pedido de la web no se envía sin antes confirmar el pago (v40).
       <button
         onClick={() => onConfirm(d)}
         className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-green-600 px-3 text-xs font-semibold text-green-700 transition-colors hover:bg-green-600 hover:text-white"
@@ -2209,11 +2211,11 @@ const DeliveryActions = ({
   );
 };
 
-/** Horas que espera un pedido de la web antes de vencer. Espejo de v36. */
+/** Horas que espera un pedido de la web antes de vencer. Espejo de v40. */
 const HORAS_VENCE_PEDIDO = 48;
 
 /**
- * Número de pedido, origen y cuánto hace que espera (v36). Un pedido que se
+ * Número de pedido, origen y cuánto hace que espera (v40). Un pedido que se
  * acerca a vencer se pinta en rojo: es el que hay que mirar primero.
  */
 const PedidoInfo = ({ d }: { d: TicketDelivery }) => {
@@ -2329,7 +2331,7 @@ const DeliveriesAdmin = () => {
 
   // Resumen general (sin importar pestaña ni búsqueda). La plata y las entradas
   // cuentan sólo lo CONFIRMADO: un pedido de la web sin comprobante no es una
-  // venta, y sumarlo inflaría la recaudación con gente que nunca pagó (v36).
+  // venta, y sumarlo inflaría la recaudación con gente que nunca pagó (v40).
   const summary = useMemo(() => {
     const confirmadas = deliveries.filter(esConfirmada);
     return {
@@ -2394,7 +2396,7 @@ const DeliveriesAdmin = () => {
     toast.success("Marcada como enviada");
   };
   /**
-   * El staff vio el comprobante de un pedido de la web (v36). Se pregunta
+   * El staff vio el comprobante de un pedido de la web (v40). Se pregunta
    * porque es justo el paso que convierte un pedido en una venta: un mensaje o
    * una captura no lo confirman solos.
    */
@@ -2467,7 +2469,7 @@ const DeliveriesAdmin = () => {
 
       {/* Toolbar */}
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
-        {/* El orden es el del camino de una venta (v36). */}
+        {/* El orden es el del camino de una venta (v40). */}
         <div className="flex flex-wrap rounded-lg border border-border overflow-hidden self-start">
           {(["por_confirmar", "pending", "sent", "vencido"] as const).map((s) => (
             <button
@@ -2754,7 +2756,7 @@ const DeliveryFormModal = ({
   const confirm = useConfirm();
 
   /*
-   * Comprobante (v35). El que viene de la cola (`prefill.receipt`) es de la
+   * Comprobante (v39). El que viene de la cola (`prefill.receipt`) es de la
    * cola: si este formulario se cancela, no se borra acá. Lo que se sube ACÁ
    * y no se guarda sí se borra al cerrar, para no dejar archivos sueltos.
    */
@@ -2986,7 +2988,7 @@ const DeliveryFormModal = ({
       };
     }
 
-    // Duplicados (v35, ver duplicadosVenta.ts): sólo se frena lo que parece la
+    // Duplicados (v39, ver duplicadosVenta.ts): sólo se frena lo que parece la
     // MISMA compra. Que la persona ya haya comprado para el evento es normal
     // —vuelve a comprar a la semana— y antes este aviso saltaba justo ahí.
     const fuertes = revisarDuplicados(
@@ -3014,7 +3016,7 @@ const DeliveryFormModal = ({
       if (!ok) return;
     }
 
-    // Comprobante: se manda sólo si cambió, así sin la migración v35 el resto
+    // Comprobante: se manda sólo si cambió, así sin la migración v39 el resto
     // de la venta se sigue guardando.
     if ((comprobante?.path ?? null) !== (editing?.receiptPath ?? null)) {
       input.receiptPath = comprobante?.path ?? null;

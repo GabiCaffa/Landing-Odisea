@@ -2,7 +2,7 @@ import { supabase, COMPROBANTES_BUCKET } from "@/lib/supabase";
 import { compressImageToBlob } from "@/contexts/AuthContext";
 
 /**
- * Comprobantes de transferencia adjuntos a una venta (v35).
+ * Comprobantes de transferencia adjuntos a una venta (v39).
  *
  * Los pega el staff al cargar la venta (Ctrl+V, arrastrar o elegir archivo);
  * el cliente no sube nada al sitio. Viven en un bucket PRIVADO y se abren sólo
@@ -34,7 +34,7 @@ export async function hashArchivo(file: Blob): Promise<string> {
 /** Error de Storage → algo que el staff entienda. */
 function traducir(message: string): string {
   if (/bucket not found/i.test(message)) {
-    return "Falta correr la migración v35 (no existe el espacio de comprobantes).";
+    return "Falta correr la migración v39 (no existe el espacio de comprobantes).";
   }
   if (/row-level security|unauthorized|not authorized/i.test(message)) {
     return "Tu usuario no tiene permiso para guardar comprobantes.";

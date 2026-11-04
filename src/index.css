@@ -650,7 +650,12 @@
 /* ── Nieve y polvo dorado (ClimaTema) ── */
 /* Cada capa es un mosaico de puntos que se desplaza exactamente un alto de
    baldosa y vuelve a empezar: por eso el corte no se nota. Si se cambia
-   --baldosa, el recorrido cambia solo. Al ser todo `transform` no repinta. */
+   --baldosa, el recorrido cambia solo. Al ser todo `transform` no repinta.
+
+   La baldosa es ancha, con muchos puntos sueltos, y sus medidas no tienen
+   múltiplos en común con la otra capa. Con baldosas de 280 y 460 px, en una
+   pantalla de 1900 px los puntos se repetían formando filas parejas: se leía
+   como una grilla y no como nieve. */
 .clima {
   position: fixed;
   inset: 0;
@@ -665,50 +670,52 @@
   bottom: calc(var(--baldosa) * -1);
   left: 0;
   right: 0;
-  background-size: var(--baldosa) var(--baldosa);
+  background-size: var(--ancho) var(--baldosa);
   will-change: transform;
   animation: clima-baja var(--duracion) linear infinite;
 }
 
-.clima__capa--lejos { --baldosa: 280px; --duracion: 34s; opacity: 0.45; }
-.clima__capa--cerca { --baldosa: 460px; --duracion: 26s; opacity: 0.8; }
+.clima--navidad { --punto-a: #F3EEE2; --punto-b: #F3EEE2; }
+.clima--anio-nuevo { --punto-a: #E3B34C; --punto-b: #F4E2B5; }
 
-.clima--navidad .clima__capa--lejos {
+.clima__capa--lejos {
+  --ancho: 1130px;
+  --baldosa: 620px;
+  --duracion: 62s;
+  opacity: 0.45;
   background-image:
-    radial-gradient(circle at 12% 18%, #F3EEE2 1px, transparent 1.8px),
-    radial-gradient(circle at 44% 62%, #F3EEE2 1.3px, transparent 2.1px),
-    radial-gradient(circle at 71% 9%, #F3EEE2 1px, transparent 1.8px),
-    radial-gradient(circle at 86% 74%, #F3EEE2 1.2px, transparent 2px),
-    radial-gradient(circle at 28% 88%, #F3EEE2 1px, transparent 1.8px);
+    radial-gradient(circle at 4% 37%, var(--punto-a) 1px, transparent 1.8px),
+    radial-gradient(circle at 13% 81%, var(--punto-b) 1.3px, transparent 2.1px),
+    radial-gradient(circle at 19% 12%, var(--punto-a) 1px, transparent 1.8px),
+    radial-gradient(circle at 31% 58%, var(--punto-b) 1.2px, transparent 2px),
+    radial-gradient(circle at 37% 29%, var(--punto-a) 0.9px, transparent 1.7px),
+    radial-gradient(circle at 46% 93%, var(--punto-b) 1.1px, transparent 1.9px),
+    radial-gradient(circle at 54% 6%, var(--punto-a) 1.3px, transparent 2.1px),
+    radial-gradient(circle at 61% 66%, var(--punto-b) 1px, transparent 1.8px),
+    radial-gradient(circle at 72% 41%, var(--punto-a) 1.2px, transparent 2px),
+    radial-gradient(circle at 79% 87%, var(--punto-b) 0.9px, transparent 1.7px),
+    radial-gradient(circle at 88% 19%, var(--punto-a) 1.1px, transparent 1.9px),
+    radial-gradient(circle at 96% 62%, var(--punto-b) 1px, transparent 1.8px);
 }
 
-.clima--navidad .clima__capa--cerca {
+.clima__capa--cerca {
+  --ancho: 1370px;
+  --baldosa: 860px;
+  --duracion: 58s;
+  opacity: 0.8;
   background-image:
-    radial-gradient(circle at 18% 34%, #F3EEE2 1.8px, transparent 3px),
-    radial-gradient(circle at 63% 12%, #F3EEE2 2.2px, transparent 3.6px),
-    radial-gradient(circle at 82% 58%, #F3EEE2 1.6px, transparent 2.8px),
-    radial-gradient(circle at 38% 81%, #F3EEE2 2px, transparent 3.2px);
+    radial-gradient(circle at 7% 64%, var(--punto-a) 1.8px, transparent 3px),
+    radial-gradient(circle at 16% 23%, var(--punto-b) 2.2px, transparent 3.6px),
+    radial-gradient(circle at 29% 84%, var(--punto-a) 1.6px, transparent 2.8px),
+    radial-gradient(circle at 41% 47%, var(--punto-b) 2px, transparent 3.2px),
+    radial-gradient(circle at 53% 9%, var(--punto-a) 1.7px, transparent 3px),
+    radial-gradient(circle at 64% 71%, var(--punto-b) 2.1px, transparent 3.4px),
+    radial-gradient(circle at 76% 33%, var(--punto-a) 1.6px, transparent 2.8px),
+    radial-gradient(circle at 91% 89%, var(--punto-b) 1.9px, transparent 3.2px);
 }
 
 /* El polvo dorado sube, como las burbujas, y va más lento que la nieve. */
 .clima--anio-nuevo .clima__capa { animation-name: clima-sube; animation-duration: calc(var(--duracion) * 1.5); }
-
-.clima--anio-nuevo .clima__capa--lejos {
-  background-image:
-    radial-gradient(circle at 16% 22%, #E3B34C 1px, transparent 1.8px),
-    radial-gradient(circle at 52% 68%, #F4E2B5 1.2px, transparent 2px),
-    radial-gradient(circle at 74% 14%, #E3B34C 0.9px, transparent 1.7px),
-    radial-gradient(circle at 90% 79%, #F4E2B5 1px, transparent 1.8px),
-    radial-gradient(circle at 33% 91%, #E3B34C 1.1px, transparent 1.9px);
-}
-
-.clima--anio-nuevo .clima__capa--cerca {
-  background-image:
-    radial-gradient(circle at 22% 41%, #E3B34C 1.6px, transparent 2.8px),
-    radial-gradient(circle at 58% 16%, #F4E2B5 1.9px, transparent 3.2px),
-    radial-gradient(circle at 84% 63%, #E3B34C 1.4px, transparent 2.6px),
-    radial-gradient(circle at 41% 86%, #F4E2B5 1.7px, transparent 3px);
-}
 
 @keyframes clima-baja {
   from { transform: translate3d(0, 0, 0); }

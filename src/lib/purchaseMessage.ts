@@ -50,7 +50,7 @@ export const MSG = {
    */
   promo: "PROMO:",
   /**
-   * Número de pedido (v36). Lo genera el sitio al tocar "Enviar" y con él
+   * Número de pedido (v40). Lo genera el sitio al tocar "Enviar" y con él
    * queda registrado el pedido "por confirmar"; el panel lo busca por acá para
    * actualizar ESE pedido en vez de cargar otra venta.
    */
@@ -112,7 +112,7 @@ export interface PurchaseMessageInput {
   promos?: PurchaseMessagePromo[];
   /** Cuenta de cobro del evento (v13). Sin cuenta, el mensaje la pide. */
   account?: PaymentAccount | null;
-  /** Número del pedido registrado en la web (v36). Sin número no va la línea. */
+  /** Número del pedido registrado en la web (v40). Sin número no va la línea. */
   orderCode?: string | null;
 }
 
@@ -213,7 +213,7 @@ export interface ParsedPurchase {
   promoLines: ParsedPromoLine[];
   /** Desglose legible ("2 General · 1 VIP"), para el campo Notas. */
   itemsSummary: string;
-  /** Número de pedido de la web (v36), sin el "#". null en los mensajes viejos. */
+  /** Número de pedido de la web (v40), sin el "#". null en los mensajes viejos. */
   orderCode: string | null;
 }
 

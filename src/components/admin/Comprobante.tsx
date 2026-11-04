@@ -11,7 +11,7 @@ import {
 } from "@/lib/comprobantes";
 
 /**
- * El comprobante de la transferencia, adjunto a una venta (v35).
+ * El comprobante de la transferencia, adjunto a una venta (v39).
  *
  * `CampoComprobante` es la única vía de carga y acepta tres gestos, porque
  * quien carga ventas viene de WhatsApp Web con el comprobante a la vista:

@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
 /**
- * El pedido que se registra solo al tocar "Enviar por WhatsApp" (v36).
+ * El pedido que se registra solo al tocar "Enviar por WhatsApp" (v40).
  *
  * Queda en `ticket_deliveries` con estado `por_confirmar`: todavía no es una
  * venta, porque nadie vio el comprobante. Lo confirma el staff en el panel.
@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabase";
  * paralelo.
  *
  * **Si el pedido no llega a guardarse, no pasa nada grave**: el cliente igual
- * manda su mensaje y el staff carga la venta a mano, como antes de v36. Por
+ * manda su mensaje y el staff carga la venta a mano, como antes de v40. Por
  * eso nada de esto le muestra un error al comprador.
  */
 

@@ -35,7 +35,7 @@ export interface VentaCandidata {
   value: number | null;
   receiptHash?: string | null;
   /**
-   * El pedido de la web que esta venta viene a confirmar (v36). No se compara
+   * El pedido de la web que esta venta viene a confirmar (v40). No se compara
    * contra sí mismo: sería avisar que la venta está repetida con su propio pedido.
    */
   excluirId?: string | null;

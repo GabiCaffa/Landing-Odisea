@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- v36 — Las ventas pasan por estados, y el pedido de la web se registra solo
+-- v40 — Las ventas pasan por estados, y el pedido de la web se registra solo
 -- ════════════════════════════════════════════════════════════════════════════
 --
 --   por_confirmar → el cliente tocó "Enviar por WhatsApp" en la web. Todavía
@@ -35,7 +35,7 @@
 -- Mismo número dos veces = el mismo pedido. Si el cliente vuelve a tocar el
 -- botón con otro carrito, se REEMPLAZA (mientras siga por confirmar).
 --
--- Idempotente. Pegar en el SQL Editor de Supabase. Necesita v35 y pg_cron (v8).
+-- Idempotente. Pegar en el SQL Editor de Supabase. Necesita v39 y pg_cron (v8).
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- 1) Estados
@@ -59,11 +59,11 @@ create unique index if not exists deliveries_order_code_idx
   where order_code is not null;
 
 comment on column public.ticket_deliveries.order_code is
-  'v36: número de pedido de la web ("K7Q2XM"). Viaja en el mensaje de WhatsApp.';
+  'v40: número de pedido de la web ("K7Q2XM"). Viaja en el mensaje de WhatsApp.';
 comment on column public.ticket_deliveries.origin is
-  'v36: web = lo registró el sitio al tocar Enviar; manual = lo cargó el staff.';
+  'v40: web = lo registró el sitio al tocar Enviar; manual = lo cargó el staff.';
 comment on column public.ticket_deliveries.confirmed_at is
-  'v36: cuándo el staff pasó el pedido a pendiente de enviar (vio el comprobante).';
+  'v40: cuándo el staff pasó el pedido a pendiente de enviar (vio el comprobante).';
 
 -- 3) Reglas de los cambios de estado
 --    · No se envía lo que no se confirmó: de por_confirmar o vencido a sent no

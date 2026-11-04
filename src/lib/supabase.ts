@@ -27,6 +27,6 @@ export const ID_PHOTOS_BUCKET = "id-photos";
 
 /**
  * Comprobantes de transferencia de las ventas. Bucket PRIVADO, sólo staff
- * (admin y operador), con URLs firmadas (ver supabase/v35_comprobantes_ventas.sql).
+ * (admin y operador), con URLs firmadas (ver supabase/v39_comprobantes_ventas.sql).
  */
 export const COMPROBANTES_BUCKET = "comprobantes";

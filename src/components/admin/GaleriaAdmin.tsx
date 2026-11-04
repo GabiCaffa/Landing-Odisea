@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Loader2, Play, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, Loader2, Play, Plus, Trash2, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
+  GaleriaAlbum,
   GaleriaItem,
   VIDEO_MAX_MB,
   VIDEO_RECOMENDADO_MB,
+  createAlbum,
   createGaleriaItem,
+  deleteAlbum,
   deleteGaleriaItem,
+  fetchAlbumes,
   fetchGaleria,
+  updateAlbum,
   updateGaleriaItem,
   uploadGaleria,
 } from "@/lib/galeria";
@@ -28,6 +33,10 @@ const mensajeDeError = (err: unknown, accion: string) => {
   if (ERRORES_DE_MIGRACION.includes(code ?? "")) {
     return "Falta correr la migración v33_galeria_eventos_anteriores.sql en Supabase.";
   }
+  // 42703 = columna inexistente (album_id sin v37). 23505 = dirección repetida.
+  if (code === "42703") return "Falta correr la migración v37 o v38 (galeria_albumes / album_link_externo) en Supabase.";
+  if (code === "23514") return "El link tiene que empezar con https://";
+  if (code === "23505") return "Ya hay un álbum con ese nombre.";
   // Los errores propios (video muy pesado, tipo de archivo) ya vienen claros.
   const msg = (err as Error | null)?.message;
   if (msg && /MB|foto o un video/.test(msg)) return msg;
@@ -37,6 +46,10 @@ const mensajeDeError = (err: unknown, accion: string) => {
 const GaleriaAdmin = () => {
   const confirm = useConfirm();
   const [items, setItems] = useState<GaleriaItem[]>([]);
+  const [albumes, setAlbumes] = useState<GaleriaAlbum[]>([]);
+  const [nuevoAlbum, setNuevoAlbum] = useState("");
+  // Qué se ve en la lista: "todos", "sueltas" o el id de un álbum.
+  const [filtro, setFiltro] = useState<string>("todos");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // "2 de 5" mientras sube varios archivos; null = nada subiendo.
@@ -45,6 +58,8 @@ const GaleriaAdmin = () => {
   const recargar = async () => {
     try {
       setItems(await fetchGaleria());
+      // Sin v37 los álbumes fallan: la galería de siempre tiene que seguir andando.
+      setAlbumes(await fetchAlbumes().catch(() => []));
       setError(null);
     } catch (err) {
       // Acá SÍ se muestra: una lista vacía que en realidad es una consulta
@@ -59,7 +74,7 @@ const GaleriaAdmin = () => {
     void recargar();
   }, []);
 
-  const subir = async (files: File[]) => {
+  const subir = async (files: File[], albumId: string | null = null) => {
     // Lo nuevo va ARRIBA (y por lo tanto en el lugar protagonista de la home):
     // casi siempre se sube lo último que pasó, y con 40 fotos mover una a mano
     // hasta el principio con flechas es inusable.
@@ -76,6 +91,7 @@ const GaleriaAdmin = () => {
           caption: "",
           sortOrder: base - (files.length - n),
           active: true,
+          ...(albumId ? { albumId } : {}),
         });
         subidos++;
       } catch (err) {
@@ -99,10 +115,14 @@ const GaleriaAdmin = () => {
     }
   };
 
-  const mover = async (i: number, delta: number) => {
-    const j = i + delta;
-    if (j < 0 || j >= items.length) return;
+  const mover = async (item: GaleriaItem, delta: number) => {
+    // Con un filtro puesto, el vecino es el de la lista visible, no el de la completa.
+    const idx = visibles.findIndex((x) => x.id === item.id);
+    const vecino = visibles[idx + delta];
+    if (!vecino) return;
     const nuevo = [...items];
+    const i = nuevo.findIndex((x) => x.id === item.id);
+    const j = nuevo.findIndex((x) => x.id === vecino.id);
     [nuevo[i], nuevo[j]] = [nuevo[j], nuevo[i]];
     setItems(nuevo);
     try {
@@ -112,6 +132,48 @@ const GaleriaAdmin = () => {
     } catch (err) {
       toast.error(mensajeDeError(err, "reordenar"));
       await recargar();
+    }
+  };
+
+  const crearAlbum = async () => {
+    try {
+      await createAlbum(nuevoAlbum, albumes.length);
+      setNuevoAlbum("");
+      await recargar();
+      toast.success("Álbum creado");
+    } catch (err) {
+      toast.error(mensajeDeError(err, "crear el álbum"));
+    }
+  };
+
+  const guardarAlbum = async (id: string, cambios: Partial<GaleriaAlbum>) => {
+    setAlbumes((prev) => prev.map((a) => (a.id === id ? { ...a, ...cambios } : a)));
+    try {
+      await updateAlbum(id, cambios);
+    } catch (err) {
+      toast.error(mensajeDeError(err, "guardar el álbum"));
+      await recargar();
+    }
+  };
+
+  const borrarAlbum = async (album: GaleriaAlbum) => {
+    const n = items.filter((i) => i.albumId === album.id).length;
+    const ok = await confirm({
+      title: `Borrar el álbum "${album.title}"`,
+      description: n
+        ? `Sus ${n} archivos NO se borran: pasan a la galería general de la home.`
+        : "Está vacío.",
+      confirmText: "Borrar álbum",
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteAlbum(album.id);
+      if (filtro === album.id) setFiltro("todos");
+      await recargar();
+      toast.success("Álbum borrado");
+    } catch (err) {
+      toast.error(mensajeDeError(err, "borrar el álbum"));
     }
   };
 
@@ -134,6 +196,15 @@ const GaleriaAdmin = () => {
 
   if (cargando) return <p className="text-sm text-muted-foreground">Cargando…</p>;
 
+  const visibles = items.filter((i) =>
+    filtro === "todos" ? true : filtro === "sueltas" ? !i.albumId : i.albumId === filtro
+  );
+  const accionArchivo = (album: GaleriaAlbum | null) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length) void subir(files, album?.id ?? null);
+  };
+
   return (
     <div className="max-w-4xl">
       {error && (
@@ -142,7 +213,128 @@ const GaleriaAdmin = () => {
         </div>
       )}
 
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+      <h3 className="font-sport text-xl font-black tracking-wide text-tinta">ÁLBUMES POR EVENTO</h3>
+      <p className="mb-4 mt-1 text-xs leading-relaxed text-muted-foreground">
+        Cada álbum es un banner en la home ("Fotos Halloween Colonia") que abre su propia página con
+        todas las fotos. Podés subir las fotos al álbum o, si viven en otro lado (Adobe, Drive), pegar su link: el banner lo abre en otra pestaña. Un álbum sin fotos ni link no se muestra.
+      </p>
+      <div className="mb-4 space-y-3">
+        {albumes.map((al) => {
+          const n = items.filter((i) => i.albumId === al.id).length;
+          return (
+            <div key={al.id} className="flex flex-col gap-3 rounded-xl border border-border p-3 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1">
+                <label className="label-techno" htmlFor={`alb-${al.id}`}>
+                  Nombre (el banner dice "Fotos …")
+                </label>
+                <input
+                  id={`alb-${al.id}`}
+                  type="text"
+                  maxLength={80}
+                  value={al.title}
+                  onChange={(e) =>
+                    setAlbumes((prev) => prev.map((x) => (x.id === al.id ? { ...x, title: e.target.value } : x)))
+                  }
+                  onBlur={(e) => e.target.value.trim() && void guardarAlbum(al.id, { title: e.target.value })}
+                  className="input-techno w-full"
+                />
+                <label className="label-techno mt-2 block" htmlFor={`lnk-${al.id}`}>
+                  Link externo (opcional, ej. carpeta de Adobe)
+                </label>
+                <input
+                  id={`lnk-${al.id}`}
+                  type="url"
+                  inputMode="url"
+                  maxLength={500}
+                  value={al.linkUrl}
+                  onChange={(e) =>
+                    setAlbumes((prev) => prev.map((x) => (x.id === al.id ? { ...x, linkUrl: e.target.value } : x)))
+                  }
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v && !/^https:\/\/\S+$/.test(v)) {
+                      toast.error("El link tiene que empezar con https://");
+                      void recargar();
+                      return;
+                    }
+                    void guardarAlbum(al.id, { linkUrl: v });
+                  }}
+                  placeholder="https://..."
+                  className="input-techno w-full"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {al.linkUrl
+                    ? "El banner abre este link en otra pestaña."
+                    : `${n} ${n === 1 ? "archivo" : "archivos"} · /fotos/${al.slug}`}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={al.active}
+                    onChange={(e) => void guardarAlbum(al.id, { active: e.target.checked })}
+                  />
+                  Activo
+                </label>
+                <label
+                  className={`btn-celeste inline-flex min-h-[44px] cursor-pointer items-center gap-2 px-4 text-xs ${
+                    progreso ? "pointer-events-none opacity-70" : ""
+                  }`}
+                >
+                  <Upload className="h-4 w-4" /> Subir fotos
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,video/mp4,video/webm,video/quicktime"
+                    className="hidden"
+                    disabled={!!progreso}
+                    onChange={accionArchivo(al)}
+                  />
+                </label>
+                <a
+                  href={`/fotos/${al.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Ver el álbum"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-border hover:bg-muted"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void borrarAlbum(al)}
+                  aria-label="Borrar álbum"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-charrua/40 text-charrua hover:bg-charrua/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            maxLength={80}
+            value={nuevoAlbum}
+            onChange={(e) => setNuevoAlbum(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && nuevoAlbum.trim() && void crearAlbum()}
+            placeholder="Nuevo álbum, ej: Halloween Nueva Helvecia"
+            className="input-techno min-w-0 flex-1"
+          />
+          <button
+            type="button"
+            onClick={() => void crearAlbum()}
+            disabled={!nuevoAlbum.trim()}
+            className="btn-techno-outline inline-flex min-h-[44px] items-center gap-2 px-4 text-xs disabled:opacity-40"
+          >
+            <Plus className="h-4 w-4" /> Crear
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-2 mt-8 flex flex-wrap items-center justify-between gap-3">
         <h3 className="font-sport text-xl font-black tracking-wide text-tinta">FOTOS Y VIDEOS</h3>
         <label
           className={`btn-celeste inline-flex cursor-pointer items-center gap-2 px-5 py-3 text-xs ${
@@ -150,18 +342,14 @@ const GaleriaAdmin = () => {
           }`}
         >
           {progreso ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          {progreso ? `Subiendo ${progreso}…` : "Agregar fotos o videos"}
+          {progreso ? `Subiendo ${progreso}…` : "Agregar sueltas"}
           <input
             type="file"
             multiple
             accept="image/*,video/mp4,video/webm,video/quicktime"
             className="hidden"
             disabled={!!progreso}
-            onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
-              e.target.value = "";
-              if (files.length) void subir(files);
-            }}
+            onChange={accionArchivo(null)}
           />
         </label>
       </div>
@@ -173,13 +361,33 @@ const GaleriaAdmin = () => {
         20-30 segundos), porque la gente los ve con datos del celular.
       </p>
 
-      {items.length === 0 ? (
+      <div className="mb-4">
+        <label className="label-techno" htmlFor="galeria-filtro">
+          Mostrar
+        </label>
+        <select
+          id="galeria-filtro"
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          className="input-techno w-full sm:w-auto"
+        >
+          <option value="todos">Todo ({items.length})</option>
+          <option value="sueltas">Sueltas — galería general ({items.filter((i) => !i.albumId).length})</option>
+          {albumes.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.title} ({items.filter((i) => i.albumId === a.id).length})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {visibles.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           Todavía no hay nada. Mientras la galería esté vacía, la sección no se muestra en la web.
         </p>
       ) : (
         <div className="space-y-3">
-          {items.map((it, i) => {
+          {visibles.map((it, i) => {
             const miniatura = it.kind === "video" ? it.posterUrl : it.url;
             return (
               <div key={it.id} className="flex flex-col gap-3 rounded-xl border border-border p-3 sm:flex-row sm:items-center">
@@ -214,6 +422,27 @@ const GaleriaAdmin = () => {
                   />
                 </div>
 
+                {albumes.length > 0 && (
+                  <div className="sm:w-44">
+                    <label className="label-techno" htmlFor={`alb-it-${it.id}`}>
+                      Álbum
+                    </label>
+                    <select
+                      id={`alb-it-${it.id}`}
+                      value={it.albumId ?? ""}
+                      onChange={(e) => void guardarCampo(it.id, { albumId: e.target.value || null })}
+                      className="input-techno w-full"
+                    >
+                      <option value="">Suelta (general)</option>
+                      {albumes.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                   <label className="mr-1 flex cursor-pointer items-center gap-2 text-sm">
                     <input
@@ -225,7 +454,7 @@ const GaleriaAdmin = () => {
                   </label>
                   <button
                     type="button"
-                    onClick={() => void mover(i, -1)}
+                    onClick={() => void mover(it, -1)}
                     disabled={i === 0}
                     aria-label="Subir"
                     className="flex h-11 w-11 items-center justify-center rounded-lg border border-border hover:bg-muted disabled:opacity-30"
@@ -234,8 +463,8 @@ const GaleriaAdmin = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void mover(i, 1)}
-                    disabled={i === items.length - 1}
+                    onClick={() => void mover(it, 1)}
+                    disabled={i === visibles.length - 1}
                     aria-label="Bajar"
                     className="flex h-11 w-11 items-center justify-center rounded-lg border border-border hover:bg-muted disabled:opacity-30"
                   >
