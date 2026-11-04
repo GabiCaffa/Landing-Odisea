@@ -24,7 +24,7 @@ import {
   type UserRole,
 } from "@/contexts/AuthContext";
 import { usePuede } from "@/lib/adminPermisos";
-import { fetchDeliveries, type TicketDelivery } from "@/lib/deliveries";
+import { esConfirmada, fetchDeliveries, type TicketDelivery } from "@/lib/deliveries";
 import { fetchBirthdays, type BirthdaySignup } from "@/lib/birthdays";
 import { getCountry } from "@/lib/locations";
 import { formatPhoneDisplay } from "@/lib/validators";
@@ -259,7 +259,8 @@ const UsersAdmin = () => {
   useEffect(() => {
     let vivo = true;
     fetchDeliveries()
-      .then((d) => vivo && setDeliveries(d))
+      // Un pedido de la web sin confirmar no es una compra (v40).
+      .then((d) => vivo && setDeliveries(d.filter(esConfirmada)))
       .catch(() => {});
     fetchBirthdays()
       .then((b) => vivo && setBirthdays(b))

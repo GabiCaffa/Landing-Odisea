@@ -39,6 +39,8 @@ import {
   CreditCard,
   Star,
   ClipboardPaste,
+  Receipt,
+  Clock,
   AlertTriangle,
   Palette,
 } from "lucide-react";
@@ -63,7 +65,6 @@ import UserSearchSelect from "@/components/UserSearchSelect";
 import {
   normalizePhone,
   formatPhoneDisplay,
-  phoneCountryOf,
   validateDocumentByCountry,
   documentLabelByCountry,
   documentPlaceholderByCountry,
@@ -72,8 +73,18 @@ import {
 } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
-import { parsePurchaseMessage } from "@/lib/purchaseMessage";
-import { foldText } from "@/lib/utils";
+import CargarVentasModal, {
+  type DeliveryPrefill,
+  type VentaRevisada,
+} from "@/components/admin/CargarVentasModal";
+import {
+  CampoComprobante,
+  VerComprobanteModal,
+  type ComprobanteValor,
+} from "@/components/admin/Comprobante";
+import { removeComprobante } from "@/lib/comprobantes";
+import { revisarDuplicados } from "@/lib/duplicadosVenta";
+import { buildConfirmacionVenta, whatsappUrl } from "@/lib/ventaMessage";
 import {
   TicketDelivery,
   DeliveryInput,
@@ -85,6 +96,9 @@ import {
   setDeliveryStatus,
   saveDeliveryTickets,
   ticketsSummary,
+  ESTADO_LABEL,
+  esConfirmada,
+  type DeliveryStatus,
 } from "@/lib/deliveries";
 import {
   BirthdaySignup,
@@ -2088,18 +2102,47 @@ const DeliveryActions = ({
   eventName,
   onSent,
   onPending,
+  onConfirm,
   onEdit,
   onDelete,
+  onVerComprobante,
 }: {
   d: TicketDelivery;
   eventName: string;
   onSent: (d: TicketDelivery) => void;
   onPending: (d: TicketDelivery) => void;
+  onConfirm: (d: TicketDelivery) => void;
   onEdit: (d: TicketDelivery) => void;
   onDelete: (d: TicketDelivery) => void;
-}) => (
-  <div className="flex items-center gap-1">
-    {d.status === "pending" ? (
+  onVerComprobante: (d: TicketDelivery) => void;
+}) => {
+  const sinConfirmar = d.status === "por_confirmar" || d.status === "vencido";
+  // Volver a mandar la confirmación (v39): el aviso sale al cargar la venta,
+  // pero puede no haberse mandado ahí. Sólo mientras está por enviar.
+  const urlRespuesta =
+    d.status === "pending"
+      ? whatsappUrl(
+          d.phone,
+          buildConfirmacionVenta({
+            nombre: d.firstName,
+            cantidad: d.quantity,
+            evento: eventName,
+            email: d.email,
+          })
+        )
+      : null;
+  return (
+  <div className="flex flex-wrap items-center gap-1">
+    {sinConfirmar ? (
+      // Un pedido de la web no se envía sin antes confirmar el pago (v40).
+      <button
+        onClick={() => onConfirm(d)}
+        className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-green-600 px-3 text-xs font-semibold text-green-700 transition-colors hover:bg-green-600 hover:text-white"
+        title="Ya vi el comprobante: pasa a Por enviar"
+      >
+        <CheckCircle2 className="w-4 h-4" /> Confirmar pago
+      </button>
+    ) : d.status === "pending" ? (
       <button
         onClick={() => onSent(d)}
         className="p-2 hover:bg-green-600 hover:text-white transition-colors"
@@ -2117,6 +2160,28 @@ const DeliveryActions = ({
       >
         <Undo2 className="w-4 h-4" />
       </button>
+    )}
+    {d.receiptPath && (
+      <button
+        onClick={() => onVerComprobante(d)}
+        className="p-2 hover:bg-secondary transition-colors"
+        title="Ver comprobante"
+        aria-label="Ver comprobante"
+      >
+        <Receipt className="w-4 h-4" />
+      </button>
+    )}
+    {urlRespuesta && (
+      <a
+        href={urlRespuesta}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="p-2 hover:bg-secondary transition-colors"
+        title="Responder por WhatsApp (recibimos tu comprobante)"
+        aria-label="Responder por WhatsApp"
+      >
+        <WhatsAppIcon className="w-4 h-4" />
+      </a>
     )}
     <a
       href={`mailto:${d.email}?subject=${encodeURIComponent(`Tus entradas · ${eventName}`)}`}
@@ -2143,31 +2208,72 @@ const DeliveryActions = ({
       <Trash2 className="w-4 h-4" />
     </button>
   </div>
-);
+  );
+};
+
+/** Horas que espera un pedido de la web antes de vencer. Espejo de v40. */
+const HORAS_VENCE_PEDIDO = 48;
+
+/**
+ * Número de pedido, origen y cuánto hace que espera (v40). Un pedido que se
+ * acerca a vencer se pinta en rojo: es el que hay que mirar primero.
+ */
+const PedidoInfo = ({ d }: { d: TicketDelivery }) => {
+  if (d.origin !== "web" && !d.orderCode) return null;
+  const horas = Math.max(0, (Date.now() - new Date(d.createdAt).getTime()) / 3_600_000);
+  const quedan = Math.ceil(HORAS_VENCE_PEDIDO - horas);
+  const espera =
+    horas < 1 ? "hace menos de 1 h" : horas < 48 ? `hace ${Math.floor(horas)} h` : `hace ${Math.floor(horas / 24)} días`;
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+        #{d.orderCode ?? "—"}
+      </span>
+      <span>Web · {espera}</span>
+      {d.status === "por_confirmar" && (
+        <span className={quedan <= 6 ? "font-semibold text-charrua" : ""}>
+          · vence en {Math.max(quedan, 0)} h
+        </span>
+      )}
+    </p>
+  );
+};
 
 const DeliveriesAdmin = () => {
   const { events, users } = useAuth();
   const confirm = useConfirm();
   const [deliveries, setDeliveries] = useState<TicketDelivery[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<"pending" | "sent">("pending");
+  const [statusFilter, setStatusFilter] = useState<DeliveryStatus>("pending");
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<TicketDelivery | null>(null);
-  // Importar pegando el mensaje de WhatsApp: el parser deja el form pre-cargado.
+  // Cargar ventas pegando los mensajes de WhatsApp (CargarVentasModal).
   const [pasteOpen, setPasteOpen] = useState(false);
   const [prefill, setPrefill] = useState<DeliveryPrefill | null>(null);
+  // La cola de ventas abrió el formulario para una de ellas: cuál, y qué pasó.
+  const [revisandoIndex, setRevisandoIndex] = useState<number | null>(null);
+  const [revisada, setRevisada] = useState<VentaRevisada | null>(null);
+  const [verComprobante, setVerComprobante] = useState<TicketDelivery | null>(null);
 
   // Si la lectura falla se muestra el error y NO una lista vacía (ver
   // fetchDeliveries): "no hay ventas" y "no pude leerlas" tienen que verse
   // distinto. Lo que ya estaba cargado se conserva.
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Al entrar, si hay pedidos nuevos de la web se abre ahí: es donde empieza
+  // el trabajo. Una sola vez, para no sacar a nadie de la pestaña que eligió.
+  const primeraCarga = useRef(true);
+
   const reload = async () => {
     try {
       const data = await fetchDeliveries();
       setDeliveries(data);
       setLoadError(null);
+      if (primeraCarga.current) {
+        primeraCarga.current = false;
+        if (data.some((d) => d.status === "por_confirmar")) setStatusFilter("por_confirmar");
+      }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -2191,10 +2297,10 @@ const DeliveriesAdmin = () => {
   }, []);
 
   // Los contadores de cada pestaña reflejan la búsqueda: al tipear ves cuántos
-  // coinciden en "Por enviar" y en "Enviadas" al mismo tiempo.
+  // coinciden en cada estado al mismo tiempo.
   const term = search.trim().toLowerCase();
-  const pendingCount = deliveries.filter((d) => d.status === "pending" && deliveryMatches(d, term)).length;
-  const sentCount = deliveries.filter((d) => d.status === "sent" && deliveryMatches(d, term)).length;
+  const cuantos = (s: DeliveryStatus) =>
+    deliveries.filter((d) => d.status === s && deliveryMatches(d, term)).length;
 
   // Filtramos por estado + búsqueda y agrupamos por evento (ordenados por fecha).
   const groups = useMemo(() => {
@@ -2223,16 +2329,19 @@ const DeliveriesAdmin = () => {
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
   }, [deliveries, statusFilter, term, events]);
 
-  // Resumen general (todas las entregas, sin importar pestaña ni búsqueda).
-  const summary = useMemo(
-    () => ({
-      totalTickets: deliveries.reduce((a, d) => a + d.quantity, 0),
-      totalValue: deliveries.reduce((a, d) => a + d.value, 0),
+  // Resumen general (sin importar pestaña ni búsqueda). La plata y las entradas
+  // cuentan sólo lo CONFIRMADO: un pedido de la web sin comprobante no es una
+  // venta, y sumarlo inflaría la recaudación con gente que nunca pagó (v40).
+  const summary = useMemo(() => {
+    const confirmadas = deliveries.filter(esConfirmada);
+    return {
+      totalTickets: confirmadas.reduce((a, d) => a + d.quantity, 0),
+      totalValue: confirmadas.reduce((a, d) => a + d.value, 0),
+      porConfirmar: deliveries.filter((d) => d.status === "por_confirmar").length,
       pending: deliveries.filter((d) => d.status === "pending").length,
       sent: deliveries.filter((d) => d.status === "sent").length,
-    }),
-    [deliveries]
-  );
+    };
+  }, [deliveries]);
 
   // Exporta a CSV la lista visible (pestaña actual + búsqueda), lista para Excel.
   const exportCsv = () => {
@@ -2245,7 +2354,8 @@ const DeliveriesAdmin = () => {
     }
     const headers = [
       "Evento", "Ubicación evento", "Nombre completo", "Email", "Teléfono",
-      "Tipo de entrada", "Entradas", "Total", "Estado", "Enviada", "Registrado", "Notas",
+      "Tipo de entrada", "Entradas", "Total", "Estado", "Enviada", "Registrado", "Comprobante",
+      "Pedido", "Notas",
     ];
     const lines = rows.map(({ d, eventName, eventLocation }) =>
       [
@@ -2253,14 +2363,16 @@ const DeliveriesAdmin = () => {
         d.phone ? formatPhoneDisplay(d.phone) : "",
         ticketsSummary(d.tickets),
         d.quantity, d.value,
-        d.status === "sent" ? "Enviada" : "Pendiente",
+        ESTADO_LABEL[d.status],
         d.sentAt ? d.sentAt.slice(0, 10) : "",
         d.userId ? "Sí" : "No",
+        d.receiptPath ? "Sí" : "No",
+        d.orderCode ?? "",
         d.notes ?? "",
       ]
     );
     descargarCsv(
-      `odisea-entregas-${statusFilter === "pending" ? "por-enviar" : "enviadas"}`,
+      `odisea-entregas-${ESTADO_LABEL[statusFilter].toLowerCase().replace(/\s+/g, "-")}`,
       headers,
       lines
     );
@@ -2283,6 +2395,27 @@ const DeliveriesAdmin = () => {
     await reload();
     toast.success("Marcada como enviada");
   };
+  /**
+   * El staff vio el comprobante de un pedido de la web (v40). Se pregunta
+   * porque es justo el paso que convierte un pedido en una venta: un mensaje o
+   * una captura no lo confirman solos.
+   */
+  const handleConfirm = async (d: TicketDelivery) => {
+    const ok = await confirm({
+      title: "Confirmar pago",
+      description: `¿Viste el comprobante de ${d.firstName} ${d.lastName} por ${fmtMoney(d.value)}? Pasa a Por enviar.${
+        d.receiptPath
+          ? ""
+          : " No tiene el comprobante cargado: lo podés adjuntar después editando la venta, o confirmarlo con Cargar ventas pegando el mensaje y el comprobante."
+      }`,
+      confirmText: "Sí, lo vi",
+    });
+    if (!ok) return;
+    const result = await setDeliveryStatus(d.id, "pending");
+    if (!result.ok) return toast.error(result.error ?? "No se pudo confirmar");
+    await reload();
+    toast.success("Pago confirmado: pasó a Por enviar");
+  };
   const handleMarkPending = async (d: TicketDelivery) => {
     const result = await setDeliveryStatus(d.id, "pending");
     if (!result.ok) return toast.error(result.error ?? "No se pudo actualizar");
@@ -2299,6 +2432,8 @@ const DeliveriesAdmin = () => {
     if (!ok) return;
     const result = await deleteDelivery(d.id);
     if (!result.ok) return toast.error(result.error ?? "No se pudo eliminar");
+    // Borrar la fila no borra el archivo del bucket (misma lección que v17).
+    if (d.receiptPath) await removeComprobante(d.receiptPath);
     await reload();
     toast.success("Cliente eliminado");
   };
@@ -2327,34 +2462,28 @@ const DeliveriesAdmin = () => {
       {/* Resumen general */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MiniStat icon={<DollarSign className="w-4 h-4" />} label="Recaudado" value={fmtMoney(summary.totalValue)} />
-        <MiniStat icon={<Ticket className="w-4 h-4" />} label="Entradas" value={String(summary.totalTickets)} />
+        <MiniStat icon={<Clock className="w-4 h-4" />} label="Por confirmar" value={String(summary.porConfirmar)} />
         <MiniStat icon={<Send className="w-4 h-4" />} label="Por enviar" value={String(summary.pending)} />
         <MiniStat icon={<CheckCircle2 className="w-4 h-4" />} label="Enviadas" value={String(summary.sent)} />
       </div>
 
       {/* Toolbar */}
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
-        <div className="inline-flex rounded-lg border border-border overflow-hidden self-start">
-          <button
-            onClick={() => setStatusFilter("pending")}
-            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
-              statusFilter === "pending"
-                ? "bg-foreground text-background"
-                : "bg-background text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            Por enviar ({pendingCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter("sent")}
-            className={`px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
-              statusFilter === "sent"
-                ? "bg-foreground text-background"
-                : "bg-background text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            Enviadas ({sentCount})
-          </button>
+        {/* El orden es el del camino de una venta (v40). */}
+        <div className="flex flex-wrap rounded-lg border border-border overflow-hidden self-start">
+          {(["por_confirmar", "pending", "sent", "vencido"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 sm:px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors ${
+                statusFilter === s
+                  ? "bg-foreground text-background"
+                  : "bg-background text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              {ESTADO_LABEL[s].replace("Enviada", "Enviadas").replace("Vencido", "Vencidos")} ({cuantos(s)})
+            </button>
+          ))}
         </div>
 
         <div className="flex flex-1 gap-3 lg:justify-end">
@@ -2370,10 +2499,10 @@ const DeliveriesAdmin = () => {
           <button
             onClick={() => setPasteOpen(true)}
             className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2"
-            title="Pegar el mensaje de WhatsApp del cliente y cargar la entrega"
+            title="Pegar uno o varios mensajes de WhatsApp y cargar las ventas"
           >
             <ClipboardPaste className="w-4 h-4" />{" "}
-            <span className="hidden sm:inline">Pegar mensaje</span>
+            <span className="hidden sm:inline">Cargar ventas</span>
           </button>
           <button
             onClick={exportCsv}
@@ -2391,9 +2520,16 @@ const DeliveriesAdmin = () => {
       {/* Grupos por evento */}
       {groups.length === 0 ? (
         <div className="bg-card border border-border py-16 text-center text-muted-foreground text-sm">
-          {statusFilter === "pending"
-            ? "No hay clientes por enviar. Cargá uno pegando su mensaje de WhatsApp o con el botón Agregar."
-            : "Todavía no marcaste ninguna entrega como enviada."}
+          {
+            {
+              por_confirmar:
+                "No hay pedidos por confirmar. Aparecen solos cuando alguien toca Enviar por WhatsApp en la web.",
+              pending:
+                "No hay clientes por enviar. Cargá uno pegando su mensaje de WhatsApp o con el botón Agregar.",
+              sent: "Todavía no marcaste ninguna entrega como enviada.",
+              vencido: "No hay pedidos vencidos. Un pedido vence si a las 48 hs no se confirmó el pago.",
+            }[statusFilter]
+          }
         </div>
       ) : (
         groups.map((g) => (
@@ -2442,6 +2578,7 @@ const DeliveriesAdmin = () => {
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground space-y-0.5">
+                    <PedidoInfo d={d} />
                     {d.tickets.length > 0 && (
                       <p className="text-foreground">{ticketsSummary(d.tickets)}</p>
                     )}
@@ -2456,8 +2593,10 @@ const DeliveriesAdmin = () => {
                       eventName={g.eventName}
                       onSent={handleMarkSent}
                       onPending={handleMarkPending}
+                      onConfirm={handleConfirm}
                       onEdit={openEdit}
                       onDelete={handleDelete}
+                      onVerComprobante={setVerComprobante}
                     />
                   </div>
                 </div>
@@ -2485,6 +2624,9 @@ const DeliveriesAdmin = () => {
                           {d.firstName} {d.lastName}
                           {d.userId && <RegBadge />}
                         </p>
+                        <div className="text-xs text-muted-foreground">
+                          <PedidoInfo d={d} />
+                        </div>
                       </Td>
                       <Td>
                         <p className="text-xs font-mono">{d.email}</p>
@@ -2514,8 +2656,10 @@ const DeliveriesAdmin = () => {
                           eventName={g.eventName}
                           onSent={handleMarkSent}
                           onPending={handleMarkPending}
+                          onConfirm={handleConfirm}
                           onEdit={openEdit}
                           onDelete={handleDelete}
+                          onVerComprobante={setVerComprobante}
                         />
                       </Td>
                     </tr>
@@ -2528,15 +2672,24 @@ const DeliveriesAdmin = () => {
       )}
 
       {pasteOpen && (
-        <PasteMessageModal
+        <CargarVentasModal
           events={events}
           users={users}
           existing={deliveries}
-          onClose={() => setPasteOpen(false)}
-          onParsed={(data) => {
-            // El mensaje no se guarda solo: cae en el form de siempre, con todo
-            // cargado, para que el staff lo revise antes de escribir en la base.
+          // Con el formulario abierto la cola se esconde pero sigue montada:
+          // al volver están las ventas que faltaban.
+          oculto={modalOpen}
+          revisada={revisada}
+          onClose={() => {
             setPasteOpen(false);
+            setRevisada(null);
+          }}
+          onSaved={async () => {
+            setStatusFilter("pending");
+            await reload();
+          }}
+          onRevisar={(index, data) => {
+            setRevisandoIndex(index);
             setEditing(null);
             setPrefill(data);
             setModalOpen(true);
@@ -2554,356 +2707,33 @@ const DeliveriesAdmin = () => {
           onClose={() => {
             setModalOpen(false);
             setPrefill(null);
+            setRevisandoIndex(null);
           }}
-          onSaved={() => {
+          onSaved={(saved) => {
             setModalOpen(false);
             setPrefill(null);
+            // Venía de la cola de "Cargar ventas": que la marque como cargada.
+            if (revisandoIndex !== null) {
+              setRevisada({ index: revisandoIndex, id: saved?.id, receiptPath: saved?.receiptPath });
+              setRevisandoIndex(null);
+            }
             // Un cliente nuevo nace "pendiente": mostramos esa lista para que se vea.
             if (!editing) setStatusFilter("pending");
             reload();
           }}
         />
       )}
+
+      {verComprobante?.receiptPath && (
+        <VerComprobanteModal
+          path={verComprobante.receiptPath}
+          titulo={`${verComprobante.firstName} ${verComprobante.lastName}`.trim()}
+          onClose={() => setVerComprobante(null)}
+        />
+      )}
     </div>
   );
 };
-
-/**
- * Datos de un mensaje de WhatsApp ya interpretados, para abrir el form con todo
- * puesto. Van como strings porque alimentan los inputs tal cual, y el form sigue
- * siendo el que valida y guarda: el importador nunca escribe solo en la base.
- */
-interface DeliveryPrefill {
-  eventId: string;
-  /** Vínculo al perfil si el email coincidió con un usuario registrado (v10). */
-  userId: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  phoneCountry: string;
-  quantity: string;
-  value: string;
-  notes: string;
-  /** Desglose por tipo de entrada ya cruzado con el catálogo (v18). */
-  lines: DeliveryTicketLine[];
-}
-
-/**
- * Pegar el mensaje de WhatsApp de una compra y cargar la entrega sin retipear.
- *
- * El texto lo armó el propio sitio (ver @/lib/purchaseMessage), así que el
- * parser sabe exactamente qué busca. Lo que se entendió se muestra ANTES de
- * seguir: de acá no se escribe en la base, se abre el form de siempre con todo
- * cargado para que el staff lo confirme.
- */
-const PasteMessageModal = ({
-  events,
-  users,
-  existing,
-  onClose,
-  onParsed,
-}: {
-  events: AdminEvent[];
-  users: User[];
-  existing: TicketDelivery[];
-  onClose: () => void;
-  onParsed: (prefill: DeliveryPrefill) => void;
-}) => {
-  const [text, setText] = useState("");
-  // Evento elegido a mano: sólo se usa si el del mensaje no se pudo cruzar.
-  const [pickedEventId, setPickedEventId] = useState("");
-  const areaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    areaRef.current?.focus();
-  }, []);
-
-  const parsed = useMemo(() => (text.trim() ? parsePurchaseMessage(text) : null), [text]);
-  const data = parsed?.data ?? null;
-
-  // Evento del mensaje → evento cargado. Sin tildes ni mayúsculas, y aceptando
-  // que uno contenga al otro: el nombre del evento suele venir con adornos.
-  const matchedEvent = useMemo(() => {
-    const name = data?.eventName;
-    if (!name) return null;
-    const wanted = foldText(name).trim();
-    const exact = events.find((e) => foldText(e.name).trim() === wanted);
-    if (exact) return exact;
-    return (
-      events.find((e) => {
-        const candidate = foldText(e.name).trim();
-        return candidate.includes(wanted) || wanted.includes(candidate);
-      }) ?? null
-    );
-  }, [data?.eventName, events]);
-
-  const eventId = pickedEventId || matchedEvent?.id || "";
-  const selectedEvent = events.find((e) => e.id === eventId) ?? null;
-
-  // Si el email es de alguien registrado, la entrega queda vinculada al perfil.
-  const matchedUser = useMemo(
-    () => (data?.email ? users.find((u) => u.email.toLowerCase() === data.email) ?? null : null),
-    [data?.email, users]
-  );
-
-  const duplicate = useMemo(() => {
-    if (!data?.email || !eventId) return null;
-    return (
-      existing.find((d) => d.eventId === eventId && d.email.toLowerCase() === data.email) ?? null
-    );
-  }, [data?.email, eventId, existing]);
-
-  /**
-   * Cruza el tipo de entrada del mensaje con los que vende el evento (v18). El
-   * precio unitario sale del propio mensaje (subtotal ÷ cantidad): es lo que se
-   * le cobró, que puede no ser el precio de hoy.
-   */
-  const matched = useMemo(() => {
-    const available = selectedEvent?.tickets ?? [];
-    const lines: DeliveryTicketLine[] = [];
-    const unmatched: string[] = [];
-    for (const item of data?.items ?? []) {
-      const wanted = foldText(item.name).trim();
-      const type =
-        available.find((t) => foldText(t.name).trim() === wanted) ??
-        available.find((t) => {
-          const candidate = foldText(t.name).trim();
-          return candidate.includes(wanted) || wanted.includes(candidate);
-        });
-      if (!type) {
-        unmatched.push(item.name);
-        continue;
-      }
-      lines.push({
-        ticketTypeId: type.ticketTypeId,
-        name: type.name,
-        quantity: item.qty,
-        unitPrice: item.qty > 0 ? item.amount / item.qty : type.price,
-      });
-    }
-
-    /*
-     * Promo de cada línea (v24): "PROMO: 2x1 en General (-$700)" → la línea
-     * General lleva el 2x1 del evento. Es lo que descuenta el cupo, así que
-     * si no se puede cruzar se avisa en vez de cargar la venta sin promo.
-     * Se busca entre TODAS las promos del evento, vigentes o no: la venta se
-     * carga a veces después de que la promo venció.
-     */
-    const promosSinCruzar: string[] = [];
-    for (const pl of data?.promoLines ?? []) {
-      const tipo = foldText(pl.ticketName).trim();
-      const line = lines.find((l) => foldText(l.name).trim() === tipo);
-      const promo = line
-        ? (selectedEvent?.promos ?? []).find(
-            (p) =>
-              p.ticketTypeId === line.ticketTypeId &&
-              foldText(p.name).trim() === foldText(pl.label).trim()
-          )
-        : undefined;
-      if (line && promo) {
-        line.promoId = promo.promoId;
-        line.promoName = promo.name;
-      } else {
-        promosSinCruzar.push(`${pl.label} en ${pl.ticketName}`);
-      }
-    }
-    return { lines, unmatched, promosSinCruzar };
-  }, [data?.items, data?.promoLines, selectedEvent]);
-
-  const value = data ? data.total ?? data.itemsTotal : null;
-
-  const handleContinue = () => {
-    if (!data) return;
-    if (!eventId) {
-      toast.error("Elegí el evento");
-      return;
-    }
-    // El tipo de entrada ya tiene su propia tabla (v18), así que a Notas van
-    // sólo las cosas que no tienen dónde guardarse: la promo, el documento (la
-    // columna existe pero el form nunca la expuso) y lo que no se pudo cruzar.
-    const notes = [
-      data.birthdayPromo ? "PROMO CUMPLEAÑOS" : "",
-      // Las promos de entrada (v21) ya vienen descontadas en el total, así que
-      // acá van sólo como constancia de por qué se cobró menos que el precio
-      // de lista. Sin esto, dentro de un mes nadie se acuerda.
-      ...data.promos,
-      data.documentId ? `Doc: ${data.documentId}` : "",
-      matched.unmatched.length ? `Sin cruzar: ${matched.unmatched.join(", ")}` : "",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
-    onParsed({
-      eventId,
-      userId: matchedUser?.id ?? "",
-      fullName: data.fullName ?? "",
-      email: data.email ?? "",
-      // El input de teléfono espera el número sin el prefijo internacional.
-      phone: data.phoneE164
-        ? formatPhoneDisplay(data.phoneE164).replace(/^\+\d+\s*/, "")
-        : data.phoneRaw ?? "",
-      phoneCountry: phoneCountryOf(data.phoneE164) ?? DEFAULT_COUNTRY_CODE,
-      quantity: data.quantity > 0 ? String(data.quantity) : "1",
-      value: value !== null ? String(value) : "",
-      notes,
-      lines: matched.lines,
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl bg-background border border-border h-full sm:h-auto sm:max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 md:p-6 border-b border-border sticky top-0 bg-background z-10">
-          <h2 className="title-sport text-xl md:text-2xl font-black tracking-wide">
-            PEGAR MENSAJE
-          </h2>
-          <button onClick={onClose} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-4 md:p-6 space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Copiá el mensaje que te mandó el cliente por WhatsApp y pegalo acá (Ctrl+V). Lo leo y
-            te muestro qué entendí antes de cargar nada.
-          </p>
-
-          <textarea
-            ref={areaRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={8}
-            placeholder={"Buenas! Soy Juan\nQuiero comprar para ..."}
-            className="input-techno font-mono text-xs leading-relaxed resize-y"
-          />
-
-          {parsed && (
-            <div className="border border-border divide-y divide-border">
-              <div className="px-4 py-2.5 bg-secondary/50 flex items-center justify-between">
-                <span className="text-xs font-bold tracking-wider uppercase">Lo que entendí</span>
-                {matchedUser && <RegBadge />}
-              </div>
-
-              <ParsedRow label="Evento">
-                {matchedEvent ? (
-                  <span>
-                    {matchedEvent.name}{" "}
-                    <span className="text-xs text-muted-foreground">· detectado del mensaje</span>
-                  </span>
-                ) : (
-                  <select
-                    value={eventId}
-                    onChange={(e) => setPickedEventId(e.target.value)}
-                    className="input-techno py-1.5 text-sm"
-                  >
-                    <option value="">
-                      {data?.eventName ? `No encontré "${data.eventName}" — elegilo` : "Elegí el evento"}
-                    </option>
-                    {events.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.name} · {formatEventDate(e.date)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </ParsedRow>
-              <ParsedRow label="Nombre">{data?.fullName}</ParsedRow>
-              <ParsedRow label="Email">{data?.email}</ParsedRow>
-              <ParsedRow label="Teléfono">
-                {data?.phoneE164 ? formatPhoneDisplay(data.phoneE164) : data?.phoneRaw}
-              </ParsedRow>
-              <ParsedRow label="Documento">{data?.documentId}</ParsedRow>
-              <ParsedRow label="Entradas">
-                {data && data.quantity > 0 ? (
-                  <span>
-                    {data.quantity} · {data.itemsSummary}
-                    {matched.unmatched.length > 0 && (
-                      <span className="block text-xs text-charrua mt-0.5">
-                        No pude cruzar {matched.unmatched.join(", ")} con los tipos que vende el
-                        evento: cargalo a mano en el paso siguiente.
-                      </span>
-                    )}
-                  </span>
-                ) : null}
-              </ParsedRow>
-              <ParsedRow label="Total">{value !== null ? `$${value}` : null}</ParsedRow>
-              {data?.birthdayPromo && (
-                <ParsedRow label="Promo">
-                  <span className="inline-flex items-center gap-1.5 text-celeste-deep font-semibold">
-                    <Cake className="w-3.5 h-3.5" /> Cumpleaños aplicada
-                  </span>
-                </ParsedRow>
-              )}
-              {/* Promos de entrada (v21). Se muestran para que el total más
-                  bajo no parezca un error del cliente; el descuento ya está
-                  dentro del subtotal de cada línea. */}
-              {data?.promos.map((p) => (
-                <ParsedRow key={p} label="Promo">
-                  <span className="font-semibold text-celeste-deep">{p}</span>
-                </ParsedRow>
-              ))}
-              {matched.promosSinCruzar.length > 0 && (
-                <ParsedRow label="Ojo">
-                  <span className="text-xs text-charrua">
-                    No encontré {matched.promosSinCruzar.join(", ")} entre las promos del evento.
-                    Elegila a mano en el paso siguiente: si no, esta venta no descuenta el cupo.
-                  </span>
-                </ParsedRow>
-              )}
-            </div>
-          )}
-
-          {parsed && parsed.warnings.length > 0 && (
-            <div className="border border-charrua/40 bg-charrua/5 p-3 space-y-1.5">
-              {parsed.warnings.map((w) => (
-                <p key={w} className="flex items-start gap-2 text-xs text-charrua">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {w}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {duplicate && (
-            <div className="border border-charrua/40 bg-charrua/5 p-3">
-              <p className="flex items-start gap-2 text-xs text-charrua">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                Ya hay una entrega para {data?.email} en{" "}
-                {selectedEvent?.name ?? "este evento"} ({duplicate.quantity} entrada/s,{" "}
-                {duplicate.status === "sent" ? "ya enviada" : "pendiente"}). Vas a poder cargarla
-                igual, pero fijate que no sea la misma compra.
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-1">
-            <button onClick={onClose} className="btn-techno-outline flex-1">
-              Cancelar
-            </button>
-            <button
-              onClick={handleContinue}
-              disabled={!data?.fullName && !data?.email}
-              className="btn-celeste flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Revisar y cargar
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/** Fila del resumen de lo parseado. Sin valor muestra un guión apagado. */
-const ParsedRow = ({ label, children }: { label: string; children?: React.ReactNode }) => (
-  <div className="px-4 py-2 flex items-baseline gap-3 text-sm">
-    <span className="w-24 shrink-0 text-xs tracking-wider uppercase text-muted-foreground">
-      {label}
-    </span>
-    <span className="min-w-0 flex-1 break-words">
-      {children || <span className="text-muted-foreground">—</span>}
-    </span>
-  </div>
-);
 
 const DeliveryFormModal = ({
   events,
@@ -2920,9 +2750,39 @@ const DeliveryFormModal = ({
   editing: TicketDelivery | null;
   prefill?: DeliveryPrefill | null;
   onClose: () => void;
-  onSaved: () => void;
+  /** Con qué id y qué comprobante quedó guardada (la cola de ventas lo necesita). */
+  onSaved: (saved?: { id?: string; receiptPath?: string | null }) => void;
 }) => {
   const confirm = useConfirm();
+
+  /*
+   * Comprobante (v39). El que viene de la cola (`prefill.receipt`) es de la
+   * cola: si este formulario se cancela, no se borra acá. Lo que se sube ACÁ
+   * y no se guarda sí se borra al cerrar, para no dejar archivos sueltos.
+   */
+  const comprobanteInicial: ComprobanteValor | null =
+    prefill?.receipt ??
+    (editing?.receiptPath
+      ? { path: editing.receiptPath, hash: editing.receiptHash, tipo: editing.receiptPath }
+      : null);
+  const [comprobante, setComprobanteState] = useState<ComprobanteValor | null>(comprobanteInicial);
+  const subidosAca = useRef<string[]>([]);
+  const [verGuardado, setVerGuardado] = useState(false);
+
+  const setComprobante = (valor: ComprobanteValor | null) => {
+    const previo = comprobante;
+    // Lo que se subió en este formulario y se reemplaza no lo usa nadie.
+    if (previo && previo.path !== valor?.path && subidosAca.current.includes(previo.path)) {
+      void removeComprobante(previo.path);
+    }
+    if (valor && valor.path !== comprobanteInicial?.path) subidosAca.current.push(valor.path);
+    setComprobanteState(valor);
+  };
+
+  const cerrar = () => {
+    for (const p of subidosAca.current) void removeComprobante(p);
+    onClose();
+  };
   // "registered": elegís un usuario ya registrado y sólo cargás las entradas.
   // "manual": tipeás nombre/mail/teléfono. Al editar siempre usamos manual, y
   // al venir de un mensaje pegado también: los datos ya están, hay que verlos.
@@ -3128,21 +2988,39 @@ const DeliveryFormModal = ({
       };
     }
 
-    // Aviso de duplicado: mismo email en el mismo evento (solo al crear).
-    if (!editing) {
-      const dup = existing.find(
-        (x) => x.eventId === input.eventId && x.email.toLowerCase() === input.email.toLowerCase()
-      );
-      if (dup) {
-        const ok = await confirm({
-          title: "Posible duplicado",
-          description: `Ya hay una entrega para ${input.email} en este evento (${dup.quantity} entrada/s, ${
-            dup.status === "sent" ? "ya enviada" : "pendiente"
-          }). ¿Querés cargarla igual?`,
-          confirmText: "Cargar igual",
-        });
-        if (!ok) return;
-      }
+    // Duplicados (v39, ver duplicadosVenta.ts): sólo se frena lo que parece la
+    // MISMA compra. Que la persona ya haya comprado para el evento es normal
+    // —vuelve a comprar a la semana— y antes este aviso saltaba justo ahí.
+    const fuertes = revisarDuplicados(
+      {
+        eventId: input.eventId,
+        email: input.email,
+        phone: input.phone,
+        quantity: input.quantity,
+        value: input.value,
+        receiptHash: comprobante?.hash,
+      },
+      existing.filter((x) => x.id !== editing?.id),
+      { nombreEvento: (id) => events.find((ev) => ev.id === id)?.name ?? "otro evento" }
+    ).filter((a) => a.nivel === "fuerte");
+    // Al editar sólo importa si se cambió el comprobante por uno ya usado.
+    const aRevisar = editing
+      ? fuertes.filter(() => comprobante?.path !== editing.receiptPath)
+      : fuertes;
+    if (aRevisar.length > 0) {
+      const ok = await confirm({
+        title: "Puede estar repetida",
+        description: `${aRevisar.map((a) => a.texto).join(" ")} ¿La cargás igual?`,
+        confirmText: "Cargar igual",
+      });
+      if (!ok) return;
+    }
+
+    // Comprobante: se manda sólo si cambió, así sin la migración v39 el resto
+    // de la venta se sigue guardando.
+    if ((comprobante?.path ?? null) !== (editing?.receiptPath ?? null)) {
+      input.receiptPath = comprobante?.path ?? null;
+      input.receiptHash = comprobante?.hash ?? null;
     }
 
     // Aviso y no bloqueo, mismo criterio que el duplicado y que v14: sin
@@ -3175,6 +3053,14 @@ const DeliveryFormModal = ({
       deliveryId = result.id;
     }
 
+    // La venta ya quedó con su comprobante: lo subido acá ya no es huérfano, y
+    // si se reemplazó uno guardado, el viejo no lo usa nadie más.
+    subidosAca.current = [];
+    if (editing?.receiptPath && input.receiptPath !== undefined && input.receiptPath !== editing.receiptPath) {
+      void removeComprobante(editing.receiptPath);
+    }
+    const saved = { id: deliveryId, receiptPath: comprobante?.path ?? null };
+
     // El desglose vive en su propia tabla, así que se guarda recién con el id.
     if (deliveryId) {
       const result = await saveDeliveryTickets(deliveryId, ticketLines);
@@ -3182,14 +3068,14 @@ const DeliveryFormModal = ({
         // La entrega ya se guardó: hay que decirlo, no tragarse el error.
         setSaving(false);
         toast.error(`Se guardó la entrega, pero no el desglose: ${result.error}`);
-        onSaved();
+        onSaved(saved);
         return;
       }
     }
 
     setSaving(false);
     toast.success(editing ? "Cliente actualizado" : "Cliente agregado");
-    onSaved();
+    onSaved(saved);
   };
 
   const total = (() => {
@@ -3206,7 +3092,7 @@ const DeliveryFormModal = ({
           <h2 className="title-sport text-xl md:text-2xl font-black tracking-wide">
             {editing ? "EDITAR CLIENTE" : "NUEVO CLIENTE"}
           </h2>
-          <button onClick={onClose} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
+          <button onClick={cerrar} className="-mr-2 flex h-11 w-11 items-center justify-center hover:bg-muted" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -3451,8 +3337,14 @@ const DeliveryFormModal = ({
             />
           </FormField>
 
+          <CampoComprobante
+            valor={comprobante}
+            onChange={setComprobante}
+            onVer={() => setVerGuardado(true)}
+          />
+
           <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-techno-outline flex-1">
+            <button type="button" onClick={cerrar} className="btn-techno-outline flex-1">
               Cancelar
             </button>
             <button type="submit" disabled={saving} className="btn-celeste flex-1 disabled:opacity-60">
@@ -3461,6 +3353,13 @@ const DeliveryFormModal = ({
           </div>
         </form>
       </div>
+      {verGuardado && comprobante && (
+        <VerComprobanteModal
+          path={comprobante.path}
+          titulo={form.fullName}
+          onClose={() => setVerGuardado(false)}
+        />
+      )}
     </div>
   );
 };

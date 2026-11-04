@@ -49,6 +49,12 @@ export const MSG = {
    * VIP sin promo, o dos tipos con promos distintas.
    */
   promo: "PROMO:",
+  /**
+   * Número de pedido (v40). Lo genera el sitio al tocar "Enviar" y con él
+   * queda registrado el pedido "por confirmar"; el panel lo busca por acá para
+   * actualizar ESE pedido en vez de cargar otra venta.
+   */
+  order: "Pedido:",
   dataHeader: "Mis datos:",
   fullName: "Nombre completo:",
   email: "Email:",
@@ -106,6 +112,8 @@ export interface PurchaseMessageInput {
   promos?: PurchaseMessagePromo[];
   /** Cuenta de cobro del evento (v13). Sin cuenta, el mensaje la pide. */
   account?: PaymentAccount | null;
+  /** Número del pedido registrado en la web (v40). Sin número no va la línea. */
+  orderCode?: string | null;
 }
 
 export function buildPurchaseMessage(input: PurchaseMessageInput): string {
@@ -125,6 +133,7 @@ export function buildPurchaseMessage(input: PurchaseMessageInput): string {
     msg += `${MSG.promo} ${p.label} en ${p.ticketName} (-$${p.monto})\n`;
   }
   msg += `\n${MSG.total} $${input.total}\n`;
+  if (input.orderCode) msg += `${MSG.order} #${input.orderCode}\n`;
   // La promo de cumpleaños NO se escribe acá: no se reclama desde la compra.
   // Ver el comentario de MSG.birthdayPromo.
   msg += `\n${MSG.dataHeader}\n`;
@@ -204,6 +213,8 @@ export interface ParsedPurchase {
   promoLines: ParsedPromoLine[];
   /** Desglose legible ("2 General · 1 VIP"), para el campo Notas. */
   itemsSummary: string;
+  /** Número de pedido de la web (v40), sin el "#". null en los mensajes viejos. */
+  orderCode: string | null;
 }
 
 export interface ParsePurchaseResult {
@@ -216,15 +227,26 @@ export interface ParsePurchaseResult {
 
 /**
  * Sello que WhatsApp agrega a cada línea al copiar varios mensajes o exportar
- * el chat: "[12/9/26, 21:03] Juan: ". Copiando un mensaje suelto no aparece,
- * pero si el staff selecciona el chat sí, y sin limpiarlo no matchea nada.
+ * el chat. Copiando un mensaje suelto no aparece, pero si el staff selecciona
+ * varios sí, y sin limpiarlo no matchea nada. Hay dos órdenes:
+ *
+ * - fecha primero — el chat exportado y el teléfono: "[12/9/26, 21:03] Juan: "
+ * - hora primero — **WhatsApp Web** al copiar varios: "[21:03, 12/9/2026] Juan: "
+ *
+ * El segundo es el que importa para pegar varias ventas juntas, que se hace
+ * desde la compu.
  */
-const CHAT_STAMP =
-  /^\s*[[(]?\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?\s?m\.?)?[\])]?\s*[-–]?\s*/i;
+const FECHA = String.raw`\d{1,2}\/\d{1,2}\/\d{2,4}`;
+const HORA = String.raw`\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?\s?m\.?)?`;
+const CHAT_STAMP = new RegExp(
+  String.raw`^\s*[[(]?(?:${FECHA},?\s+${HORA}|${HORA},?\s+${FECHA})[\])]?\s*[-–]?\s*`,
+  "i"
+);
 
 const ITEM_RE = /^-\s*(\d+)\s+entradas?\s+(.+?)\s*\(\s*\$?\s*([\d.,]+)\s*\)\s*$/i;
 const EVENT_RE = /^quiero comprar para\s+(.+?)\s*\(([^)]*)\)\s*:?\s*$/i;
 const TOTAL_RE = /^total:\s*\$?\s*([\d.,]+)\s*$/i;
+const ORDER_RE = /^pedido:\s*#?\s*([a-z0-9]{6})\s*$/i;
 /**
  * Lo que sigue a "PROMO:", tal como lo arma `buildPurchaseMessage`:
  * "2x1 en General (-$700)". El nombre de la promo es GOLOSO a propósito: si el
@@ -280,6 +302,45 @@ export function parseMoney(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Separa un pegado con VARIOS mensajes de compra en uno por venta.
+ *
+ * En plena venta masiva los mensajes se acumulan: seleccionarlos todos en
+ * WhatsApp Web, copiar y pegar una sola vez es mucho más rápido que de a uno.
+ * Cada venta empieza donde aparece el saludo que arma el sitio
+ * (`MSG.greeting`, "Buenas! Soy …") y llega hasta el saludo siguiente. Lo que
+ * quede en el medio —una respuesta del staff, un "gracias!"— cae al final de
+ * la venta anterior, después de `Comprobante:`, donde el parser ya no lee.
+ *
+ * Si el mismo mensaje se pegó dos veces (pasa al seleccionar de más) queda uno
+ * solo. Sin ningún saludo devuelve el texto entero: puede ser un mensaje que el
+ * cliente editó, y el parser igual saca lo que pueda.
+ */
+export function splitPurchaseMessages(text: string): string[] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const greeting = foldText(MSG.greeting);
+  const starts: number[] = [];
+  lines.forEach((line, i) => {
+    if (foldText(stripChatStamp(line).trim()).startsWith(greeting)) starts.push(i);
+  });
+  if (starts.length <= 1) return text.trim() ? [text] : [];
+
+  const chunks = starts.map((start, k) =>
+    lines.slice(start, starts[k + 1] ?? lines.length).join("\n").trim()
+  );
+  const seen = new Set<string>();
+  return chunks.filter((chunk) => {
+    // La clave ignora el sello: el mismo mensaje copiado dos veces es igual.
+    const key = chunk
+      .split("\n")
+      .map((l) => foldText(stripChatStamp(l).trim()))
+      .join("\n");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Busca el valor de una etiqueta al principio de una línea. */
 function valueFor(lines: string[], label: string): string | null {
   // foldText conserva la longitud, así que el índice del original sirve.
@@ -313,8 +374,14 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
   let eventName: string | null = null;
   let eventDateLabel: string | null = null;
   let total: number | null = null;
+  let orderCode: string | null = null;
 
   for (const line of lines) {
+    const order = ORDER_RE.exec(line);
+    if (order) {
+      orderCode = order[1].toUpperCase();
+      continue;
+    }
     const event = EVENT_RE.exec(line);
     if (event) {
       eventName = event[1].trim() || null;
@@ -404,6 +471,7 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
       promos,
       promoLines,
       itemsSummary,
+      orderCode,
     },
     warnings,
   };
