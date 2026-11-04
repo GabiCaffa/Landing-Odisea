@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { supabase, EVENT_IMAGES_BUCKET } from "@/lib/supabase";
+import { traerTodo } from "@/lib/traerTodo";
 import { EventTicket, eventTicketFromDb, sortEventTickets } from "@/lib/ticketTypes";
 import {
   EventPromo,
@@ -364,11 +365,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const loadUsers = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (!error && data) setUsers(data.map(profileFromDb));
+    // De a páginas: de una sola vez Supabase devuelve como máximo 1000 y el
+    // panel se quedaba clavado en ese número (ver traerTodo).
+    try {
+      const data = await traerTodo((desde, hasta) =>
+        supabase
+          .from("profiles")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(desde, hasta)
+      );
+      setUsers(data.map(profileFromDb));
+    } catch {
+      // Igual que antes: si no se pudo leer, la lista queda como estaba.
+    }
   }, []);
 
   // Init: sesión + eventos + subscripciones
