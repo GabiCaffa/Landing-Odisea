@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { traerTodo } from "@/lib/traerTodo";
 
 /**
  * Entregas de entradas: clientes cargados a mano a los que hay que enviarles
@@ -187,14 +188,19 @@ function traducirError(message: string): string {
  * igual.
  */
 export async function fetchDeliveries(): Promise<TicketDelivery[]> {
-  const { data, error } = await supabase
-    .from("ticket_deliveries")
-    // El desglose por tipo viene embebido (v18): son 1 o 2 filas por entrega y
-    // se muestran en la misma lista, no vale la pena una segunda consulta.
-    .select("*, delivery_ticket_types(*, ticket_types(name), ticket_promos(name))")
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(fromDb);
+  // De a páginas: de una sola vez Supabase corta en 1000 filas sin avisar, y
+  // con una venta masiva las más viejas desaparecían de la lista y del Excel.
+  const data = await traerTodo((desde, hasta) =>
+    supabase
+      .from("ticket_deliveries")
+      // El desglose por tipo viene embebido (v18): son 1 o 2 filas por entrega y
+      // se muestran en la misma lista, no vale la pena una segunda consulta.
+      .select("*, delivery_ticket_types(*, ticket_types(name), ticket_promos(name))")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(desde, hasta)
+  );
+  return data.map(fromDb);
 }
 
 /**

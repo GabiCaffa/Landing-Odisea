@@ -1,4 +1,5 @@
 import { supabase, ID_PHOTOS_BUCKET } from "@/lib/supabase";
+import { traerTodo } from "@/lib/traerTodo";
 import { compressImageToBlob } from "@/contexts/AuthContext";
 
 /**
@@ -110,12 +111,20 @@ function humanizeError(message: string): string {
 }
 
 export async function fetchBirthdays(): Promise<BirthdaySignup[]> {
-  const { data, error } = await supabase
-    .from("birthday_signups")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error || !data) return [];
-  return data.map(fromDb);
+  // De a páginas, por el tope de 1000 filas de Supabase (ver traerTodo).
+  try {
+    const data = await traerTodo((desde, hasta) =>
+      supabase
+        .from("birthday_signups")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(desde, hasta)
+    );
+    return data.map(fromDb);
+  } catch {
+    return [];
+  }
 }
 
 export async function createBirthday(

@@ -1866,6 +1866,23 @@ tarjeta.
 - **Pendiente de decidir si molesta**: los agotados no se pueden fijar arriba aunque el
   staff quiera (por ejemplo, una fiesta "agotada" que se usa como prueba social).
 
+### El panel se quedaba en 1000 usuarios (tope de Supabase)
+
+El contador de usuarios del Dashboard se clavó en **1000** aunque la gente se seguía
+registrando. Supabase (PostgREST) **corta cada respuesta en 1000 filas sin dar
+error**: la lista simplemente termina. No era sólo el número: la pestaña Usuarios
+dejaba afuera a todos los registrados después, y Entregas (y el Excel) iban a perder
+ventas en la primera venta masiva que pasara las 1000.
+
+`src/lib/traerTodo.ts` pide de a páginas con `.range()` y un orden estable
+(`created_at` + `id`). Corta con una página **vacía** y no con "llegaron menos de
+1000", así sigue andando si el tope del proyecto cambia. Lo usan `loadUsers`
+(AuthContext), `fetchDeliveries` y `fetchBirthdays`.
+
+> **Regla:** cualquier lista del panel que pueda pasar las 1000 filas va por
+> `traerTodo`. Un `.select()` suelto sobre una tabla que crece es este mismo bug
+> esperando su fecha.
+
 ### El sidebar del panel cortaba el botón de cerrar sesión
 
 Reportado con una captura: el bloque de sesión quedaba partido contra el borde
