@@ -20,6 +20,8 @@ export interface Concurso {
   status: EstadoConcurso;
   closesAt?: string;
   createdAt: string;
+  /** v42: cuántos ganadores se destacan al cerrar (por defecto 3). */
+  winnersCount: number;
 }
 
 export interface Participante {
@@ -40,6 +42,7 @@ const concursoDesdeDb = (r: any): Concurso => ({
   status: r.status,
   closesAt: r.closes_at ?? undefined,
   createdAt: r.created_at,
+  winnersCount: r.winners_count ?? 3,
 });
 
 const participanteDesdeDb = (r: any): Participante => ({
@@ -58,6 +61,13 @@ const participanteDesdeDb = (r: any): Participante => ({
  */
 export const estaAbierto = (c: Concurso, ahora = Date.now()): boolean =>
   c.status === "open" && !(c.closesAt && ahora >= Date.parse(c.closesAt));
+
+/**
+ * ¿Ya terminó? Cerrada a mano, o abierta pero pasada su hora de cierre. Un
+ * borrador no cuenta: todavía no empezó.
+ */
+export const haTerminado = (c: Concurso, ahora = Date.now()): boolean =>
+  c.status !== "draft" && !estaAbierto(c, ahora);
 
 /** Dónde vive una votación. Con dos a la vez, cada una tiene su propia página. */
 export const rutaDeConcurso = (c: Pick<Concurso, "id" | "slug">) => `/votacion/${c.slug || c.id}`;
@@ -163,7 +173,14 @@ export async function createConcurso(c: {
 
 export async function updateConcurso(
   id: string,
-  c: Partial<{ title: string; description: string; status: EstadoConcurso; closesAt: string; slug: string }>
+  c: Partial<{
+    title: string;
+    description: string;
+    status: EstadoConcurso;
+    closesAt: string;
+    slug: string;
+    winnersCount: number;
+  }>
 ): Promise<void> {
   const out: Record<string, unknown> = {};
   if (c.slug !== undefined) out.slug = c.slug || null;
@@ -171,6 +188,8 @@ export async function updateConcurso(
   if (c.description !== undefined) out.description = c.description;
   if (c.status !== undefined) out.status = c.status;
   if (c.closesAt !== undefined) out.closes_at = c.closesAt || null;
+  // Sólo si se manda: sin v42 corrida, el resto de los cambios sigue andando.
+  if (c.winnersCount !== undefined) out.winners_count = c.winnersCount;
   const { error } = await supabase.from("contests").update(out).eq("id", id);
   if (error) throw error;
 }
@@ -241,20 +260,67 @@ export async function uploadParticipante(file: File): Promise<string> {
 }
 
 /**
- * Para la home: las votaciones abiertas ahora (puede haber más de una). Una sola
- * consulta por carga de página. Vacío = todavía no contestó o no hay.
+ * Ganadores de una votación terminada: las `winnersCount` fotos con más votos,
+ * sólo las que tienen alguno (un "ganador" con cero votos sería puro azar).
+ * Desempata el orden cargado. Cada uno trae sus votos.
+ */
+export interface Ganador {
+  participante: Participante;
+  votos: number;
+}
+
+export async function fetchGanadores(c: Concurso): Promise<Ganador[]> {
+  const [participantes, conteos] = await Promise.all([fetchParticipantes(c.id), fetchConteos(c.id)]);
+  return participantes
+    .map((participante, orden) => ({ participante, orden, votos: conteos[participante.id] ?? 0 }))
+    .filter((x) => x.votos > 0)
+    .sort((a, b) => b.votos - a.votos || a.orden - b.orden)
+    .slice(0, c.winnersCount)
+    .map(({ participante, votos }) => ({ participante, votos }));
+}
+
+/**
+ * Para la home: las votaciones abiertas ahora y las que ya terminaron (puede
+ * haber varias de cada una). Una sola consulta por carga de página.
+ *
+ * **Se actualiza sola a la hora de cierre**: se agenda un aviso para el próximo
+ * `closesAt` y, al llegar, la votación pasa de "abierta" a "terminada" sin que
+ * nadie recargue la página (el destacado de "votá" se apaga y aparece el de
+ * ganadores). Vacíos = todavía no contestó o no hay.
  */
 let pendiente: Promise<Concurso[]> | null = null;
 
-export const useConcursosAbiertos = (): Concurso[] => {
-  const [concursos, setConcursos] = useState<Concurso[]>([]);
+export const useConcursosHome = (): { abiertos: Concurso[]; terminados: Concurso[] } => {
+  const [todos, setTodos] = useState<Concurso[]>([]);
+  const [ahora, setAhora] = useState(() => Date.now());
+
   useEffect(() => {
     let vivo = true;
     pendiente ??= fetchConcursosVisibles().catch(() => []);
-    pendiente.then((cs) => vivo && setConcursos(cs.filter((c) => estaAbierto(c))));
+    pendiente.then((cs) => vivo && setTodos(cs));
     return () => {
       vivo = false;
     };
   }, []);
-  return concursos;
+
+  useEffect(() => {
+    // El próximo cierre que todavía no pasó, entre las votaciones abiertas.
+    const proximos = todos
+      .filter((c) => estaAbierto(c, ahora) && c.closesAt)
+      .map((c) => Date.parse(c.closesAt!))
+      .filter((t) => t > ahora);
+    if (proximos.length === 0) return;
+    // setTimeout no acepta más de ~24 días: con un cierre más lejano se reagenda.
+    const espera = Math.min(Math.min(...proximos) - ahora + 500, 2_000_000_000);
+    const id = window.setTimeout(() => setAhora(Date.now()), espera);
+    return () => window.clearTimeout(id);
+  }, [todos, ahora]);
+
+  return {
+    abiertos: todos.filter((c) => estaAbierto(c, ahora)),
+    terminados: todos.filter((c) => haTerminado(c, ahora)),
+  };
 };
+
+/** Compatibilidad: sólo las abiertas. */
+export const useConcursosAbiertos = (): Concurso[] => useConcursosHome().abiertos;

@@ -35,7 +35,7 @@ const mensajeDeError = (err: unknown, accion: string) => {
     return "Falta correr la migración v35_votacion_disfraces.sql en Supabase.";
   }
   // 42703 = la columna no existe; 23505 = la dirección ya la usa otra votación.
-  if (code === "42703") return "Falta correr la migración v36_votacion_slug.sql en Supabase.";
+  if (code === "42703") return "Falta correr una migración en Supabase (v36 para la dirección, v42 para los ganadores).";
   if (code === "23505") return "Esa dirección ya la usa otra votación. Probá con otra.";
   const msg = (err as Error | null)?.message;
   if (msg && /foto/.test(msg)) return msg;
@@ -164,6 +164,7 @@ const VotacionAdmin = () => {
               ...(campos.description !== undefined && { description: campos.description }),
               ...(campos.closesAt !== undefined && { closesAt: campos.closesAt || undefined }),
               ...(campos.slug !== undefined && { slug: campos.slug || undefined }),
+              ...(campos.winnersCount !== undefined && { winnersCount: campos.winnersCount }),
             }
           : c
       )
@@ -380,6 +381,30 @@ const VotacionAdmin = () => {
               <p className="mt-1 break-all text-[11px] text-muted-foreground">
                 Link para compartir:{" "}
                 <b>odiseaoficial.com/votacion/{concurso.slug || concurso.id}</b>
+              </p>
+            </div>
+            <div>
+              <label className="label-techno" htmlFor="v-ganadores">Cantidad de ganadores</label>
+              <input
+                id="v-ganadores"
+                type="number"
+                min={1}
+                max={10}
+                className="input-techno w-28"
+                defaultValue={concurso.winnersCount}
+                key={`g-${concurso.id}`}
+                onBlur={(e) => {
+                  const n = Math.round(Number(e.target.value));
+                  if (!Number.isFinite(n) || n < 1 || n > 10) {
+                    toast.error("Poné un número entre 1 y 10");
+                    e.target.value = String(concurso.winnersCount);
+                    return;
+                  }
+                  void guardarConcurso({ winnersCount: n });
+                }}
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Al cerrar la votación, la home destaca a estos ganadores (los más votados).
               </p>
             </div>
             <div>

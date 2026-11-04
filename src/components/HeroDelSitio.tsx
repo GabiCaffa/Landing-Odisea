@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import HeroBanners from "./HeroBanners";
 import PromoDestacada from "./PromoDestacada";
 import VotacionDestacada from "./VotacionDestacada";
+import GanadoresDestacados from "./GanadoresDestacados";
 import { SiteBanner, fetchBannersActivos } from "@/lib/banners";
 import { playThud } from "@/lib/spookySound";
 import { useAuth } from "@/contexts/AuthContext";
@@ -67,6 +68,8 @@ const HeroDelSitio = () => {
             se renderiza (ni el hueco). */}
         {/* Votación de disfraces abierta (v35): invita a participar. */}
         <VotacionDestacada />
+        {/* Al cerrar la votación (v42): los ganadores, en el mismo lugar. */}
+        <GanadoresDestacados />
         <PromoDestacada />
 
         <div className="mx-auto flex max-w-md items-center justify-center gap-3">

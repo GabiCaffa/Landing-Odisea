@@ -235,8 +235,8 @@ const Votacion = () => {
   const renderTarjeta = (p: Participante, i: number, fuente: Fuente, puestoTop?: number) => {
     const votos = conteos[p.id] ?? 0;
     const esMio = miVoto === p.id;
-    // Cerrada: podio de 3 en la grilla. Abierta: el puesto sólo se marca en "Los más votados".
-    const puesto = puestoTop ?? (!abierto && i < 3 && votos > 0 ? i + 1 : 0);
+    // Cerrada: podio de `winnersCount` (v42) en la grilla. Abierta: el puesto sólo se marca en "Los más votados".
+    const puesto = puestoTop ?? (!abierto && i < (concurso?.winnersCount ?? 3) && votos > 0 ? i + 1 : 0);
     return (
       <article
         key={`${fuente}-${p.id}`}
