@@ -137,6 +137,7 @@ import UsersAdmin from "@/components/admin/UsersAdmin";
 import BotonActualizarPaginas from "@/components/admin/BotonActualizarPaginas";
 import CampoDireccion from "@/components/admin/CampoDireccion";
 import { descargarCsv } from "@/lib/csv";
+import { exportarVentasExcel } from "@/lib/exportarVentasExcel";
 import { AdminTab, rotuloDePanel, tabsDe, usePuede } from "@/lib/adminPermisos";
 import { saveEventPromos, descuentoDe } from "@/lib/ticketPromos";
 import {
@@ -2211,17 +2212,14 @@ const DeliveryActions = ({
   );
 };
 
-/** Horas que espera un pedido de la web antes de vencer. Espejo de v40. */
-const HORAS_VENCE_PEDIDO = 48;
-
 /**
- * Número de pedido, origen y cuánto hace que espera (v40). Un pedido que se
- * acerca a vencer se pinta en rojo: es el que hay que mirar primero.
+ * Número de pedido, origen y cuánto hace que espera (v40). Los pedidos no
+ * vencen (v41): esperan en Por confirmar hasta que el staff los confirme o
+ * los borre.
  */
 const PedidoInfo = ({ d }: { d: TicketDelivery }) => {
   if (d.origin !== "web" && !d.orderCode) return null;
   const horas = Math.max(0, (Date.now() - new Date(d.createdAt).getTime()) / 3_600_000);
-  const quedan = Math.ceil(HORAS_VENCE_PEDIDO - horas);
   const espera =
     horas < 1 ? "hace menos de 1 h" : horas < 48 ? `hace ${Math.floor(horas)} h` : `hace ${Math.floor(horas / 24)} días`;
   return (
@@ -2230,11 +2228,6 @@ const PedidoInfo = ({ d }: { d: TicketDelivery }) => {
         #{d.orderCode ?? "—"}
       </span>
       <span>Web · {espera}</span>
-      {d.status === "por_confirmar" && (
-        <span className={quedan <= 6 ? "font-semibold text-charrua" : ""}>
-          · vence en {Math.max(quedan, 0)} h
-        </span>
-      )}
     </p>
   );
 };
@@ -2343,39 +2336,27 @@ const DeliveriesAdmin = () => {
     };
   }, [deliveries]);
 
-  // Exporta a CSV la lista visible (pestaña actual + búsqueda), lista para Excel.
-  const exportCsv = () => {
-    const rows = groups.flatMap((g) =>
-      g.rows.map((d) => ({ d, eventName: g.eventName, eventLocation: g.eventLocation }))
-    );
-    if (rows.length === 0) {
-      toast.error("No hay nada para exportar en esta lista");
+  /**
+   * Exporta a Excel con el formato de la planilla de siempre: una hoja por
+   * evento, las enviadas en verde y un Resumen. Va TODO lo confirmado, no sólo
+   * la pestaña abierta: la planilla es de todas las ventas.
+   */
+  const [exportando, setExportando] = useState(false);
+  const exportarExcel = async () => {
+    if (!deliveries.some(esConfirmada)) {
+      toast.error("Todavía no hay ventas confirmadas para exportar");
       return;
     }
-    const headers = [
-      "Evento", "Ubicación evento", "Nombre completo", "Email", "Teléfono",
-      "Tipo de entrada", "Entradas", "Total", "Estado", "Enviada", "Registrado", "Comprobante",
-      "Pedido", "Notas",
-    ];
-    const lines = rows.map(({ d, eventName, eventLocation }) =>
-      [
-        eventName, eventLocation, `${d.firstName} ${d.lastName}`.trim(), d.email,
-        d.phone ? formatPhoneDisplay(d.phone) : "",
-        ticketsSummary(d.tickets),
-        d.quantity, d.value,
-        ESTADO_LABEL[d.status],
-        d.sentAt ? d.sentAt.slice(0, 10) : "",
-        d.userId ? "Sí" : "No",
-        d.receiptPath ? "Sí" : "No",
-        d.orderCode ?? "",
-        d.notes ?? "",
-      ]
-    );
-    descargarCsv(
-      `odisea-entregas-${ESTADO_LABEL[statusFilter].toLowerCase().replace(/\s+/g, "-")}`,
-      headers,
-      lines
-    );
+    setExportando(true);
+    try {
+      const cuentas = await fetchPaymentAccounts();
+      const { hojas, filas } = await exportarVentasExcel(deliveries, events, cuentas);
+      toast.success(`Excel listo: ${filas} venta(s) en ${hojas} evento(s)`);
+    } catch (e) {
+      toast.error(`No se pudo armar el Excel: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setExportando(false);
+    }
   };
 
   const openNew = () => {
@@ -2471,7 +2452,10 @@ const DeliveriesAdmin = () => {
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
         {/* El orden es el del camino de una venta (v40). */}
         <div className="flex flex-wrap rounded-lg border border-border overflow-hidden self-start">
-          {(["por_confirmar", "pending", "sent", "vencido"] as const).map((s) => (
+          {/* "Vencidos" ya no existe (v41); la pestaña aparece sólo si quedó alguno. */}
+          {(["por_confirmar", "pending", "sent", "vencido"] as const)
+            .filter((s) => s !== "vencido" || cuantos(s) > 0 || statusFilter === s)
+            .map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -2505,11 +2489,13 @@ const DeliveriesAdmin = () => {
             <span className="hidden sm:inline">Cargar ventas</span>
           </button>
           <button
-            onClick={exportCsv}
-            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2"
-            title="Exportar la lista visible a CSV (Excel)"
+            onClick={exportarExcel}
+            disabled={exportando}
+            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2 disabled:opacity-50"
+            title="Bajar la planilla de ventas en Excel: una hoja por evento, las enviadas en verde"
           >
-            <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar</span>
+            <Download className="w-4 h-4" />{" "}
+            <span className="hidden sm:inline">{exportando ? "Armando…" : "Excel"}</span>
           </button>
           <button onClick={openNew} className="btn-celeste whitespace-nowrap inline-flex items-center gap-2">
             <Plus className="w-4 h-4" /> Agregar
@@ -2527,7 +2513,7 @@ const DeliveriesAdmin = () => {
               pending:
                 "No hay clientes por enviar. Cargá uno pegando su mensaje de WhatsApp o con el botón Agregar.",
               sent: "Todavía no marcaste ninguna entrega como enviada.",
-              vencido: "No hay pedidos vencidos. Un pedido vence si a las 48 hs no se confirmó el pago.",
+              vencido: "No hay pedidos vencidos.",
             }[statusFilter]
           }
         </div>

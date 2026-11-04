@@ -462,6 +462,10 @@ export default defineConfig(({ mode }) => {
             // un chunk lazy. Sin agrupar, Rollup pone cada icono donde se usa:
             // los del sitio en el chunk del sitio, los del panel en el de Admin.
             if (id.includes('lucide-react')) return;
+            // exceljs (~1 MB) lo usa sólo el botón "Excel" de Entregas y se
+            // carga con import(): en "vendor" lo bajaría cualquiera que entre
+            // a ver una fiesta. Misma trampa que lottie-web.
+            if (id.includes('exceljs')) return;
             if (id.includes('libphonenumber')) return 'telefono';
             if (id.includes('recharts') || id.includes('d3-')) return 'graficos';
             if (id.includes('@radix-ui')) return 'radix';
