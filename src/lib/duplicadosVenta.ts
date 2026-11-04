@@ -1,4 +1,5 @@
 import type { DeliveryTicketLine, TicketDelivery } from "@/lib/deliveries";
+import { foldText } from "@/lib/utils";
 
 /**
  * Controles antes de guardar una venta pegada desde WhatsApp.
@@ -172,4 +173,47 @@ export function revisarEvento(
     return [{ nivel: "aviso", texto: "La fecha de este evento ya pasó. ¿Es el evento correcto?" }];
   }
   return [];
+}
+
+// ─── El mensaje contra el pedido de la web (v40) ────────────────────────────
+
+/**
+ * ¿El mensaje es de la persona dueña de la cuenta? El email coincide, pero eso
+ * no alcanza: alguien con cuenta compra para una amiga y deja su propio email y
+ * teléfono, y cambia el nombre en el WhatsApp. Se mira que el nombre del
+ * mensaje contenga el primer nombre de la cuenta. Sin uno de los dos, se da por
+ * buena (no hay con qué decir que no).
+ */
+export function mismaPersona(nombreCuenta: string | null | undefined, nombreMensaje: string | null | undefined): boolean {
+  const mensaje = foldText(nombreMensaje ?? "").trim();
+  const primero = foldText(nombreCuenta ?? "").trim().split(/\s+/)[0] ?? "";
+  return !mensaje || !primero || mensaje.includes(primero);
+}
+
+export interface DatosDelMensaje {
+  fullName: string | null;
+  documentId: string | null;
+  email: string | null;
+  phoneE164: string | null;
+  quantity: number;
+  total: number | null;
+}
+
+/**
+ * Qué dice distinto el mensaje respecto del pedido que guardó la web. Pasa
+ * cuando el cliente edita el texto en WhatsApp antes de mandarlo (típico: la
+ * entrada es para otra persona). Manda el MENSAJE: es lo último que escribió.
+ */
+export function cambiosDelPedido(pedido: TicketDelivery, m: DatosDelMensaje): string[] {
+  const cambios: string[] = [];
+  const antes = `${pedido.firstName} ${pedido.lastName}`.trim();
+  const nombre = (m.fullName ?? "").trim();
+  if (nombre && foldText(antes).trim() !== foldText(nombre)) cambios.push(`Nombre: ${antes} → ${nombre}`);
+  if (m.documentId && m.documentId !== (pedido.documentId ?? ""))
+    cambios.push(`Documento: ${pedido.documentId || "—"} → ${m.documentId}`);
+  if (m.email && m.email.toLowerCase() !== pedido.email.toLowerCase()) cambios.push(`Email: ${pedido.email} → ${m.email}`);
+  if (m.phoneE164 && m.phoneE164 !== pedido.phone) cambios.push(`Teléfono: ${pedido.phone ?? "—"} → ${m.phoneE164}`);
+  if (m.quantity && m.quantity !== pedido.quantity) cambios.push(`Entradas: ${pedido.quantity} → ${m.quantity}`);
+  if (m.total !== null && Math.abs(m.total - pedido.value) > 0.01) cambios.push(`Total: $${pedido.value} → $${m.total}`);
+  return cambios;
 }

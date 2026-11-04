@@ -13,6 +13,8 @@ import { parsePurchaseMessage, splitPurchaseMessages } from "@/lib/purchaseMessa
 import {
   confirmarPedido,
   createDeliveryWithTickets,
+  saveDeliveryTickets,
+  updateDelivery,
   ESTADO_LABEL,
   type DeliveryInput,
   type DeliveryTicketLine,
@@ -20,6 +22,8 @@ import {
 } from "@/lib/deliveries";
 import { removeComprobante } from "@/lib/comprobantes";
 import {
+  cambiosDelPedido,
+  mismaPersona,
   revisarDuplicados,
   revisarEvento,
   revisarPrecios,
@@ -127,9 +131,16 @@ function interpretar(
   const eventId = pickedEventId || matchedEvent?.id || "";
   const selectedEvent = events.find((e) => e.id === eventId) ?? null;
 
-  const matchedUser = data.email
+  // El email coincide con una cuenta, pero eso no alcanza para decir que la
+  // venta es de esa persona: alguien con cuenta compra para una amiga y deja su
+  // propio email y teléfono. Si el nombre del mensaje no es el de la cuenta, no
+  // se vincula (y no aparece "Registrado" en una entrada que es de otra).
+  const usuarioDelEmail = data.email
     ? users.find((u) => u.email.toLowerCase() === data.email) ?? null
     : null;
+  const esElDueno = mismaPersona(usuarioDelEmail?.firstName, data.fullName);
+  const matchedUser = usuarioDelEmail && esElDueno ? usuarioDelEmail : null;
+  const cuentaDeOtro = usuarioDelEmail && !esElDueno ? usuarioDelEmail : null;
 
   // Tipo de entrada del mensaje → los que vende el evento (v18). El precio
   // unitario sale del mensaje (subtotal ÷ cantidad): es lo que se le cobró.
@@ -202,10 +213,17 @@ function interpretar(
   if (unmatched.length) faltan.push("cruzar el tipo de entrada");
   if (promosSinCruzar.length) faltan.push("cruzar la promo");
 
+  // Lo que el cliente cambió a mano en el WhatsApp (ver cambiosDelPedido).
+  const cambios = pedido
+    ? cambiosDelPedido(pedido, { ...data, total: data.total ?? data.itemsTotal })
+    : [];
+
   return {
     parsed,
     data,
     pedido,
+    cambios,
+    cuentaDeOtro,
     matchedEvent,
     eventId,
     selectedEvent,
@@ -370,18 +388,7 @@ const CargarVentasModal = ({
   const avisos: AvisoVenta[] = useMemo(() => {
     if (!actual || estado?.guardadaId) return [];
     const { data, eventId, selectedEvent, lines, value, pedido } = actual;
-    // El pedido ya está confirmado: guardar cargaría la misma venta otra vez.
-    const yaConfirmado: AvisoVenta[] =
-      pedido && (pedido.status === "pending" || pedido.status === "sent")
-        ? [
-            {
-              nivel: "fuerte",
-              texto: `El pedido #${pedido.orderCode} ya está confirmado (${ESTADO_LABEL[pedido.status].toLowerCase()}).`,
-            },
-          ]
-        : [];
     return [
-      ...yaConfirmado,
       ...revisarDuplicados(
         {
           eventId,
@@ -434,6 +441,8 @@ const CargarVentasModal = ({
       lastName: parts.slice(1).join(" "),
       phone: data.phoneE164,
       email: data.email ?? "",
+      // El del mensaje, que puede no ser el del perfil de quien hizo el pedido.
+      documentId: data.documentId ?? null,
       quantity: data.quantity,
       value: value ?? 0,
       notes: notes || null,
@@ -444,13 +453,26 @@ const CargarVentasModal = ({
     };
 
     setGuardando(true);
-    // Con pedido de la web sin confirmar, se confirma ESE pedido (v40): queda
-    // en Por enviar con el comprobante, y no aparece una venta repetida.
+    // Con pedido de la web (v40), se guarda sobre ESE pedido y nunca se carga
+    // una venta repetida. Sin confirmar: se confirma y pasa a Por enviar. Ya
+    // confirmado (alguien tocó "Confirmar pago" antes): sólo se le pasan los
+    // datos del mensaje, sin cambiarle el estado.
     const pedido = actual.pedido;
-    const result =
-      pedido && (pedido.status === "por_confirmar" || pedido.status === "vencido")
-        ? { ...(await confirmarPedido(pedido.id, input, lines)), id: pedido.id }
-        : await createDeliveryWithTickets(input, lines);
+    const sinConfirmar = pedido && (pedido.status === "por_confirmar" || pedido.status === "vencido");
+    let result: { ok: boolean; id?: string; error?: string };
+    if (pedido && sinConfirmar) {
+      result = { ...(await confirmarPedido(pedido.id, input, lines)), id: pedido.id };
+    } else if (pedido) {
+      const upd = await updateDelivery(pedido.id, input);
+      const tickets = upd.ok && lines.length ? await saveDeliveryTickets(pedido.id, lines) : { ok: true };
+      result = {
+        ok: upd.ok && tickets.ok,
+        id: upd.ok ? pedido.id : undefined,
+        error: upd.error ?? (tickets.ok ? undefined : `No se guardó el tipo de entrada: ${"error" in tickets ? tickets.error : ""}`),
+      };
+    } else {
+      result = await createDeliveryWithTickets(input, lines);
+    }
     setGuardando(false);
     if (!result.id) {
       toast.error(result.error ?? "No se pudo guardar la venta");
@@ -459,6 +481,7 @@ const CargarVentasModal = ({
     // Con id pero con error: la venta existe y el desglose no. Se marca como
     // cargada igual para no volver a crearla, y se avisa.
     if (!result.ok) toast.error(result.error ?? "Se guardó la venta con un error");
+    else if (pedido && !sinConfirmar) toast.success(`Pedido #${pedido.orderCode} actualizado con los datos del mensaje`);
     else toast.success("Venta cargada en Por enviar");
     setEstado(index, { guardadaId: result.id, respuesta: respuestaPara(actual) });
     await onSaved();
@@ -630,7 +653,8 @@ const CargarVentasModal = ({
           <div className="space-y-3">
             <div className="border border-green-600/40 bg-green-600/10 p-3 text-sm">
               <p className="flex items-center gap-2 font-semibold text-green-700">
-                <Check className="h-4 w-4" /> Cargada en Por enviar
+                <Check className="h-4 w-4" />{" "}
+                {actual.pedido && actual.pedido.status === "sent" ? "Guardada (ya estaba enviada)" : "Guardada en Por enviar"}
               </p>
               <p className="mt-1 text-muted-foreground">
                 {data.fullName} · {data.quantity} entrada(s) ·{" "}
@@ -667,15 +691,38 @@ const CargarVentasModal = ({
           </div>
         ) : (
           <>
-            {actual.pedido && (actual.pedido.status === "por_confirmar" || actual.pedido.status === "vencido") && (
+            {actual.pedido && (
               <div className="border border-celeste/40 bg-celeste/10 p-3 text-sm">
                 <p className="font-semibold">
                   Pedido #{actual.pedido.orderCode} de la web ·{" "}
                   {ESTADO_LABEL[actual.pedido.status].toLowerCase()}
                 </p>
                 <p className="mt-0.5 text-muted-foreground">
-                  Al guardar se confirma ese pedido y pasa a Por enviar. No se carga una venta nueva.
+                  {actual.pedido.status === "por_confirmar" || actual.pedido.status === "vencido"
+                    ? "Al guardar se confirma ese pedido con los datos del mensaje y pasa a Por enviar. No se carga una venta nueva."
+                    : "Ya estaba confirmado: al guardar se le pasan los datos del mensaje, sin cambiarle el estado ni cargar otra venta."}
                 </p>
+                {actual.cambios.length > 0 && (
+                  <div className="mt-2 border-t border-celeste/30 pt-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider">
+                      El mensaje dice otra cosa que el pedido (se guarda lo del mensaje)
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-xs">
+                      {actual.cambios.map((c) => (
+                        <li key={c}>{c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            {actual.cuentaDeOtro && (
+              <div className="border border-border bg-secondary/50 p-3 text-xs text-muted-foreground">
+                El email es de la cuenta de{" "}
+                <b className="text-foreground">
+                  {actual.cuentaDeOtro.firstName} {actual.cuentaDeOtro.lastName}
+                </b>
+                , pero el mensaje está a nombre de otra persona: no se vincula a esa cuenta.
               </div>
             )}
             <div className="divide-y divide-border border border-border">
