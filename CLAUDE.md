@@ -101,7 +101,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
-`v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql`.
+`v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` → `v42_votacion_ganadores.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -1681,6 +1681,25 @@ pruebas y Supabase simulado (celular y escritorio: pegar varios, comprobante por
 Ctrl+V, guardar, responder, cierre con pendientes). **No probado contra la base real**
 ni con el panel logueado. Pendiente para después: cuánto hace que espera cada venta en
 "Por enviar" y exportar a `.xlsx`.
+
+### Ganadores destacados al cerrar la votación (v42)
+
+Cuando una votación termina, la home deja de mostrar el aviso "Votación abierta" y pasa a
+mostrar un destacado con sus ganadores (`GanadoresDestacados`, en el mismo lugar del hero).
+
+- **"Terminada" = `closed` a mano, o `open` con `closes_at` ya pasado** (`haTerminado` en
+  `votacion.ts`, el espejo de `estaAbierto`). Un borrador nunca cuenta.
+- **El cambio es automático y sin recargar**: `useConcursosHome` agenda un `setTimeout` al
+  próximo `closes_at` y, al llegar, recalcula abiertas/terminadas. Verificado en navegador con
+  un cierre a 25 s. Quien tenga la página abierta a esa hora lo ve cambiar solo.
+- **Cuántos ganadores: `contests.winners_count`** (v42, 1 a 10, por defecto 3), editable por
+  votación en el panel ("Cantidad de ganadores"). Son los más votados, sólo con votos > 0;
+  **el empate en el borde no se resuelve**: desempata el orden cargado (una foto con los mismos
+  votos que la última puede quedar afuera). Cada tarjeta muestra foto, puesto, nombre y votos,
+  y lleva a la página de la votación. Hasta 2 tarjetas (`MAX`).
+- La página de la votación cerrada marca el podio con la misma cantidad (antes fijo en 3).
+- **Para sacar el destacado de la home**: pasar la votación a "Borrador" en el panel.
+- Sin v42 corrida todo anda con 3 ganadores; cambiar la cantidad da el aviso de migración.
 
 ### Votación de disfraces (v35)
 
