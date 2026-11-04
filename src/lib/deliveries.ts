@@ -48,6 +48,10 @@ export interface TicketDelivery {
   status: DeliveryStatus;
   sentAt?: string;
   notes?: string;
+  /** Ruta del comprobante en el bucket privado `comprobantes` (v35). */
+  receiptPath?: string;
+  /** SHA-256 del archivo del comprobante, para avisar si se carga dos veces (v35). */
+  receiptHash?: string;
   createdAt: string;
 }
 
@@ -66,6 +70,13 @@ export interface DeliveryInput {
   quantity: number;
   value: number;
   notes?: string | null;
+  /**
+   * Comprobante (v35). `undefined` = no tocar; `null` = quitarlo. Sólo se manda
+   * a la base cuando viene, así que sin la migración corrida todo lo demás
+   * sigue guardándose (mismo criterio que `stock_remaining` en v29).
+   */
+  receiptPath?: string | null;
+  receiptHash?: string | null;
 }
 
 /** Fila de delivery_ticket_types con el catálogo embebido (`ticket_types(name)`). */
@@ -102,6 +113,8 @@ function fromDb(row: any): TicketDelivery {
     status: row.status,
     sentAt: row.sent_at ?? undefined,
     notes: row.notes ?? undefined,
+    receiptPath: row.receipt_path ?? undefined,
+    receiptHash: row.receipt_hash ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -121,7 +134,17 @@ function toDb(input: Partial<DeliveryInput>): Record<string, any> {
   if (input.quantity !== undefined) out.quantity = input.quantity;
   if (input.value !== undefined) out.value = input.value;
   if (input.notes !== undefined) out.notes = input.notes || null;
+  if (input.receiptPath !== undefined) out.receipt_path = input.receiptPath || null;
+  if (input.receiptHash !== undefined) out.receipt_hash = input.receiptHash || null;
   return out;
+}
+
+/** Sin la migración v35, la base no conoce las columnas del comprobante. */
+function traducirError(message: string): string {
+  if (/receipt_(path|hash)/i.test(message)) {
+    return "Falta correr la migración v35 para guardar el comprobante.";
+  }
+  return message;
 }
 
 /**
@@ -156,8 +179,30 @@ export async function createDelivery(
     .insert(row)
     .select("id")
     .single();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: traducirError(error.message) };
   return { ok: true, id: data?.id };
+}
+
+/**
+ * Crea la venta Y su desglose, que es lo que hace el botón "Guardar" de
+ * "Pegar mensaje" sin pasar por el formulario. Si la venta se crea y el
+ * desglose falla, lo dice: la venta ya existe y no hay que cargarla de nuevo.
+ */
+export async function createDeliveryWithTickets(
+  input: DeliveryInput,
+  lines: DeliveryTicketLine[]
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const created = await createDelivery(input);
+  if (!created.ok || !created.id) return created;
+  const tickets = await saveDeliveryTickets(created.id, lines);
+  if (!tickets.ok) {
+    return {
+      ok: false,
+      id: created.id,
+      error: `Se guardó la venta, pero no el tipo de entrada: ${tickets.error}. Editala para completarlo.`,
+    };
+  }
+  return created;
 }
 
 /**
@@ -208,7 +253,7 @@ export async function updateDelivery(
     .from("ticket_deliveries")
     .update(toDb(patch))
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: traducirError(error.message) };
   return { ok: true };
 }
 

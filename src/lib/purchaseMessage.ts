@@ -216,11 +216,21 @@ export interface ParsePurchaseResult {
 
 /**
  * Sello que WhatsApp agrega a cada línea al copiar varios mensajes o exportar
- * el chat: "[12/9/26, 21:03] Juan: ". Copiando un mensaje suelto no aparece,
- * pero si el staff selecciona el chat sí, y sin limpiarlo no matchea nada.
+ * el chat. Copiando un mensaje suelto no aparece, pero si el staff selecciona
+ * varios sí, y sin limpiarlo no matchea nada. Hay dos órdenes:
+ *
+ * - fecha primero — el chat exportado y el teléfono: "[12/9/26, 21:03] Juan: "
+ * - hora primero — **WhatsApp Web** al copiar varios: "[21:03, 12/9/2026] Juan: "
+ *
+ * El segundo es el que importa para pegar varias ventas juntas, que se hace
+ * desde la compu.
  */
-const CHAT_STAMP =
-  /^\s*[[(]?\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?\s?m\.?)?[\])]?\s*[-–]?\s*/i;
+const FECHA = String.raw`\d{1,2}\/\d{1,2}\/\d{2,4}`;
+const HORA = String.raw`\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?\s?m\.?)?`;
+const CHAT_STAMP = new RegExp(
+  String.raw`^\s*[[(]?(?:${FECHA},?\s+${HORA}|${HORA},?\s+${FECHA})[\])]?\s*[-–]?\s*`,
+  "i"
+);
 
 const ITEM_RE = /^-\s*(\d+)\s+entradas?\s+(.+?)\s*\(\s*\$?\s*([\d.,]+)\s*\)\s*$/i;
 const EVENT_RE = /^quiero comprar para\s+(.+?)\s*\(([^)]*)\)\s*:?\s*$/i;
@@ -278,6 +288,45 @@ export function parseMoney(raw: string): number | null {
   const int = clean.slice(0, sep).replace(/[.,]/g, "");
   const n = Number(`${int || "0"}.${clean.slice(sep + 1)}`);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Separa un pegado con VARIOS mensajes de compra en uno por venta.
+ *
+ * En plena venta masiva los mensajes se acumulan: seleccionarlos todos en
+ * WhatsApp Web, copiar y pegar una sola vez es mucho más rápido que de a uno.
+ * Cada venta empieza donde aparece el saludo que arma el sitio
+ * (`MSG.greeting`, "Buenas! Soy …") y llega hasta el saludo siguiente. Lo que
+ * quede en el medio —una respuesta del staff, un "gracias!"— cae al final de
+ * la venta anterior, después de `Comprobante:`, donde el parser ya no lee.
+ *
+ * Si el mismo mensaje se pegó dos veces (pasa al seleccionar de más) queda uno
+ * solo. Sin ningún saludo devuelve el texto entero: puede ser un mensaje que el
+ * cliente editó, y el parser igual saca lo que pueda.
+ */
+export function splitPurchaseMessages(text: string): string[] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const greeting = foldText(MSG.greeting);
+  const starts: number[] = [];
+  lines.forEach((line, i) => {
+    if (foldText(stripChatStamp(line).trim()).startsWith(greeting)) starts.push(i);
+  });
+  if (starts.length <= 1) return text.trim() ? [text] : [];
+
+  const chunks = starts.map((start, k) =>
+    lines.slice(start, starts[k + 1] ?? lines.length).join("\n").trim()
+  );
+  const seen = new Set<string>();
+  return chunks.filter((chunk) => {
+    // La clave ignora el sello: el mismo mensaje copiado dos veces es igual.
+    const key = chunk
+      .split("\n")
+      .map((l) => foldText(stripChatStamp(l).trim()))
+      .join("\n");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** Busca el valor de una etiqueta al principio de una línea. */

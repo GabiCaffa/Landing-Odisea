@@ -24,3 +24,9 @@ export const EVENT_IMAGES_BUCKET = "event-images";
  * URLs firmadas y sesión de staff (ver supabase/v12_birthday_signups.sql).
  */
 export const ID_PHOTOS_BUCKET = "id-photos";
+
+/**
+ * Comprobantes de transferencia de las ventas. Bucket PRIVADO, sólo staff
+ * (admin y operador), con URLs firmadas (ver supabase/v35_comprobantes_ventas.sql).
+ */
+export const COMPROBANTES_BUCKET = "comprobantes";
