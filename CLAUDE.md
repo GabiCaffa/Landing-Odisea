@@ -101,7 +101,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
-`v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql`.
+`v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -1549,9 +1549,36 @@ sitio SÍ ve es el toque en **"Enviar por WhatsApp"**: ahí se registra el pedid
 | `por_confirmar` | El cliente toca Enviar en la web | Automático (`crear_pedido_web`) |
 | `pending` "Por enviar" | El staff vio el comprobante | Staff: "Confirmar pago" o Cargar ventas |
 | `sent` | Se mandaron las entradas | Staff, como siempre |
-| `vencido` | 48 hs sin confirmar | `pg_cron` cada hora; se puede confirmar igual |
+| ~~`vencido`~~ | ~~48 hs sin confirmar~~ | **Sacado en v41** (abajo) |
 
 `pending` y `sent` conservan el nombre de v9: las ventas cargadas antes no cambian.
+
+> **v41 — los pedidos ya no vencen** (pedido del autor). Hay gente que transfiere días
+> después, y un pedido que se movía solo a otra lista era una venta más para buscar. Se
+> apagó la tarea de `pg_cron`, se borró `vencer_pedidos_web()` y los vencidos volvieron a
+> por confirmar. El estado `vencido` sigue permitido en la tabla y el panel muestra su
+> pestaña sólo si queda alguno. El freno de 5 pedidos abiertos por teléfono en 48 hs
+> **no** es un vencimiento y sigue igual.
+
+**Exportar a Excel** (botón "Excel" de Entregas, `src/lib/exportarVentasExcel.ts`).
+Reemplaza al CSV y copia la planilla que el staff ya usaba ("Odisea Venta …"): una hoja
+por evento con las columnas de la plantilla (Precio total, Nombre del comprador, PRECIO
+UNITARIO, Teléfono, Mail, Tipo de entrada, Cantidad, Confirmacion, Cuenta, —, Enviada),
+encabezado naranja `FF9900`, **las enviadas en verde** `D9EAD3`, y al costado TOTAL
+VENTA, entradas, enviadas, por enviar y cuántas se vendieron a cada precio (lo que la
+planilla hacía con `SUMIF` para los lotes). Primero va "Resumen" con las mismas columnas
+que la de la planilla (fiesta, slug, capacidad, vendidas, quedan) más enviadas, por enviar
+y recaudado, todo con fórmulas que apuntan a cada hoja.
+
+- **Va todo lo confirmado** (Por enviar + Enviadas), no la pestaña abierta: la planilla
+  es de todas las ventas. Los pedidos sin confirmar no entran.
+- "Cuenta" es el titular de la cuenta de cobro del evento (v13). El teléfono va sin `+`
+  ("598 99 …") y el unitario es `total / cantidad`, como en la planilla.
+- **`exceljs` se carga sólo al tocar el botón** y va en su propio chunk (~940 KB, ~270 KB
+  gzip): sin la regla en `manualChunks` caía en `vendor`, que baja todo visitante.
+  Verificado: `vendor` sigue en 137,19 KB.
+- Prueba: `scripts/probar-excel-ventas.mjs` (22 chequeos sobre el archivo generado y
+  vuelto a leer). **No se abrió en Excel de verdad** (no hay Excel en el entorno).
 
 - **Un pedido NO es una venta.** No suma a la recaudación del panel, ni a "ya compró"
   en Usuarios, ni gasta cupo de promo (`promo_cupos_restantes` cuenta sólo `pending`

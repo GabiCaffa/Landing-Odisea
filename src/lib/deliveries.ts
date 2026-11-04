@@ -15,7 +15,8 @@ import { supabase } from "@/lib/supabase";
  *   nadie vio el comprobante.
  * - `pending`: "pendiente de enviar". El staff vio el comprobante.
  * - `sent`: se mandaron las entradas.
- * - `vencido`: pedido sin comprobante a las 48 hs. Se puede confirmar igual.
+ * - `vencido`: lo usaba el vencimiento a las 48 hs, que se sacó en v41. Queda
+ *   por si hay filas viejas; ninguna pasa sola a este estado.
  */
 export type DeliveryStatus = "por_confirmar" | "pending" | "sent" | "vencido";
 
