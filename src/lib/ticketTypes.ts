@@ -52,7 +52,23 @@ export interface EventTicket {
    * staff lo vació (se manda NULL a la base). Ninguno de los dos se muestra.
    */
   stockRemaining?: number | null;
+  /**
+   * v43: cuántas entradas tiene este lote en total. Con esto cargado, lo que
+   * queda se cuenta SOLO con las ventas confirmadas (`quedan`) y el número
+   * manual de arriba deja de usarse. `null` = el staff lo vació.
+   */
+  loteCupo?: number | null;
+  /** v43: lo que queda del lote según `stock_lotes()`. Sólo si hay `loteCupo`. */
+  quedan?: number;
 }
+
+/** El lote tiene cupo automático y ya se vendió entero. */
+export const loteAgotado = (t: EventTicket): boolean =>
+  t.loteCupo !== undefined && t.loteCupo !== null && t.quedan === 0;
+
+/** Algún tipo a la venta lleva el cupo automático (v43). */
+export const stockEsAutomatico = (tickets: EventTicket[]): boolean =>
+  tickets.some((t) => t.active && t.loteCupo !== undefined && t.loteCupo !== null);
 
 /**
  * Cuántas entradas quedan antes del cambio de lote, o `undefined` si no hay
@@ -60,12 +76,16 @@ export interface EventTicket {
  *
  * Mira sólo las entradas a la venta y toma **la que menos queda**: si hay dos
  * tipos con stock cargado, lo urgente es el que se acaba primero. Un 0 no
- * cuenta: un lote sin entradas se apaga con "A la venta", no con un cartel.
+ * cuenta: un lote sin entradas se apaga con "A la venta" o, con cupo
+ * automático, se muestra "Agotado" en su fila, no con un cartel de cero.
+ *
+ * Con cupo (v43) cuenta lo que queda de verdad; sin cupo, el número manual.
  */
 export function stockDelLote(tickets: EventTicket[]): number | undefined {
   const cantidades = tickets
-    .filter((t) => t.active && typeof t.stockRemaining === "number" && t.stockRemaining > 0)
-    .map((t) => t.stockRemaining as number);
+    .filter((t) => t.active)
+    .map((t) => (t.loteCupo !== undefined && t.loteCupo !== null ? t.quedan : t.stockRemaining))
+    .filter((n): n is number => typeof n === "number" && n > 0);
   return cantidades.length ? Math.min(...cantidades) : undefined;
 }
 
@@ -110,7 +130,23 @@ export function eventTicketFromDb(row: any): EventTicket {
     active: row.active,
     sortOrder: row.sort_order ?? 0,
     stockRemaining: row.stock_remaining ?? undefined,
+    loteCupo: row.lote_cupo ?? undefined,
   };
+}
+
+/**
+ * Lo que queda de cada lote con cupo (v43), por evento y tipo. Lo vendido sale
+ * de las ventas, que el público no puede leer: por eso es una RPC que devuelve
+ * sólo el número. Si falla (o v43 no está corrida), `null` y no se muestra nada.
+ */
+export async function fetchStockLotes(): Promise<Map<string, number> | null> {
+  const { data, error } = await supabase.rpc("stock_lotes");
+  if (error || !data) return null;
+  const out = new Map<string, number>();
+  for (const row of data as Array<{ event_id: string; ticket_type_id: string; quedan: number }>) {
+    out.set(`${row.event_id}:${row.ticket_type_id}`, row.quedan);
+  }
+  return out;
 }
 
 /** Orden de presentación: el orden configurado y, a igualdad, por precio. */
@@ -125,7 +161,9 @@ function humanError(error: { code?: string; message: string }): string {
   if (error.code === "23503")
     return "No se puede borrar: hay eventos vendiendo este tipo. Desactivalo en vez de borrarlo.";
   if (error.code === "42703" || error.code === "PGRST204")
-    return "Falta correr la migración v29_ticket_stock.sql en Supabase.";
+    return /lote_cupo/.test(error.message)
+      ? "Falta correr la migración v43 en Supabase para el cupo del lote."
+      : "Falta correr la migración v29_ticket_stock.sql en Supabase.";
   return error.message;
 }
 
@@ -199,6 +237,8 @@ export async function saveEventTickets(
       // Sólo si hay algo que decir: con la columna todavía sin migrar (v29) un
       // campo desconocido haría fallar el guardado de CUALQUIER evento.
       ...(t.stockRemaining !== undefined ? { stock_remaining: t.stockRemaining } : {}),
+      // Mismo criterio para el cupo (v43): sin migrar, no se manda.
+      ...(t.loteCupo !== undefined ? { lote_cupo: t.loteCupo } : {}),
     })),
     { onConflict: "event_id,ticket_type_id" }
   );

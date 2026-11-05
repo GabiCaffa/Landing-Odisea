@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { supabase, EVENT_IMAGES_BUCKET } from "@/lib/supabase";
 import { traerTodo } from "@/lib/traerTodo";
-import { EventTicket, eventTicketFromDb, sortEventTickets } from "@/lib/ticketTypes";
+import { EventTicket, eventTicketFromDb, fetchStockLotes, sortEventTickets } from "@/lib/ticketTypes";
 import {
   EventPromo,
   eventPromoFromDb,
@@ -332,7 +332,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const loadEvents = useCallback(async () => {
-    const [{ data, error }, cupos] = await Promise.all([
+    const [{ data, error }, cupos, lotes] = await Promise.all([
       supabase
         .from("events")
         // Los tipos de entrada y las promos vienen embebidos: el sitio los
@@ -346,12 +346,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // público no puede leer. Si falla, las promos quedan sin `remaining` y
       // se muestran igual (ver EventPromo.remaining).
       fetchCuposRestantes(),
+      // Lo que queda de cada lote con cupo (v43), por el mismo motivo.
+      fetchStockLotes(),
     ]);
     if (error || !data) {
       setEventsLoaded(true);
       return;
     }
     const eventos = data.map(eventFromDb);
+    if (lotes) {
+      for (const e of eventos) {
+        for (const t of e.tickets) {
+          const quedan = lotes.get(`${e.id}:${t.ticketTypeId}`);
+          if (quedan !== undefined) t.quedan = quedan;
+        }
+      }
+    }
     if (cupos) {
       for (const e of eventos) {
         for (const p of e.promos) {

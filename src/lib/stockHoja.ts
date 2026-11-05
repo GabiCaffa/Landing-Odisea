@@ -47,9 +47,14 @@ export const fetchStockHoja = (): Promise<StockHoja> => {
  */
 export const stockAMostrar = (
   deLaHoja: number | undefined,
-  manual: number | undefined
+  manual: number | undefined,
+  /**
+   * El número del panel sale del cupo automático (v43): cuenta las ventas
+   * confirmadas, así que manda sobre la hoja, que se carga a mano.
+   */
+  automatico = false
 ): number | undefined =>
-  deLaHoja !== undefined ? (deLaHoja > 0 ? deLaHoja : undefined) : manual;
+  automatico ? manual : deLaHoja !== undefined ? (deLaHoja > 0 ? deLaHoja : undefined) : manual;
 
 export const useStockHoja = (): StockHoja => {
   const [stock, setStock] = useState<StockHoja>({});

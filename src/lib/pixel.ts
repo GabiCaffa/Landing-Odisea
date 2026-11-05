@@ -43,7 +43,7 @@ const HOSTS_PRODUCCION = ["odiseaoficial.com", "www.odiseaoficial.com"];
  * URL de `/auth/callback` y `/reset-password` lleva un código que no tiene por
  * qué viajar a un tercero.
  */
-const RUTAS_SIN_PIXEL = ["/admin", "/auth", "/reset-password", "/recuperar", "/perfil"];
+const RUTAS_SIN_PIXEL = ["/admin", "/auth", "/reset-password", "/recuperar", "/perfil", "/pedido"];
 
 export const rutaConPixel = (pathname: string): boolean =>
   !RUTAS_SIN_PIXEL.some((r) => pathname === r || pathname.startsWith(`${r}/`));

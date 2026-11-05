@@ -10,7 +10,7 @@ import { normalizePhone, formatPhoneDisplay, usableDocumentId } from "@/lib/vali
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { PaymentAccount, fetchAccountForEvent } from "@/lib/paymentAccounts";
-import { EventTicket } from "@/lib/ticketTypes";
+import { EventTicket, loteAgotado } from "@/lib/ticketTypes";
 import {
   EventPromo,
   mejorDescuento,
@@ -322,6 +322,14 @@ const CompraEntradas = ({
     // la respuesta antes haría que el celular bloquee la ventana nueva. Si no
     // se guarda, el staff carga la venta a mano como siempre.
     if (eventId && codigoPedido.current) {
+      const codigo = codigoPedido.current;
+      // Al volver de WhatsApp, el cliente tiene a mano dónde seguir su pedido
+      // (v43). El link también va en el mensaje que mandó.
+      toast.success(`Tu pedido es el #${codigo}`, {
+        description: "Mandanos el comprobante por WhatsApp. Podés ver en qué está tu pedido cuando quieras.",
+        duration: 15000,
+        action: { label: "Ver pedido", onClick: () => window.location.assign(`/pedido/${codigo}`) },
+      });
       void registrarPedidoWeb({
         code: codigoPedido.current,
         eventId,
@@ -586,6 +594,16 @@ const CompraEntradas = ({
                           {rotuloAbono}
                         </p>
                       )}
+                      {/* Lote con cupo automático (v43): agotado, o las últimas. */}
+                      {loteAgotado(ticket) ? (
+                        <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-charrua">
+                          Agotado
+                        </p>
+                      ) : ticket.quedan !== undefined && ticket.quedan <= 20 ? (
+                        <p className="mt-0.5 text-[11px] font-semibold text-charrua">
+                          {ticket.quedan === 1 ? "Queda 1" : `Quedan ${ticket.quedan}`}
+                        </p>
+                      ) : null}
                       {/* La descripción del tipo de entrada se cae en compacto:
                           son ~18 px por fila para un texto que casi siempre
                           repite el nombre ("Acceso general al evento"). */}
@@ -666,7 +684,12 @@ const CompraEntradas = ({
                       <button
                         type="button"
                         onClick={() => updateQuantity(ticket.name, 1)}
-                        className="flex h-11 w-11 items-center justify-center border border-border text-lg transition-colors hover:bg-foreground hover:text-background"
+                        // Sin más lugar en el lote (v43): ni agotado ni pasarse del cupo.
+                        disabled={
+                          loteAgotado(ticket) ||
+                          (ticket.quedan !== undefined && quantities[ticket.name] >= ticket.quedan)
+                        }
+                        className="flex h-11 w-11 items-center justify-center border border-border text-lg transition-colors hover:bg-foreground hover:text-background disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-inherit"
                         aria-label={`Agregar una entrada ${ticket.name}`}
                       >
                         +

@@ -10,7 +10,7 @@ import { diasDelGrupo, etiquetaDeDia, eventoAgotado } from "@/lib/grupos";
 import { useComisionTicketera, useSinTema } from "@/contexts/ThemeContext";
 import { RUTA_APARTE, esFiestaAparte, fiestaAparte } from "@/lib/fiestasAparte";
 import { precioConComision } from "@/lib/siteSettings";
-import { stockDelLote, textoStockLote } from "@/lib/ticketTypes";
+import { loteAgotado, stockDelLote, stockEsAutomatico, textoStockLote } from "@/lib/ticketTypes";
 import { rastrear } from "@/lib/pixel";
 import VisorFlyer from "@/components/VisorFlyer";
 import { stockAMostrar, useStockHoja } from "@/lib/stockHoja";
@@ -140,19 +140,24 @@ const Evento = () => {
   }
 
   const entradas = evento.tickets.filter((t) => t.active);
+  // Las que todavía se pueden comprar: un lote con cupo vendido entero (v43)
+  // sigue en la lista —se muestra "Agotado"— pero no cuenta para el precio.
+  const comprables = entradas.filter((t) => !loteAgotado(t));
   const promos = evento.promos.filter((p) => promoVigente(p));
   // Mismo criterio que la tarjeta del carrusel, para que no digan cosas
   // distintas: agotado si lo marcaron, si venció la venta o si no hay entradas.
   const agotado =
     evento.status === "agotado" ||
-    entradas.length === 0 ||
+    comprables.length === 0 ||
     (evento.saleEndsAt ? new Date() >= new Date(evento.saleEndsAt) : false);
 
   // El tipo activo más barato, para el "desde $X" de arriba.
-  const desde = entradas.length ? Math.min(...entradas.map((t) => t.price)) : 0;
+  const desde = comprables.length ? Math.min(...comprables.map((t) => t.price)) : 0;
   const desdeConComision = precioConComision(desde, comisionTicketera);
-  // Cuántas quedan antes del cambio de lote (v29), si el staff lo cargó.
-  const stockLote = agotado ? undefined : stockAMostrar(stockHoja[evento.slug], stockDelLote(entradas));
+  // Cuántas quedan antes del cambio de lote (v29; automático desde v43).
+  const stockLote = agotado
+    ? undefined
+    : stockAMostrar(stockHoja[evento.slug], stockDelLote(entradas), stockEsAutomatico(entradas));
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

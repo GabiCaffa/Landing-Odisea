@@ -95,6 +95,16 @@ export const TicketsEditor = ({
   const setActive = (typeId: string, active: boolean) =>
     onChange(value.map((t) => (t.ticketTypeId === typeId ? { ...t, active } : t)));
 
+  // Cupo del lote (v43). Vacío = sin cupo automático.
+  const setCupo = (typeId: string, raw: string) =>
+    onChange(
+      value.map((t) =>
+        t.ticketTypeId === typeId
+          ? { ...t, loteCupo: raw === "" ? null : Math.max(0, Math.floor(Number(raw))) }
+          : t
+      )
+    );
+
   // Vacío = no se informa ('null' se manda a la base como NULL).
   const setStock = (typeId: string, raw: string) =>
     onChange(
@@ -175,24 +185,55 @@ export const TicketsEditor = ({
             )}
 
             {row && (
-              <div className="mt-2 ml-7">
+              <div className="mt-2 ml-7 space-y-2">
+                {/* Cupo automático (v43): lo que queda se cuenta solo con las
+                    ventas confirmadas. Si está, el número manual no se usa. */}
                 <label className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                  Quedan
+                  Este lote tiene
                   <input
                     type="number"
                     min={0}
-                    value={row.stockRemaining ?? ""}
-                    onChange={(e) => setStock(type.id, e.target.value)}
+                    value={row.loteCupo ?? ""}
+                    onChange={(e) => setCupo(type.id, e.target.value)}
                     className="input-techno w-20 text-right"
                     placeholder="—"
-                    aria-label={`Entradas que quedan de ${type.name} antes del cambio de lote`}
+                    aria-label={`Cupo del lote de ${type.name}`}
                   />
-                  entradas antes del cambio de lote
+                  entradas en total
                 </label>
-                <p className="mt-1 text-[11px] text-muted-foreground/80">
-                  Opcional. Se muestra tal cual en la web: <strong>mantenelo al día</strong> con
-                  las ventas, o dejalo vacío para no mostrar nada.
-                </p>
+                {row.loteCupo !== undefined && row.loteCupo !== null ? (
+                  <p className="text-[11px] text-muted-foreground/80">
+                    {row.quedan !== undefined ? (
+                      <>
+                        Quedan <strong className="text-foreground">{row.quedan}</strong> (vendidas{" "}
+                        {Math.max(0, row.loteCupo - row.quedan)}).{" "}
+                      </>
+                    ) : null}
+                    Se descuenta solo con cada venta confirmada que tenga este tipo de entrada.
+                    Al llegar a 0 la web lo muestra <strong>Agotado</strong>: dejá el siguiente
+                    lote a la venta para que quede ése.
+                  </p>
+                ) : (
+                  <>
+                    <label className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      O a mano: quedan
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.stockRemaining ?? ""}
+                        onChange={(e) => setStock(type.id, e.target.value)}
+                        className="input-techno w-20 text-right"
+                        placeholder="—"
+                        aria-label={`Entradas que quedan de ${type.name} antes del cambio de lote`}
+                      />
+                      antes del cambio de lote
+                    </label>
+                    <p className="text-[11px] text-muted-foreground/80">
+                      Opcional. El cupo de arriba se cuenta solo; el número a mano se muestra tal
+                      cual y hay que <strong>mantenerlo al día</strong>. Vacíos, no se muestra nada.
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </div>

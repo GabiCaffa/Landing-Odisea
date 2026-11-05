@@ -30,6 +30,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Votacion = lazy(() => import("./pages/Votacion"));
 const Fotos = lazy(() => import("./pages/Fotos"));
+const Pedido = lazy(() => import("./pages/Pedido"));
 
 const queryClient = new QueryClient();
 
@@ -72,6 +73,8 @@ const App = () => (
               <Route path="/votacion/:clave" element={<Votacion />} />
               {/* Álbum de fotos de un evento (v37). */}
               <Route path="/fotos/:slug" element={<Fotos />} />
+              {/* "Mi pedido" (v43): el cliente ve en qué está su compra. */}
+              <Route path="/pedido/:codigo" element={<Pedido />} />
               <Route path="/terminos" element={<Terms />} />
               <Route path="/privacidad" element={<Privacy />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

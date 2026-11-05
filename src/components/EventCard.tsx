@@ -4,7 +4,7 @@ import { ArrowRight, Flame, Instagram } from "lucide-react";
 import { playHover, playThud } from "@/lib/spookySound";
 import { imagenRedimensionada, srcSetRedimensionado, PROPORCION_EVENTO } from "@/lib/imagenes";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
-import { EventTicket, stockDelLote, textoStockLote } from "@/lib/ticketTypes";
+import { EventTicket, loteAgotado, stockDelLote, stockEsAutomatico, textoStockLote } from "@/lib/ticketTypes";
 import { EventPromo, promoVigente } from "@/lib/ticketPromos";
 import { urlDeEvento } from "@/lib/rutas";
 import { stockAMostrar } from "@/lib/stockHoja";
@@ -93,11 +93,17 @@ const EventCard = ({
   const cartel = useCartelEventos();
 
   // Agotado si el admin lo marcó así, si ya pasó la fecha/hora de cierre de
-  // venta, o si el evento no tiene ningún tipo de entrada a la venta.
+  // venta, o si el evento no tiene ningún tipo de entrada a la venta (o todos
+  // son lotes con cupo ya vendidos enteros, v43).
   const isSoldOut =
-    soldOut || tickets.length === 0 || (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
+    soldOut ||
+    tickets.length === 0 ||
+    tickets.every(loteAgotado) ||
+    (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
 
-  const stock = isSoldOut ? undefined : stockAMostrar(stockHoja, stockDelLote(tickets));
+  const stock = isSoldOut
+    ? undefined
+    : stockAMostrar(stockHoja, stockDelLote(tickets), stockEsAutomatico(tickets));
 
   // Los carteles de promo (2x1, etc.), sin repetir y de a tres como mucho. En
   // escritorio van sobre el flyer; en celular, donde el flyer es una miniatura,
