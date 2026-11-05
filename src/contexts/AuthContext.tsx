@@ -523,6 +523,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (signUpError) return { ok: false, error: translateAuthError(signUpError.message) };
     if (!signUpData.user) return { ok: false, error: "No se pudo crear la cuenta" };
+    // Con "Confirm email" prendido, un email que YA tiene cuenta no da error:
+    // Supabase devuelve un usuario sin identidades (para no revelar qué mails
+    // existen) y no manda nada. Sin esto, la persona espera un mail que nunca llega.
+    if (signUpData.user.identities?.length === 0) {
+      return { ok: false, error: "Ya existe una cuenta con ese email" };
+    }
 
     // 3. Si requiere confirmación de email, signUpData.session viene null
     if (!signUpData.session) {

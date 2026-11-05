@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { tomarVolverA } from "@/lib/cuentaDesdePedido";
 
 /**
  * Aterrizaje del link de confirmación de email (emailRedirectTo del signUp).
@@ -17,6 +18,9 @@ const AuthCallback = () => {
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [firstName, setFirstName] = useState<string>("");
   const settled = useRef(false);
+  // Quien creó la cuenta desde una compra vuelve a su pedido (cuentaDesdePedido).
+  // Se toma recién si el link anduvo: si venció, queda para el próximo intento.
+  const [volverA, setVolverA] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -30,7 +34,9 @@ const AuthCallback = () => {
         const name = (session?.user?.user_metadata?.first_name as string) ?? "";
         setFirstName(name);
         toast.success(name ? `¡Bienvenido, ${name}!` : "¡Iniciaste sesión!");
-        setTimeout(() => active && navigate("/", { replace: true }), 2200);
+        const destino = tomarVolverA();
+        setVolverA(destino);
+        setTimeout(() => active && navigate(destino ?? "/", { replace: true }), 2200);
       }
     };
 
@@ -80,7 +86,7 @@ const AuthCallback = () => {
                   {firstName ? `¡BIENVENIDO, ${firstName.toUpperCase()}!` : "¡BIENVENIDO!"}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Iniciaste sesión. Te llevamos al inicio...
+                  Iniciaste sesión. {volverA?.startsWith("/pedido") ? "Te llevamos a tu pedido..." : "Te llevamos al inicio..."}
                 </p>
               </>
             )}
