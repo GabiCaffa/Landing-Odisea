@@ -22,6 +22,7 @@ import {
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { toast } from "sonner";
+import CampoFecha from "@/components/CampoFecha";
 
 interface BirthdayPromoModalProps {
   isOpen: boolean;
@@ -270,13 +271,10 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
                   <label className="block text-sm font-medium mb-2">
                     Fecha de nacimiento *
                   </label>
-                  <input
-                    type="date"
+                  <CampoFecha
                     value={form.birthDate}
-                    onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
-                    max={new Date().toISOString().slice(0, 10)}
-                    min="1900-01-01"
-                    className="w-full p-3 border border-border bg-background focus:outline-none focus:border-foreground transition-colors"
+                    onChange={(iso) => setForm((f) => ({ ...f, birthDate: iso }))}
+                    className="w-full p-3 border border-border bg-background text-base focus:outline-none focus:border-foreground transition-colors"
                   />
                 </div>
                 <div>

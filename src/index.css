@@ -647,6 +647,23 @@
   --papel: 41 47% 93%;
 }
 
+/* ── Controles nativos en los temas oscuros ── */
+/* La lista que abre un <select> (país, departamento, ciudad) la dibuja el
+   navegador, no la página: sin esto salía BLANCA con el texto claro del tema
+   encima, casi ilegible. `color-scheme: dark` le dice al navegador que pinte
+   sus controles en oscuro (lista, calendario, barras de scroll); el color de
+   las opciones va además explícito porque Chrome en Windows no siempre lo
+   toma del esquema. */
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) {
+  color-scheme: dark;
+}
+
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) option,
+:root:is([data-theme="halloween"], [data-theme="navidad"], [data-theme="anio-nuevo"]) optgroup {
+  background-color: hsl(var(--card));
+  color: hsl(var(--tinta));
+}
+
 /* ── Nieve y polvo dorado (ClimaTema) ── */
 /* Cada capa es un mosaico de puntos que se desplaza exactamente un alto de
    baldosa y vuelve a empezar: por eso el corte no se nota. Si se cambia

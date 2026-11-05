@@ -27,6 +27,7 @@ import { normalizePhone, formatPhoneDisplay } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE, getCountry } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { toast } from "sonner";
+import CampoFecha from "@/components/CampoFecha";
 
 type Section = "info" | "avatar" | "security" | "danger";
 
@@ -235,13 +236,7 @@ const InfoSection = () => {
       </div>
 
       <Field label="Fecha de nacimiento">
-        <input
-          type="date"
-          value={birthDate}
-          onChange={(e) => setBirthDate(e.target.value)}
-          className="input-techno"
-          required
-        />
+        <CampoFecha value={birthDate} onChange={setBirthDate} required />
       </Field>
 
       <LocationSelect
