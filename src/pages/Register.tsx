@@ -16,6 +16,7 @@ import {
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { toast } from "sonner";
+import CampoFecha from "@/components/CampoFecha";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -227,13 +228,10 @@ const Register = () => {
                 </div>
 
                 <Field label="Fecha de nacimiento">
-                  <input
-                    type="date"
+                  <CampoFecha
                     required
                     value={form.birthDate}
-                    onChange={update("birthDate")}
-                    max={new Date().toISOString().split("T")[0]}
-                    className="input-techno"
+                    onChange={(iso) => setForm((p) => ({ ...p, birthDate: iso }))}
                   />
                 </Field>
               </FormSection>

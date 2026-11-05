@@ -116,6 +116,16 @@ const CompraEntradas = ({
    */
   const [editandoDatos, setEditandoDatos] = useState(false);
 
+  /**
+   * El perfil vino SIN teléfono: se muestra el campo suelto.
+   *
+   * Se decide UNA vez, al cargar el perfil, y no mirando si el campo está
+   * vacío en cada render. Mirándolo en cada render, el primer dígito lo dejaba
+   * "no vacío", el campo se desmontaba y el teclado se cerraba: había que
+   * tocar de nuevo por cada número.
+   */
+  const [telefonoSuelto, setTelefonoSuelto] = useState(false);
+
   // Cuenta de cobro del evento (la carga el admin desde el panel).
   const [account, setAccount] = useState<PaymentAccount | null>(null);
 
@@ -136,6 +146,7 @@ const CompraEntradas = ({
     if (!isOpen) return;
     if (currentUser) {
       setStep("purchase");
+      setTelefonoSuelto(!currentUser.phone);
       setCountry(currentUser.country ?? DEFAULT_COUNTRY_CODE);
       setFormData({
         name: `${currentUser.firstName} ${currentUser.lastName}`,
@@ -691,7 +702,7 @@ const CompraEntradas = ({
                 {/* El teléfono suelto: es el que más falta en los perfiles, y
                     sin él el botón no se habilita. Aparece acá mismo para no
                     obligar a entrar en "Editar" por un solo campo. */}
-                {datosResumidos && !formData.phone.trim() && (
+                {datosResumidos && telefonoSuelto && (
                   <div className="mb-4">
                     <label className={compacto ? "mb-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground" : "mb-2 block text-sm font-medium"}>Teléfono *</label>
                     <PhoneInput

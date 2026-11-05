@@ -2510,6 +2510,26 @@ archivo del bucket.
 > explícita del autor, tomada después de plantearle un job de limpieza a 30/90 días. Si
 > alguna vez se quiere un vencimiento, el molde es el `pg_cron` de `v8_cleanup_unconfirmed`.
 
+### Formularios en los temas oscuros: desplegables, fecha y el teléfono que se cerraba
+
+- **Las listas de los `<select>` salían blancas** con el texto claro del tema encima. Esa
+  lista la dibuja el navegador, no la página: `color-scheme: dark` en los temas oscuros
+  (`index.css`) la pinta en oscuro, junto con calendarios y scrollbars, y las `option`
+  llevan además color explícito para Chrome en Windows. **Sin librería**: un desplegable
+  propio en celular es peor que el nativo (que abre la rueda del sistema) y sumaría peso.
+- **La fecha de nacimiento es `CampoFecha`** ("dd/mm/aaaa" con teclado numérico) en
+  Registro, Perfil y la promo de cumpleaños. El `type="date"` nativo tomaba el idioma del
+  navegador (pedía "mm/dd/yyyy" en un Chrome en inglés) y obligaba a ir mes por mes
+  hasta 1995. Hacia afuera sigue hablando en ISO; incompleta o inexistente (31/02)
+  devuelve "" y queda inválida para el navegador, así `required` frena igual. Los
+  `type="date"` del panel no se tocaron.
+- **El teléfono suelto de la compra se cerraba con cada dígito.** Con sesión y sin
+  teléfono en el perfil aparece ese campo; se mostraba mientras el teléfono estuviera
+  **vacío**, así que el primer número lo desmontaba y el teclado se cerraba. Ahora se
+  decide una vez, al cargar el perfil (`telefonoSuelto`). Misma familia que los hooks
+  después de un return: una condición que depende de lo que el propio campo está
+  editando.
+
 ### Temas Navidad y Año Nuevo (sin migración)
 
 Dos temas más en el interruptor de v19: `navidad` (pino de noche, rojo y dorado) y
