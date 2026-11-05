@@ -102,7 +102,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
 `v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` →
-`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql`.
+`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -1546,9 +1546,20 @@ compra con el número que ya va en su mensaje: pedido recibido → pago confirma
 enviadas. Ataca el problema con el que arrancó todo: los "¿te llegó mi transferencia?" que
 tapaban el WhatsApp en plena venta.
 
-- Lo lee `anon` por la RPC `estado_pedido(code)`, que devuelve **sólo** estado, evento,
-  cantidad, total, detalle y el **primer nombre**. Nada de email, teléfono ni documento:
-  el número no es una contraseña y quien lo adivine no tiene que ver datos de nadie.
+- La RPC `estado_pedido(code)` devuelve **sólo** estado, evento, cantidad, total, detalle
+  y el **primer nombre**. Nada de email, teléfono ni documento.
+- **v44: sólo lo ve su dueño.** En v43 la llamaba `anon` y cualquiera con el número veía
+  el pedido de otro; el autor lo marcó como error (el número viaja en chats y capturas).
+  Ahora hace falta sesión y la base sólo lo devuelve si es de esa cuenta (`user_id`) o
+  del **mismo email** de la cuenta —seguro porque una cuenta sólo existe con el email
+  confirmado— o al staff. "No existe" y "no es tuyo" se ven igual, a propósito: no se
+  puede averiguar si un número existe. Sin sesión, las páginas piden entrar
+  (`PedirIngresoPedidos`): quien compró sin cuenta la crea con el mismo mail y lo ve.
+- **"Mis pedidos" (`/pedidos`, v44)**: botón en el menú (texto en escritorio, ícono en
+  celular) que aparece con sesión o si desde ese navegador se hizo algún pedido (el
+  número se guarda en `localStorage` sólo para mostrar el botón; **no da acceso a
+  nada**). Lista los pedidos de la cuenta (RPC `mis_pedidos()`, también los hechos sin
+  sesión con el mismo mail) y tiene un buscador por número.
 - El link llega por tres lados: una línea `Seguí tu pedido:` en el mensaje que manda el
   cliente (le queda en su propio chat; el parser la ignora), la respuesta del staff al
   confirmar (`ventaMessage.ts`) y un toast con "Ver pedido" al tocar Enviar.

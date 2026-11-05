@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, ShieldCheck, User as UserIcon, UserCircle } from "lucide-react";
+import { LogOut, Receipt, ShieldCheck, User as UserIcon, UserCircle } from "lucide-react";
 import odiseaLogoDark from "@/assets/odisea-logo-black.png";
 import odiseaLogoLight from "@/assets/odisea-logo-white.png";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -10,6 +10,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { useAlbumes, useGaleria } from "@/lib/galeria";
 import Guirnalda from "@/components/Guirnalda";
+import { useHayPedidos } from "@/lib/pedidosWeb";
 
 
 const Header = () => {
@@ -20,6 +21,7 @@ const Header = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { currentUser, logout } = useAuth();
+  const hayPedidos = useHayPedidos(Boolean(currentUser));
   const confirm = useConfirm();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -98,7 +100,9 @@ const Header = () => {
       <div className="container-odisea">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo - Always an image, never text */}
-          <Link to="/" className="flex items-center">
+          {/* flex-shrink-0: con todos los botones de celular, el logo era lo que
+              se achicaba hasta desaparecer. */}
+          <Link to="/" className="flex flex-shrink-0 items-center">
             <img
               src={odiseaLogo}
               alt="ODÍSEA Logo"
@@ -107,7 +111,7 @@ const Header = () => {
           </Link>
 
           {/* Minimal navigation */}
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex items-center gap-3 lg:gap-6">
             <Link
               to="/#eventos"
               onClick={(e) => irAAncla(e, "eventos")}
@@ -134,11 +138,27 @@ const Header = () => {
             >
               Promociones
             </Link>
+            {/* "Mis pedidos" (v44): sólo si hay algo para ver, o sea sesión
+                iniciada o algún pedido hecho desde este navegador. */}
+            {hayPedidos && (
+              <Link
+                to="/pedidos"
+                aria-label="Mis pedidos"
+                title="Mis pedidos"
+                className="inline-flex items-center gap-1.5 font-sport text-sm font-bold tracking-[0.15em] uppercase text-tinta/70 hover:text-celeste-deep transition-colors duration-200"
+              >
+                {/* Entre 768 y 1024 px el texto no entra junto al resto: va el ícono. */}
+                <Receipt className="w-4 h-4 lg:hidden" aria-hidden="true" />
+                <span className="hidden lg:inline">Mis pedidos</span>
+              </Link>
+            )}
+            {/* En tablet (768-1023 px) no entra todo: se va Instagram, que
+                también está en el pie y es el único link que saca del sitio. */}
             <a
               href="https://www.instagram.com/odisea.uy/"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-sport text-sm font-bold tracking-[0.15em] uppercase text-tinta/70 hover:text-celeste-deep transition-colors duration-200"
+              className="hidden lg:inline font-sport text-sm font-bold tracking-[0.15em] uppercase text-tinta/70 hover:text-celeste-deep transition-colors duration-200"
             >
               Instagram
             </a>
@@ -215,7 +235,8 @@ const Header = () => {
             {/* Los dos atajos, en celular también. "Promociones" va relleno: es el
                 resaltado. "Eventos anteriores" va en dos líneas porque en una
                 no entra junto a los iconos de sesión y WhatsApp. */}
-            {hayGaleria && !currentUser && (
+            {/* Con "Mis pedidos" a la vista no entra: la galería se ve bajando. */}
+            {hayGaleria && !currentUser && !hayPedidos && (
               <Link
                 to="/#anteriores"
                 onClick={(e) => irAAncla(e, "anteriores")}
@@ -235,8 +256,21 @@ const Header = () => {
                 currentUser ? "px-2.5 text-[10px]" : "px-3.5 text-[11px]"
               }`}
             >
-              Promociones
+              {/* Con sesión y "Mis pedidos" no entra la palabra entera en 375 px. */}
+              {currentUser && hayPedidos && !isStaffRole(currentUser.role) ? "Promos" : "Promociones"}
             </Link>
+            {/* El staff ya tiene su ícono del panel: con los dos no entra en 375 px,
+                y "Mis pedidos" le queda en el menú de escritorio. */}
+            {hayPedidos && !(currentUser && isStaffRole(currentUser.role)) && (
+              <Link
+                to="/pedidos"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-border"
+                aria-label="Mis pedidos"
+                title="Mis pedidos"
+              >
+                <Receipt className="w-4 h-4" />
+              </Link>
+            )}
             {currentUser ? (
               <>
                 <Link to="/perfil" className="rounded-full border border-border overflow-hidden" aria-label="Mi perfil">

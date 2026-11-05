@@ -4,7 +4,8 @@ import { Check, Clock, Mail, RefreshCw } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
-import { formatEventDate } from "@/contexts/AuthContext";
+import { formatEventDate, useAuth } from "@/contexts/AuthContext";
+import PedirIngresoPedidos from "@/components/PedirIngresoPedidos";
 import { EstadoPedido, fetchEstadoPedido } from "@/lib/pedidosWeb";
 import { urlDeEvento } from "@/lib/rutas";
 
@@ -17,8 +18,9 @@ import { urlDeEvento } from "@/lib/rutas";
  * acá sin escribir a nadie.
  *
  * Tres pasos, siempre a la vista, para que se entienda qué falta: pedido
- * enviado → pago confirmado → entradas enviadas. Muestra sólo lo que devuelve
- * `estado_pedido()`: nada de email ni teléfono.
+ * enviado → pago confirmado → entradas enviadas. **Sólo con la cuenta de quien
+ * compró** (v44): sin sesión pide entrar, y la base no le devuelve el pedido a
+ * nadie más que a su dueño y al staff.
  */
 
 const WHATSAPP = "59892592179";
@@ -40,6 +42,7 @@ const MENSAJES: Record<number, string> = {
 
 const Pedido = () => {
   const { codigo = "" } = useParams();
+  const { currentUser, loading } = useAuth();
   const numero = codigo.toUpperCase();
   const [pedido, setPedido] = useState<EstadoPedido | null>(null);
   const [estado, setEstado] = useState<"cargando" | "listo" | "no-existe" | "error">("cargando");
@@ -56,10 +59,18 @@ const Pedido = () => {
   };
 
   useEffect(() => {
+    // Sin sesión no se consulta: la base sólo le muestra el pedido a su dueño (v44).
+    if (loading) return;
+    // Al cerrar sesión, lo que se veía se borra de la pantalla.
+    if (!currentUser) {
+      setPedido(null);
+      setEstado("cargando");
+      return;
+    }
     void cargar();
-    // Sólo cuando cambia el número.
+    // Cuando cambia el número o la cuenta.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [numero]);
+  }, [numero, currentUser, loading]);
 
   const consulta = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`Hola! Consulto por mi pedido #${numero}`)}`;
   const paso = pedido ? pasoDe(pedido.estado) : 0;
@@ -74,21 +85,23 @@ const Pedido = () => {
             PEDIDO <span className="highlight-celeste">#{numero}</span>
           </h1>
 
-          {estado === "cargando" && (
+          {!loading && !currentUser && <PedirIngresoPedidos />}
+
+          {currentUser && estado === "cargando" && (
             <p className="text-sm text-muted-foreground" role="status">
               Buscando tu pedido…
             </p>
           )}
 
-          {(estado === "no-existe" || estado === "error") && (
+          {currentUser && (estado === "no-existe" || estado === "error") && (
             <div className="rounded-2xl border border-border bg-card p-5">
               <p className="font-semibold">
-                {estado === "error" ? "No pudimos revisar tu pedido ahora." : "No encontramos ese pedido."}
+                {estado === "error" ? "No pudimos revisar tu pedido ahora." : "No encontramos ese pedido en tu cuenta."}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {estado === "error"
                   ? "Probá de nuevo en un rato."
-                  : "Revisá el número en el mensaje que nos mandaste. Si compraste escribiéndonos directo, puede no tener número: consultanos por WhatsApp."}
+                  : "Se ven sólo los pedidos hechos con tu cuenta o con tu mismo mail. Revisá el número y con qué mail compraste, o consultanos por WhatsApp."}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {estado === "error" && (
@@ -103,7 +116,7 @@ const Pedido = () => {
             </div>
           )}
 
-          {estado === "listo" && pedido && (
+          {currentUser && estado === "listo" && pedido && (
             <div className="space-y-5">
               <div className="rounded-2xl border border-border bg-card p-5">
                 <p className="text-sm text-muted-foreground">
