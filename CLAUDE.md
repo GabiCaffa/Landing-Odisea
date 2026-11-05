@@ -2523,6 +2523,10 @@ archivo del bucket.
   hasta 1995. Hacia afuera sigue hablando en ISO; incompleta o inexistente (31/02)
   devuelve "" y queda inválida para el navegador, así `required` frena igual. Los
   `type="date"` del panel no se tocaron.
+  **El calendario sigue estando** (pedido del autor, después de la primera versión que
+  lo había sacado): un `type="date"` transparente encima del ícono de la derecha. Tocarlo
+  directo es lo que abre el selector en iOS; en escritorio además se llama a
+  `showPicker()`. Lo elegido se escribe en el campo como si se hubiera tipeado.
 - **El teléfono suelto de la compra se cerraba con cada dígito.** Con sesión y sin
   teléfono en el perfil aparece ese campo; se mostraba mientras el teléfono estuviera
   **vacío**, así que el primer número lo desmontaba y el teclado se cerraba. Ahora se
