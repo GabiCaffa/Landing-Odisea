@@ -2388,7 +2388,7 @@ const DeliveriesAdmin = () => {
         d.receiptPath
           ? ""
           : " No tiene el comprobante cargado: lo podés adjuntar después editando la venta, o confirmarlo con Cargar ventas pegando el mensaje y el comprobante."
-      }`,
+      } Se guarda con los datos que tenía el pedido: si en el WhatsApp cambió el nombre o el documento (por ejemplo, la entrada es para otra persona), usá Cargar ventas, que toma los del mensaje.`,
       confirmText: "Sí, lo vi",
     });
     if (!ok) return;

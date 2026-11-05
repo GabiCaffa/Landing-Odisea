@@ -19,6 +19,8 @@ import {
   revisarEvento,
   buildConfirmacionVenta,
   whatsappUrl,
+  mismaPersona,
+  cambiosDelPedido,
 } from "./cargaVentas.bundle.mjs";
 
 let fallas = 0;
@@ -218,6 +220,45 @@ const candidata = (over) => ({
     r2.length === 1 && r2[0].nivel === "fuerte" && r2[0].texto.includes("pedido sin confirmar"),
     JSON.stringify(r2)
   );
+}
+
+// ─── El mensaje editado en WhatsApp contra el pedido de la web ──────────────
+// Caso real: alguien con cuenta hace el pedido y en el WhatsApp cambia el
+// nombre y el documento porque la entrada es para otra persona.
+{
+  const editado = parsePurchaseMessage(`Buenas! Soy Male
+Quiero comprar para NAVIDAD COLONIA (24 DICIEMBRE 2026):
+- 1 entrada General ($800)
+
+TOTAL: $800
+Pedido: #X7KTXH
+
+Mis datos:
+Nombre completo: Delfina Prueba
+Email: male@ejemplo.com
+Teléfono: +598 99 000 111
+Documento: 11111111
+
+Voy a realizar la transferencia a:
+TITULAR
+Documento del titular: 99999999
+Comprobante: `).data;
+  check("lee el documento del mensaje, no el del titular", editado.documentId === "11111111", editado.documentId);
+  const pedido = venta({
+    id: "p2", status: "pending", orderCode: "X7KTXH", firstName: "Male", lastName: "Cuenta",
+    email: "male@ejemplo.com", phone: "+59899000111", documentId: "22222222", quantity: 1, value: 800,
+  });
+  const cambios = cambiosDelPedido(pedido, { ...editado, total: editado.total });
+  check(
+    "avisa el nombre y el documento que cambió el cliente",
+    cambios.length === 2 && cambios[0] === "Nombre: Male Cuenta → Delfina Prueba" && cambios[1] === "Documento: 22222222 → 11111111",
+    JSON.stringify(cambios)
+  );
+  check("…y nada más si el resto coincide", !cambios.some((c) => /Email|Teléfono|Total|Entradas/.test(c)));
+  check("otro nombre con el email de la cuenta → no es la dueña", mismaPersona("Male", "Delfina Prueba") === false);
+  check("mismo nombre → sí", mismaPersona("Malena", "malena noble") === true);
+  check("sin tildes ni mayúsculas → sí", mismaPersona("Sofía", "SOFIA GOMEZ") === true);
+  check("sin nombre en el mensaje → no se descarta", mismaPersona("Malena", null) === true);
 }
 
 // ─── Respuesta al cliente ───────────────────────────────────────────────────

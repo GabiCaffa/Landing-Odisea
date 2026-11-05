@@ -1599,6 +1599,16 @@ y recaudado, todo con fórmulas que apuntan a cada hoja.
 - **Cargar ventas busca el pedido por el número**: si el mensaje pegado lo trae y está
   por confirmar o vencido, Guardar **confirma ese pedido** con el comprobante (no crea
   otra venta) y no avisa "duplicado" contra sí mismo.
+- **Mandan los datos del MENSAJE, no los del pedido.** Caso real: alguien con cuenta
+  arma el pedido (la web lo guarda con SUS datos) y en el WhatsApp cambia el nombre y
+  el documento porque la entrada es para una amiga. La web no ve esa edición. Cargar
+  ventas guarda nombre, documento, email, teléfono, cantidad y total del mensaje,
+  muestra la lista de lo que cambió (`cambiosDelPedido`) y, si el pedido **ya estaba
+  confirmado** (alguien tocó "Confirmar pago"), lo actualiza sin cambiarle el estado y
+  sin cargar otra venta. "Confirmar pago" sigue usando los datos del pedido y lo avisa.
+- **"Registrado" sólo si es la misma persona** (`mismaPersona`): el email coincide con
+  una cuenta pero el nombre del mensaje no contiene su primer nombre → no se vincula a
+  esa cuenta, y el panel lo dice. Vale también para las ventas cargadas sin pedido.
 - **Panel**: pestañas Por confirmar · Por enviar · Enviadas · Vencidos; abre en Por
   confirmar si hay pedidos. Cada pedido muestra `#número`, hace cuánto espera y
   "vence en N h" (en rojo las últimas 6).
