@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import { CalendarDays } from "lucide-react";
 
 /**
- * Fecha escrita a mano como "dd/mm/aaaa", con teclado numérico.
+ * Fecha escrita a mano como "dd/mm/aaaa", con teclado numérico, **y además el
+ * calendario** del botón de la derecha.
  *
  * Reemplaza al `<input type="date">` en las fechas de nacimiento. El nativo
  * tomaba el formato del idioma del navegador —en un Chrome en inglés pedía
- * "mm/dd/yyyy", al revés de como se escribe acá— y para una fecha de 1995 el
- * calendario obliga a ir para atrás mes por mes. Escribir ocho números es más
- * rápido que cualquier calendario, y no suma ninguna librería.
+ * "mm/dd/yyyy", al revés de como se escribe acá—. Se puede escribir o elegir:
+ * el calendario es el del propio navegador (un `type="date"` invisible encima
+ * del botón), así en el celular abre la rueda del sistema y no suma ninguna
+ * librería. Pedido del autor: el calendario tiene que estar.
  *
  * Por fuera habla en ISO ("1995-05-13"), igual que el input nativo: quien lo
  * usa no cambia nada. Mientras la fecha está incompleta o no existe (31/02)
@@ -73,8 +76,19 @@ const CampoFecha = ({ value, onChange, id, className = "input-techno", required 
     );
   }, [invalida, completa, texto]);
 
+  const hoy = new Date();
+  const max = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+
+  /** Lo elegido en el calendario entra como si se hubiera escrito. */
+  const elegir = (iso: string) => {
+    ultimo.current = iso;
+    setTexto(aTexto(iso));
+    onChange(iso);
+  };
+
   return (
     <>
+      <div className="relative">
       <input
         ref={inputRef}
         id={id}
@@ -93,9 +107,33 @@ const CampoFecha = ({ value, onChange, id, className = "input-techno", required 
           ultimo.current = iso;
           onChange(iso);
         }}
-        className={`${className}${invalida ? " border-charrua" : ""}`}
+        className={`${className} pr-12${invalida ? " border-charrua" : ""}`}
       />
-      {invalida && <p className="mt-1 text-xs text-charrua">Esa fecha no existe. Revisá día y mes.</p>}
+      {/* El calendario: un date nativo transparente sobre el ícono. Tocarlo
+          directo es lo que abre el selector en iOS; en escritorio, además,
+          showPicker() lo abre desde cualquier punto del botón. */}
+      <span className="pointer-events-none absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground">
+        <CalendarDays className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <input
+        type="date"
+        tabIndex={-1}
+        aria-label="Elegir la fecha en el calendario"
+        min="1900-01-01"
+        max={max}
+        value={aIso(digitos) || ""}
+        onChange={(e) => e.target.value && elegir(e.target.value)}
+        onClick={(e) => {
+          try {
+            e.currentTarget.showPicker?.();
+          } catch {
+            // Navegador viejo sin showPicker: el toque directo ya lo abre.
+          }
+        }}
+        className="absolute inset-y-0 right-0 w-11 cursor-pointer opacity-0"
+      />
+      </div>
+      {invalida &&<p className="mt-1 text-xs text-charrua">Esa fecha no existe. Revisá día y mes.</p>}
     </>
   );
 };
