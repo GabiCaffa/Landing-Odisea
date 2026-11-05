@@ -101,7 +101,8 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v26_event_groups.sql` → `v27_site_banners.sql` → `v28_ticket_abono.sql` →
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
-`v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` → `v42_votacion_ganadores.sql`.
+`v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` →
+`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -1537,6 +1538,44 @@ hace dudar. Ahora puede salir de las ventas que el staff ya anota en el Google S
 - Probado con 13 casos del lector (CSV sucio, filas rotas, miles, datos personales que
   no viajan) y del servicio (sin variable, URL ajena, Google 500, sin red) más la
   pantalla con una hoja simulada. **No probado contra una hoja real de Google.**
+
+### "Mi pedido" y stock automático por lote (v43)
+
+**Mi pedido (`/pedido/:codigo`, `src/pages/Pedido.tsx`).** El cliente ve en qué está su
+compra con el número que ya va en su mensaje: pedido recibido → pago confirmado → entradas
+enviadas. Ataca el problema con el que arrancó todo: los "¿te llegó mi transferencia?" que
+tapaban el WhatsApp en plena venta.
+
+- Lo lee `anon` por la RPC `estado_pedido(code)`, que devuelve **sólo** estado, evento,
+  cantidad, total, detalle y el **primer nombre**. Nada de email, teléfono ni documento:
+  el número no es una contraseña y quien lo adivine no tiene que ver datos de nadie.
+- El link llega por tres lados: una línea `Seguí tu pedido:` en el mensaje que manda el
+  cliente (le queda en su propio chat; el parser la ignora), la respuesta del staff al
+  confirmar (`ventaMessage.ts`) y un toast con "Ver pedido" al tocar Enviar.
+- Fuera del píxel (`RUTAS_SIN_PIXEL`) y de los buscadores (`robots.txt`).
+
+**Stock automático (`event_ticket_types.lote_cupo`).** En el formulario del evento se
+carga cuántas entradas tiene el lote; lo que queda se cuenta solo con las ventas
+**confirmadas** de ese tipo (RPC `stock_lotes()`, mismo criterio que los cupos de promo:
+un pedido sin confirmar no gasta lote). Manda sobre el Google Sheets y sobre el número a
+mano (v29), que queda para los tipos sin cupo.
+
+- **Lote agotado = "Agotado" en su fila** y el `+` apagado; tampoco deja pedir más de lo
+  que queda. El "Desde $X" de la página salta al siguiente lote, y si todos los lotes con
+  cupo se vendieron, el evento se ve agotado. **El cambio de lote "automático" es dejar el
+  siguiente lote a la venta al mismo tiempo**: se ve "1er lote Agotado · 2do lote $900"
+  sin que nadie toque nada. No hay relación "siguiente lote" en la base: no hizo falta.
+- Cuenta sólo las ventas con el tipo de entrada cargado (`delivery_ticket_types`). Las de
+  la web y las de Cargar ventas lo tienen; una venta cargada a mano sin desglose no
+  descuenta.
+
+> **v43 y no v42:** Franco usó v42 para los ganadores de la votación, en paralelo. Tercera
+> vez que pasa: antes de crear una migración, mirar `supabase/` en el `master` más nuevo.
+
+**Probado:** la migración contra un Postgres temporal (17 chequeos: corre dos veces,
+pedidos sin confirmar no gastan cupo, nunca negativo, `estado_pedido` sin datos
+sensibles) y en navegador la página con un pedido de prueba y con el error esperado.
+**No probado contra la base real.**
 
 ### Ventas por estado: el pedido de la web se registra solo (v40)
 

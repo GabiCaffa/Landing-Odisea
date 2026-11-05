@@ -25,3 +25,9 @@ export const SITIO = "https://www.odiseaoficial.com";
 
 /** `"halloween-colonia"` → `"https://www.odiseaoficial.com/evento/halloween-colonia"`. */
 export const urlAbsolutaDeEvento = (slug: string): string => `${SITIO}${urlDeEvento(slug)}`;
+
+/** La página "Mi pedido" (v43). `"K7Q2XM"` → `"/pedido/K7Q2XM"`. */
+export const RUTA_PEDIDO = "/pedido";
+
+/** `"K7Q2XM"` → `"https://www.odiseaoficial.com/pedido/K7Q2XM"`, para mandarlo por WhatsApp. */
+export const urlAbsolutaDePedido = (codigo: string): string => `${SITIO}${RUTA_PEDIDO}/${codigo}`;

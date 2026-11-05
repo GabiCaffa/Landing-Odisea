@@ -17,5 +17,6 @@ Allow: /
 Disallow: /admin
 Disallow: /perfil
 Disallow: /auth/
+Disallow: /pedido/
 
 Sitemap: https://www.odiseaoficial.com/sitemap.xml

@@ -245,6 +245,7 @@ function respuestaPara(v: Interpretada): string {
     cantidad: v.data.quantity,
     evento: v.selectedEvent?.name ?? v.data.eventName ?? "el evento",
     email: v.data.email ?? "tu email",
+    orderCode: v.data.orderCode,
   });
 }
 

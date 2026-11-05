@@ -16,6 +16,8 @@
  * ODÍSEA si se usa desde ahí).
  */
 
+import { urlAbsolutaDePedido } from "@/lib/rutas";
+
 export interface ConfirmacionVentaInput {
   /** Nombre del cliente; se usa sólo el primero. */
   nombre: string;
@@ -23,6 +25,8 @@ export interface ConfirmacionVentaInput {
   evento: string;
   /** A dónde le llegan las entradas. */
   email: string;
+  /** Número del pedido de la web (v40). Con él va el link a "Mi pedido" (v43). */
+  orderCode?: string | null;
 }
 
 export function buildConfirmacionVenta(input: ConfirmacionVentaInput): string {
@@ -32,6 +36,9 @@ export function buildConfirmacionVenta(input: ConfirmacionVentaInput): string {
     `Hola ${nombre}! Recibimos tu comprobante por ${entradas} para ${input.evento}.`,
     ``,
     `Ya quedaste anotado. Las entradas te llegan a ${input.email}, revisá también la carpeta de spam.`,
+    ...(input.orderCode
+      ? [``, `Podés ver en qué está tu pedido acá: ${urlAbsolutaDePedido(input.orderCode)}`]
+      : []),
     ``,
     `Cualquier cosa escribinos por acá.`,
   ].join("\n");

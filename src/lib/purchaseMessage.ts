@@ -3,6 +3,7 @@ import { formatPhoneDisplay, normalizePhone } from "@/lib/validators";
 import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { foldText } from "@/lib/utils";
 import type { PaymentAccount } from "@/lib/paymentAccounts";
+import { urlAbsolutaDePedido } from "@/lib/rutas";
 
 /**
  * El mensaje de WhatsApp de una compra de entradas: cómo se ARMA y cómo se LEE.
@@ -55,6 +56,12 @@ export const MSG = {
    * actualizar ESE pedido en vez de cargar otra venta.
    */
   order: "Pedido:",
+  /**
+   * Link a "Mi pedido" (v43). Va en el mensaje que manda el CLIENTE para que le
+   * quede en su propio chat y pueda tocarlo después. El parser no lo necesita:
+   * el número ya viene en la línea de "Pedido:".
+   */
+  tracking: "Seguí tu pedido:",
   dataHeader: "Mis datos:",
   fullName: "Nombre completo:",
   email: "Email:",
@@ -133,7 +140,10 @@ export function buildPurchaseMessage(input: PurchaseMessageInput): string {
     msg += `${MSG.promo} ${p.label} en ${p.ticketName} (-$${p.monto})\n`;
   }
   msg += `\n${MSG.total} $${input.total}\n`;
-  if (input.orderCode) msg += `${MSG.order} #${input.orderCode}\n`;
+  if (input.orderCode) {
+    msg += `${MSG.order} #${input.orderCode}\n`;
+    msg += `${MSG.tracking} ${urlAbsolutaDePedido(input.orderCode)}\n`;
+  }
   // La promo de cumpleaños NO se escribe acá: no se reclama desde la compra.
   // Ver el comentario de MSG.birthdayPromo.
   msg += `\n${MSG.dataHeader}\n`;

@@ -103,3 +103,33 @@ export function registrarPedidoWeb(p: PedidoWeb): Promise<boolean> {
       return false;
     });
 }
+
+// ─── "Mi pedido": lo que ve el cliente (v43) ────────────────────────────────
+
+export interface EstadoPedido {
+  codigo: string;
+  estado: "por_confirmar" | "pending" | "sent" | "vencido";
+  evento: string;
+  fecha: string;
+  lugar: string;
+  slug: string | null;
+  cantidad: number;
+  total: number;
+  nombre: string;
+  detalle: string | null;
+  creado: string;
+  confirmado: string | null;
+  enviado: string | null;
+}
+
+/**
+ * Estado de un pedido por su número. `null` = no existe (o el número no tiene
+ * la forma de uno). Tira sólo si la consulta falla, para que la página pueda
+ * distinguir "no existe" de "no pude averiguarlo".
+ */
+export async function fetchEstadoPedido(codigo: string): Promise<EstadoPedido | null> {
+  const { data, error } = await supabase.rpc("estado_pedido", { p_code: codigo });
+  if (error) throw new Error(error.message);
+  const fila = (data as EstadoPedido[] | null)?.[0];
+  return fila ? { ...fila, total: Number(fila.total) } : null;
+}
