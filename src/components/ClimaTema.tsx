@@ -1,27 +1,64 @@
+import { useEffect, useRef } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 /**
- * Atmósfera de los temas de fin de año: nieve en Navidad y polvo dorado en Año
- * Nuevo. Son puntos sin silueta, por lo mismo que sobrevivió el grano de
- * Halloween: las figuras dibujadas a mano se leían como calcomanías.
+ * Atmósfera de los temas de fin de año: nieve y luces en Navidad; el "2027"
+ * de lamparitas, fuegos artificiales y burbujas en Año Nuevo. El dibujo vive
+ * en `src/efectos/motorEfectos.ts`.
  *
  * **Va DETRÁS del contenido** (`z-index: -1`), y para eso el contenedor de la
- * home lleva `isolate`: sin esa clase, su `bg-background` taparía la capa.
+ * home lleva `isolate`: sin esa clase, su `bg-background` taparía el canvas.
  *
- * **Todo el movimiento es `transform`**, que corre en la GPU y no repinta nada.
- * Sin librería, sin JavaScript por cuadro y sin bajar nada: los puntos son
- * gradientes del CSS. Con `prefers-reduced-motion` quedan quietos.
+ * **El motor se baja DESPUÉS de que la página cargó** y con el navegador
+ * libre, igual que la decoración de Halloween: el que llega desde un anuncio
+ * tiene que ver la fecha y el botón de comprar antes que la nieve. Mientras
+ * tanto el fondo es el color del tema, que ya está bien solo.
+ *
+ * Con `prefers-reduced-motion` se dibuja un cuadro quieto.
  */
 const ClimaTema = () => {
   const { theme } = useTheme();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const activo = theme === "navidad" || theme === "anio-nuevo";
 
-  if (theme !== "navidad" && theme !== "anio-nuevo") return null;
+  useEffect(() => {
+    if (!activo) return;
+    let detener: (() => void) | undefined;
+    let cancelado = false;
+
+    const arrancar = () => {
+      import("@/efectos/motorEfectos").then(({ iniciarEfectos }) => {
+        if (cancelado || !canvasRef.current) return;
+        const quieto = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        detener = iniciarEfectos(canvasRef.current, theme, { quieto });
+      });
+    };
+    const cuandoEsteLibre = () => {
+      // Safari no tiene requestIdleCallback.
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(arrancar, { timeout: 3000 });
+      } else {
+        setTimeout(arrancar, 300);
+      }
+    };
+    if (document.readyState === "complete") cuandoEsteLibre();
+    else window.addEventListener("load", cuandoEsteLibre, { once: true });
+
+    return () => {
+      cancelado = true;
+      window.removeEventListener("load", cuandoEsteLibre);
+      detener?.();
+    };
+  }, [activo, theme]);
+
+  if (!activo) return null;
 
   return (
-    <div className={`clima clima--${theme}`} aria-hidden="true">
-      <div className="clima__capa clima__capa--lejos" />
-      <div className="clima__capa clima__capa--cerca" />
-    </div>
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 -z-10"
+    />
   );
 };
 
