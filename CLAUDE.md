@@ -2593,7 +2593,14 @@ Viene **apagada** y la prende quien quiere (una canción que arranca sola en un 
 vende entradas espanta, y el navegador igual la bloquea hasta el primer toque). Sin el
 archivo, el botón no aparece. Los archivos van en `public/` y **tienen que ser libres de
 derechos**: `navidad-musica.mp3` y `anio-nuevo-musica.mp3` (mp3 de 1-3 MB, que se pueda
-repetir en loop). Dónde buscar:
+repetir en loop).
+
+> **Cargados (5/11/2026), los dos de Pixabay Music:** `navidad-musica.mp3` = "Merry
+> Christmas" de *atlasaudio* (1,5 MB) y `anio-nuevo-musica.mp3` = "New Year Background" de
+> *tunetank* (4,4 MB). Se bajan recién cuando alguien toca el botón; el chequeo de que
+> existen es un `HEAD`, que no baja la canción.
+
+Dónde buscar:
 
 - **Música:** Pixabay Music (pixabay.com/music, se puede usar gratis y sin citar). Un
   villancico "tradicional" está libre como melodía, pero cada GRABACIÓN tiene sus propios
