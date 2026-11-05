@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { X, Check, ChevronDown } from "lucide-react";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import PhoneInput from "./PhoneInput";
 import AuthPromptStep from "./AuthPromptStep";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ModalShell from "./ModalShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { normalizePhone, formatPhoneDisplay, usableDocumentId } from "@/lib/validators";
@@ -24,6 +24,17 @@ import { generarCodigoPedido, guardarPedidoLocal, prepararPedidoWeb, registrarPe
 import { rastrear } from "@/lib/pixel";
 import { esFiestaAparte } from "@/lib/fiestasAparte";
 import { toast } from "sonner";
+import {
+  DATOS_CUENTA_VACIOS,
+  DatosCuenta,
+  faltaParaCuenta,
+  partirNombre,
+  recordarVolverA,
+} from "@/lib/cuentaDesdePedido";
+
+// Los campos de la cuenta van aparte: traen el catálogo de ciudades, que no
+// tiene por qué bajar quien compra sin crear cuenta.
+const CamposCuentaCompra = lazy(() => import("./CamposCuentaCompra"));
 
 interface CompraEntradasProps {
   /**
@@ -75,7 +86,8 @@ const CompraEntradas = ({
   promos = [],
   diasDeLaFiesta = 1,
 }: CompraEntradasProps) => {
-  const { currentUser, events } = useAuth();
+  const { currentUser, events, register } = useAuth();
+  const navigate = useNavigate();
   // Arriba del "if (!isOpen) return null" de abajo, como el resto de los
   // hooks: puesto donde se usa cambiaria el orden de los hooks entre renders.
   const comisionTicketera = useComisionTicketera();
@@ -126,6 +138,15 @@ const CompraEntradas = ({
    * tocar de nuevo por cada número.
    */
   const [telefonoSuelto, setTelefonoSuelto] = useState(false);
+
+  /**
+   * Sin sesión, antes de enviar se pregunta si quiere crear la cuenta para
+   * seguir su pedido (v44: los pedidos se ven sólo con la cuenta). `null` =
+   * todavía no contestó; con `true` aparecen los campos que faltan. Ver
+   * `src/lib/cuentaDesdePedido.ts`.
+   */
+  const [quiereCuenta, setQuiereCuenta] = useState<boolean | null>(null);
+  const [datosCuenta, setDatosCuenta] = useState<DatosCuenta>(DATOS_CUENTA_VACIOS);
 
   // Cuenta de cobro del evento (la carga el admin desde el panel).
   const [account, setAccount] = useState<PaymentAccount | null>(null);
@@ -295,18 +316,19 @@ const CompraEntradas = ({
     });
   };
 
-  const handleSubmit = (e?: React.MouseEvent<HTMLButtonElement>) => {
+  /** Abre WhatsApp y registra el pedido. Devuelve si se envió. */
+  const handleSubmit = (e?: React.MouseEvent<HTMLButtonElement>, conCuenta = false): boolean => {
     if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim()) {
       toast.error("Completá tus datos");
-      return;
+      return false;
     }
     const phoneE164 = normalizePhone(formData.phone, country as CountryCode);
     if (!phoneE164) {
       toast.error("Teléfono inválido");
-      return;
+      return false;
     }
     const message = buildMessage();
-    if (!message) return;
+    if (!message) return false;
     const url = `https://wa.me/59892592179?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
     // Año Nuevo: confeti dorado desde el botón. Va DESPUÉS de abrir WhatsApp
@@ -327,7 +349,8 @@ const CompraEntradas = ({
       guardarPedidoLocal(codigo);
       // Al volver de WhatsApp, el cliente tiene a mano dónde seguir su pedido
       // (v43). El link también va en el mensaje que mandó.
-      toast.success(`Tu pedido es el #${codigo}`, {
+      // Con cuenta nueva el aviso es otro: el de confirmar el mail.
+      if (!conCuenta) toast.success(`Tu pedido es el #${codigo}`, {
         description: "Mandanos el comprobante por WhatsApp. Podés ver en qué está tu pedido cuando quieras.",
         duration: 15000,
         action: { label: "Ver pedido", onClick: () => window.location.assign(`/pedido/${codigo}`) },
@@ -366,7 +389,64 @@ const CompraEntradas = ({
       },
       evento && esFiestaAparte(evento) ? "web+expo" : "web"
     );
-    onClose();
+    // `cerrar` y no `onClose()`: en la página del evento no hay `onClose`, y
+    // llamarlo tiraba un error después de cada envío (no se veía porque era lo
+    // último; con la cuenta, cortaba el registro que viene después).
+    cerrar();
+    return true;
+  };
+
+  /**
+   * "Crear cuenta y enviar": WhatsApp se abre PRIMERO, en este mismo toque, y
+   * la cuenta se crea después en paralelo (si se esperara al registro, el
+   * celular bloquearía la ventana). Si el registro falla el pedido ya salió:
+   * sólo se avisa, y quien ya tenía cuenta va a ingresar.
+   */
+  const crearCuentaYEnviar = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const falta = faltaParaCuenta(datosCuenta, formData.name, country);
+    if (falta) {
+      toast.error(falta);
+      return;
+    }
+    const phoneE164 = normalizePhone(formData.phone, country as CountryCode);
+    const codigo = eventId ? codigoPedido.current : null;
+    const email = formData.email.trim();
+    if (!phoneE164 || !handleSubmit(e, true)) return;
+
+    const volverA = codigo ? `/pedido/${codigo}` : "/pedidos";
+    recordarVolverA(volverA);
+    void register({
+      ...partirNombre(formData.name),
+      birthDate: datosCuenta.birthDate,
+      documentId: datosCuenta.documentId.replace(/\D/g, ""),
+      email,
+      password: datosCuenta.password,
+      phone: phoneE164,
+      country,
+      state: datosCuenta.state.trim(),
+      city: datosCuenta.city.trim(),
+    }).then((r) => {
+      if (r.ok) {
+        toast.success("Revisá tu email para activar tu cuenta", {
+          description: `Te mandamos un link a ${email}. Al confirmarla vas a ver tu pedido${codigo ? ` #${codigo}` : ""}.`,
+          duration: 20000,
+        });
+        return;
+      }
+      // Ya tenía cuenta (por email o por documento): con ingresar alcanza,
+      // porque el pedido es de su mismo email.
+      const yaTiene = /ya existe/i.test(r.error ?? "");
+      toast.error(yaTiene ? "Ya tenés una cuenta" : "Tu pedido se envió, pero no pudimos crear la cuenta", {
+        // El documento puede ser de otro por un error de tipeo: se dice cuál chocó.
+        description: yaTiene
+          ? `${r.error}. Si es tuya, ingresá con el email del pedido y lo vas a ver en "Mis pedidos".`
+          : r.error,
+        duration: 20000,
+        action: yaTiene
+          ? { label: "Ingresar", onClick: () => navigate("/login", { state: { from: volverA } }) }
+          : undefined,
+      });
+    });
   };
 
   const hasSelectedTickets = getSelectedTickets().length > 0;
@@ -394,6 +474,11 @@ const CompraEntradas = ({
   })();
 
   const datosResumidos = Boolean(currentUser) && !editandoDatos;
+
+  // Crear la cuenta en la compra: sólo sin sesión y con el pedido completo.
+  const preguntaCuenta = !currentUser && isFormValid && quiereCuenta === null;
+  const conCuenta = !currentUser && quiereCuenta === true;
+  const faltaCuenta = conCuenta ? faltaParaCuenta(datosCuenta, formData.name, country) : null;
 
   /**
    * Modo compacto: todo el flujo tiene que entrar en UNA pantalla, sin scroll.
@@ -796,6 +881,19 @@ const CompraEntradas = ({
               </div>
             )}
 
+            {hasSelectedTickets && !currentUser && quiereCuenta && (
+              <Suspense fallback={null}>
+                <CamposCuentaCompra
+                  datos={datosCuenta}
+                  onChange={setDatosCuenta}
+                  email={formData.email.trim()}
+                  country={country}
+                  onCountryChange={setCountry}
+                  compacto={compacto}
+                />
+              </Suspense>
+            )}
+
             {/*
               Datos para transferencia.
 
@@ -906,15 +1004,53 @@ const CompraEntradas = ({
                 </div>
               </div>
             )}
-            <button
-              onClick={handleSubmit}
-              disabled={!isFormValid}
-              className="btn-techno w-full disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <WhatsAppIcon className="h-5 w-5" />
-              <span>Enviar por WhatsApp</span>
-            </button>
-            {isFormValid ? (
+            {/* Sin sesión, antes de enviar: ¿crear la cuenta? Cada respuesta es
+                el toque que abre WhatsApp, así el celular no lo bloquea. */}
+            {preguntaCuenta ? (
+              <div className="space-y-2">
+                <p className="text-center text-sm font-semibold">
+                  ¿Querés crear tu cuenta para seguir tu pedido?
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setQuiereCuenta(true)} className="btn-celeste flex-1">
+                    Sí, crear cuenta
+                  </button>
+                  <button onClick={(e) => handleSubmit(e)} className="btn-techno-outline flex-1">
+                    No, enviar
+                  </button>
+                </div>
+              </div>
+            ) : conCuenta ? (
+              <>
+                <button
+                  onClick={crearCuentaYEnviar}
+                  disabled={!isFormValid || Boolean(faltaCuenta)}
+                  className="btn-techno w-full disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <WhatsAppIcon className="h-5 w-5" />
+                  <span>Crear cuenta y enviar</span>
+                </button>
+                <button
+                  onClick={(e) => handleSubmit(e)}
+                  disabled={!isFormValid}
+                  className="mx-auto block text-xs font-semibold text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                >
+                  Enviar sin crear cuenta
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={(e) => handleSubmit(e)}
+                disabled={!isFormValid}
+                className="btn-techno w-full disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <WhatsAppIcon className="h-5 w-5" />
+                <span>Enviar por WhatsApp</span>
+              </button>
+            )}
+            {conCuenta && isFormValid && faltaCuenta ? (
+              <p className="text-center text-xs font-semibold text-charrua">{faltaCuenta}</p>
+            ) : isFormValid ? (
               <p className="text-center text-xs text-muted-foreground">
                 Recordá adjuntar el comprobante de pago en WhatsApp
               </p>

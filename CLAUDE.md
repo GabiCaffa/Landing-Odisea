@@ -1564,6 +1564,23 @@ tapaban el WhatsApp en plena venta.
   cliente (le queda en su propio chat; el parser la ignora), la respuesta del staff al
   confirmar (`ventaMessage.ts`) y un toast con "Ver pedido" al tocar Enviar.
 - Fuera del píxel (`RUTAS_SIN_PIXEL`) y de los buscadores (`robots.txt`).
+- **Crear la cuenta en la compra** (`src/lib/cuentaDesdePedido.ts`, sin migración). Sin
+  sesión, con el pedido completo, el botón de enviar pasa a ser la pregunta "¿Querés
+  crear tu cuenta para seguir tu pedido?". **No** y **Sí** son cada uno el toque que abre
+  WhatsApp, así el celular no lo bloquea. Con Sí aparecen ahí mismo los datos que faltan
+  (`CamposCuentaCompra`, en su propio chunk porque trae el catálogo de ciudades): fecha
+  de nacimiento, documento, departamento/ciudad, contraseña y términos, con las mismas
+  reglas que `/registro`. "Crear cuenta y enviar" **abre WhatsApp primero** y registra
+  la cuenta después, en paralelo (esperar al alta dejaría a WhatsApp bloqueado); si
+  falla, el pedido ya salió y sólo se avisa. El pedido se ve en la cuenta por ser del
+  mismo mail (v44). Al confirmar el mail, `/auth/callback` lleva al pedido
+  (`recordarVolverA`, en `localStorage` y no en el `emailRedirectTo`, que tiene que
+  coincidir con la lista de Supabase). `/registro` también respeta `state.from`.
+  > `register()` ahora detecta el email que **ya tiene cuenta**: con "Confirm email"
+  > prendido Supabase no da error, devuelve un usuario sin identidades y no manda nada,
+  > así que la persona esperaba un mail que nunca llegaba.
+  > De paso: en la página del evento `CompraEntradas` llamaba a `onClose()`, que ahí no
+  > existe, y tiraba un error después de cada envío. No se notaba porque era lo último.
 
 **Stock automático (`event_ticket_types.lote_cupo`).** En el formulario del evento se
 carga cuántas entradas tiene el lote; lo que queda se cuenta solo con las ventas

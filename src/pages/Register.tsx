@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Mail } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -17,9 +17,13 @@ import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { CountryCode } from "libphonenumber-js";
 import { toast } from "sonner";
 import CampoFecha from "@/components/CampoFecha";
+import { recordarVolverA } from "@/lib/cuentaDesdePedido";
 
 const Register = () => {
   const navigate = useNavigate();
+  // Quien llega desde una página que pide cuenta (p. ej. su pedido) vuelve ahí,
+  // también después de confirmar el mail.
+  const volverA = (useLocation().state as { from?: string } | null)?.from;
   const { register, resendConfirmation } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -147,13 +151,14 @@ const Register = () => {
     }
 
     if (result.needsEmailConfirmation) {
+      recordarVolverA(volverA);
       setConfirmationEmail(form.email);
       setSubmitting(false);
       return;
     }
 
     toast.success("¡Bienvenido a ODÍSEA!");
-    navigate("/");
+    navigate(volverA ?? "/");
   };
 
   return (
@@ -180,7 +185,7 @@ const Register = () => {
                 <span className="font-mono">{confirmationEmail}</span>. Hacé click para activar tu
                 cuenta y después iniciá sesión.
               </p>
-              <Link to="/login" className="btn-techno-outline inline-block">
+              <Link to="/login" state={{ from: volverA }} className="btn-techno-outline inline-block">
                 Ir al login
               </Link>
               <p className="text-sm text-muted-foreground">
@@ -386,7 +391,7 @@ const Register = () => {
 
               <p className="text-center text-sm text-muted-foreground">
                 ¿Ya tenés cuenta?{" "}
-                <Link to="/login" className="text-foreground font-semibold hover:underline">
+                <Link to="/login" state={{ from: volverA }} className="text-foreground font-semibold hover:underline">
                   Iniciá sesión
                 </Link>
               </p>
