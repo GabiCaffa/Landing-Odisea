@@ -20,7 +20,7 @@ import {
 import { useComisionTicketera, useTheme } from "@/contexts/ThemeContext";
 import { precioConComision } from "@/lib/siteSettings";
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
-import { generarCodigoPedido, prepararPedidoWeb, registrarPedidoWeb } from "@/lib/pedidosWeb";
+import { generarCodigoPedido, guardarPedidoLocal, prepararPedidoWeb, registrarPedidoWeb } from "@/lib/pedidosWeb";
 import { rastrear } from "@/lib/pixel";
 import { esFiestaAparte } from "@/lib/fiestasAparte";
 import { toast } from "sonner";
@@ -323,6 +323,8 @@ const CompraEntradas = ({
     // se guarda, el staff carga la venta a mano como siempre.
     if (eventId && codigoPedido.current) {
       const codigo = codigoPedido.current;
+      // Queda en "Mis pedidos" de este navegador, aunque no tenga cuenta (v44).
+      guardarPedidoLocal(codigo);
       // Al volver de WhatsApp, el cliente tiene a mano dónde seguir su pedido
       // (v43). El link también va en el mensaje que mandó.
       toast.success(`Tu pedido es el #${codigo}`, {

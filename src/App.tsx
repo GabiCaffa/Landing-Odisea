@@ -31,6 +31,7 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const Votacion = lazy(() => import("./pages/Votacion"));
 const Fotos = lazy(() => import("./pages/Fotos"));
 const Pedido = lazy(() => import("./pages/Pedido"));
+const MisPedidos = lazy(() => import("./pages/MisPedidos"));
 
 const queryClient = new QueryClient();
 
@@ -75,6 +76,8 @@ const App = () => (
               <Route path="/fotos/:slug" element={<Fotos />} />
               {/* "Mi pedido" (v43): el cliente ve en qué está su compra. */}
               <Route path="/pedido/:codigo" element={<Pedido />} />
+              {/* La lista, a la que lleva "Mis pedidos" del menú (v44). */}
+              <Route path="/pedidos" element={<MisPedidos />} />
               <Route path="/terminos" element={<Terms />} />
               <Route path="/privacidad" element={<Privacy />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

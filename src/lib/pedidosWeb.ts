@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -123,13 +124,70 @@ export interface EstadoPedido {
 }
 
 /**
- * Estado de un pedido por su número. `null` = no existe (o el número no tiene
- * la forma de uno). Tira sólo si la consulta falla, para que la página pueda
- * distinguir "no existe" de "no pude averiguarlo".
+ * Estado de un pedido por su número. **Hace falta sesión** (v44): la base sólo
+ * devuelve el pedido si es de la cuenta con la que se entró (o al staff).
+ * `null` = no existe o no es tuyo; la base no distingue a propósito, así no se
+ * puede averiguar si un número existe. Tira sólo si la consulta falla.
  */
 export async function fetchEstadoPedido(codigo: string): Promise<EstadoPedido | null> {
   const { data, error } = await supabase.rpc("estado_pedido", { p_code: codigo });
   if (error) throw new Error(error.message);
   const fila = (data as EstadoPedido[] | null)?.[0];
   return fila ? { ...fila, total: Number(fila.total) } : null;
+}
+
+// ─── "Mis pedidos": la lista (v44) ──────────────────────────────────────────
+
+/**
+ * Los números de los pedidos hechos desde ESTE navegador. **No dan acceso a
+ * nada** (los pedidos se ven sólo con la cuenta, v44): sirven para que el
+ * botón "Mis pedidos" aparezca e invite a entrar a quien compró sin sesión.
+ */
+const CLAVE_LOCAL = "odisea:pedidos";
+const AVISO = "odisea:pedidos";
+
+export function pedidosLocales(): string[] {
+  try {
+    const lista = JSON.parse(localStorage.getItem(CLAVE_LOCAL) ?? "[]");
+    return Array.isArray(lista) ? lista.filter((c) => typeof c === "string").slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function guardarPedidoLocal(codigo: string): void {
+  try {
+    const lista = [codigo, ...pedidosLocales().filter((c) => c !== codigo)].slice(0, 20);
+    localStorage.setItem(CLAVE_LOCAL, JSON.stringify(lista));
+    // Para que el botón del menú aparezca sin recargar.
+    window.dispatchEvent(new Event(AVISO));
+  } catch {
+    // Storage bloqueado (incógnito): el pedido existe igual, sólo no se recuerda acá.
+  }
+}
+
+/**
+ * Los pedidos de la cuenta con la que se entró: los hechos con sesión y los
+ * hechos sin cuenta con el mismo email (v44). Hace falta sesión.
+ */
+export async function fetchMisPedidos(): Promise<EstadoPedido[]> {
+  const { data, error } = await supabase.rpc("mis_pedidos");
+  if (error) throw new Error(error.message);
+  return ((data as EstadoPedido[] | null) ?? []).map((p) => ({ ...p, total: Number(p.total) }));
+}
+
+/** Mostrar "Mis pedidos" en el menú: con sesión, o si se hizo algún pedido acá. */
+export function useHayPedidos(conSesion: boolean): boolean {
+  const [locales, setLocales] = useState(() => pedidosLocales().length > 0);
+  useEffect(() => {
+    const revisar = () => setLocales(pedidosLocales().length > 0);
+    window.addEventListener(AVISO, revisar);
+    // Otra pestaña hizo un pedido.
+    window.addEventListener("storage", revisar);
+    return () => {
+      window.removeEventListener(AVISO, revisar);
+      window.removeEventListener("storage", revisar);
+    };
+  }, []);
+  return conSesion || locales;
 }
