@@ -8,6 +8,8 @@ import Footer from "@/components/Footer";
 import SpookyLayer from "@/components/SpookyLayer";
 import ClimaTema from "@/components/ClimaTema";
 import SoundToggle from "@/components/SoundToggle";
+import CuentaRegresiva from "@/components/CuentaRegresiva";
+import MusicaTema from "@/components/MusicaTema";
 
 /**
  * El título NO se toca acá.
@@ -29,6 +31,8 @@ const Index = () => {
         {/* El de siempre o el slider de banners, según el interruptor del
             panel (v27). La decisión vive en la base, no acá. */}
         <HeroDelSitio />
+        {/* Sólo con el tema Año Nuevo: cuánto falta para el 2027. */}
+        <CuentaRegresiva />
         {/* Entre el hero y los eventos: una promo que vence en horas es lo más
             urgente de la página. Si no hay ninguna vigente, no se renderiza. */}
         <PromosActivasSection />
@@ -46,6 +50,7 @@ const Index = () => {
       <SpookyLayer />
       <ClimaTema />
       <SoundToggle />
+      <MusicaTema />
     </div>
   );
 };

@@ -2551,11 +2551,56 @@ acepta `[a-z-]`. No hizo falta migrar: `site_settings` no valida el valor a prop
   alcanza para texto grande pero no para letra chica. Año Nuevo queda por encima de 7:1.
 - **`--resplandor`** es el brillo interior de las cards. En Navidad es dorado porque rojo
   sobre verde daba un marrón embarrado.
-- **`ClimaTema`** pinta nieve o polvo dorado con puntos de CSS, sin figuras, sin librería y
-  sólo en la home. Va en `z-index: -1`, por eso el contenedor de `Index` lleva `isolate`: sin
-  esa clase, su `bg-background` taparía la capa. Se ve donde la sección es translúcida (la de
-  eventos); las de fondo `bg-papel` la tapan. Las baldosas son anchas y de medidas distintas
-  entre capas: con 280 y 460 px, en una pantalla de 1900 px la nieve formaba filas parejas.
+- **`ClimaTema`** es un canvas en `z-index: -1` (por eso el contenedor de `Index` lleva
+  `isolate`: sin esa clase su `bg-background` lo taparía). Se ve donde la sección es
+  translúcida (la de eventos); las de fondo `bg-papel` lo tapan. Sólo en la home.
+  (La primera versión eran puntos de CSS en baldosas; se reemplazó por lo de abajo.)
+
+#### Efectos de fin de año (`src/efectos/motorEfectos.ts`)
+
+Pedido del autor: "mejor calidad, efectos, copos más gráficos". Todo en UN canvas, sin
+librería (~8 KB, 3,5 KB gzip) y **bajado después del `load` con el navegador libre**, igual
+que la decoración de Halloween.
+
+- **Navidad:** copos en tres profundidades —lejos chicos y nítidos, cerca grandes,
+  transparentes y rápidos—, algunos **cristales de seis puntas** que giran, viento que
+  cambia en ráfagas, y **bokeh** (luces cálidas desenfocadas rojas, doradas y verdes).
+- **Año Nuevo:** un **"2027" de lamparitas** de marquesina (se escribe el texto en un canvas
+  aparte y se toman los puntos del BORDE de cada número) que se prenden en ola, **fuegos
+  artificiales** espaciados (cohete que sube y explota) y **burbujas de champagne**.
+- **Nada dibujado a mano como silueta**: cada partícula se pinta una vez en un sprite y
+  después sólo se copia. Es lo que lo hace barato y parejo.
+- Menos partículas en celular, resolución topeada en 1,5x, `requestAnimationFrame` (se
+  frena solo en segundo plano), y con `prefers-reduced-motion` un cuadro quieto.
+- **Guirnalda** (`Guirnalda.tsx`): lamparitas colgando del borde del menú, multicolor en
+  Navidad y doradas en Año Nuevo. SVG medido al ancho real, cada una titila con su ritmo
+  (sólo `opacity`). Va dentro del `<Header>`, sólo en `/`.
+- **"EVENTOS" en dorado con destello** (`.highlight-celeste` de los `.title-sport` en la
+  vidriera): gradiente metálico recortado al texto que se cruza cada 7 s.
+- **Cuenta regresiva al 2027** (`CuentaRegresiva.tsx`, sólo Año Nuevo, debajo del hero):
+  real, hacia la medianoche del 31 en Uruguay. Después dice "¡Feliz 2027!" hasta el
+  mediodía del 1° y desaparece.
+- **Confeti al comprar** (`estallido()`): en Año Nuevo, al tocar "Enviar por WhatsApp" sale
+  confeti dorado del botón. Va DESPUÉS de abrir WhatsApp para no demorarlo; en el celular
+  casi no se ve porque se abre la app.
+- **No se pudo ver animando**: el panel del navegador de pruebas está oculto y ahí
+  `requestAnimationFrame` no corre. Se verificaron cuadros quietos (celular y escritorio) y
+  que el motor se baja aparte.
+
+#### Música de los temas (`MusicaTema.tsx`)
+
+Viene **apagada** y la prende quien quiere (una canción que arranca sola en un sitio que
+vende entradas espanta, y el navegador igual la bloquea hasta el primer toque). Sin el
+archivo, el botón no aparece. Los archivos van en `public/` y **tienen que ser libres de
+derechos**: `navidad-musica.mp3` y `anio-nuevo-musica.mp3` (mp3 de 1-3 MB, que se pueda
+repetir en loop). Dónde buscar:
+
+- **Música:** Pixabay Music (pixabay.com/music, se puede usar gratis y sin citar). Un
+  villancico "tradicional" está libre como melodía, pero cada GRABACIÓN tiene sus propios
+  derechos: usar la de Pixabay, nunca una de Spotify o YouTube.
+- **Animaciones:** LottieFiles (lottiefiles.com, filtro *Free*, licencia Lottie Simple:
+  uso comercial sin atribución). El proyecto ya sabe reproducirlas (`SpookyLottie`).
+- **Sonidos sueltos:** Freesound (freesound.org, filtrar por licencia **CC0**).
 
 > **Las arañas abrían ~1.700 px de vacío con cualquier tema que no fuera Halloween, también
 > con el normal.** Su `position: absolute` vive en el CSS de Halloween, pero

@@ -9,6 +9,7 @@ import { useAuth, isStaffRole } from "@/contexts/AuthContext";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { useAlbumes, useGaleria } from "@/lib/galeria";
+import Guirnalda from "@/components/Guirnalda";
 
 
 const Header = () => {
@@ -280,6 +281,10 @@ const Header = () => {
           </div>
         </div>
       </div>
+      {/* Guirnalda de fin de año, colgando del borde del menú. Sólo en la home:
+          en registro o login distraería de lo único que esas páginas tienen
+          que lograr (misma regla que la nieve). */}
+      {pathname === "/" && (theme === "navidad" || theme === "anio-nuevo") && <Guirnalda modo={theme} />}
     </header>
   );
 };

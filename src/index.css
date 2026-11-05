@@ -664,89 +664,48 @@
   color: hsl(var(--tinta));
 }
 
-/* ── Nieve y polvo dorado (ClimaTema) ── */
-/* Cada capa es un mosaico de puntos que se desplaza exactamente un alto de
-   baldosa y vuelve a empezar: por eso el corte no se nota. Si se cambia
-   --baldosa, el recorrido cambia solo. Al ser todo `transform` no repinta.
+/* ── Guirnalda de lamparitas (Guirnalda.tsx) ── */
+/* Sólo opacity: es lo único que el navegador anima sin repintar. El halo
+   titila más fuerte que el foco, como una lamparita de verdad. */
+.guirnalda__halo { animation: guirnalda-halo 2s ease-in-out infinite alternate; }
+.guirnalda__foco { animation: guirnalda-foco 2s ease-in-out infinite alternate; }
 
-   La baldosa es ancha, con muchos puntos sueltos, y sus medidas no tienen
-   múltiplos en común con la otra capa. Con baldosas de 280 y 460 px, en una
-   pantalla de 1900 px los puntos se repetían formando filas parejas: se leía
-   como una grilla y no como nieve. */
-.clima {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
+@keyframes guirnalda-halo {
+  from { opacity: 0.15; }
+  to { opacity: 0.95; }
+}
+@keyframes guirnalda-foco {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
 }
 
-.clima__capa {
-  position: absolute;
-  top: calc(var(--baldosa) * -1);
-  bottom: calc(var(--baldosa) * -1);
-  left: 0;
-  right: 0;
-  background-size: var(--ancho) var(--baldosa);
-  will-change: transform;
-  animation: clima-baja var(--duracion) linear infinite;
+/* ── Títulos con brillo dorado (Navidad y Año Nuevo, sólo en la home) ── */
+/* Va sobre la palabra acentuada (`.highlight-celeste`, la de "EVENTOS"): un
+   dorado metálico con un destello que la cruza cada tanto. Enganchado de la
+   clase propia del proyecto y no de una utilidad de Tailwind. */
+:root:is([data-theme="navidad"], [data-theme="anio-nuevo"])[data-surface="vidriera"] .title-sport .highlight-celeste {
+  background-image: linear-gradient(
+    100deg,
+    #b8862b 0%, #e3b34c 20%, #f7e3a8 38%, #fffaf0 46%, #f7e3a8 54%, #e3b34c 72%, #b8862b 100%
+  );
+  background-size: 260% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: brillo-dorado 7s ease-in-out infinite;
 }
 
-.clima--navidad { --punto-a: #F3EEE2; --punto-b: #F3EEE2; }
-.clima--anio-nuevo { --punto-a: #E3B34C; --punto-b: #F4E2B5; }
-
-.clima__capa--lejos {
-  --ancho: 1130px;
-  --baldosa: 620px;
-  --duracion: 62s;
-  opacity: 0.45;
-  background-image:
-    radial-gradient(circle at 4% 37%, var(--punto-a) 1px, transparent 1.8px),
-    radial-gradient(circle at 13% 81%, var(--punto-b) 1.3px, transparent 2.1px),
-    radial-gradient(circle at 19% 12%, var(--punto-a) 1px, transparent 1.8px),
-    radial-gradient(circle at 31% 58%, var(--punto-b) 1.2px, transparent 2px),
-    radial-gradient(circle at 37% 29%, var(--punto-a) 0.9px, transparent 1.7px),
-    radial-gradient(circle at 46% 93%, var(--punto-b) 1.1px, transparent 1.9px),
-    radial-gradient(circle at 54% 6%, var(--punto-a) 1.3px, transparent 2.1px),
-    radial-gradient(circle at 61% 66%, var(--punto-b) 1px, transparent 1.8px),
-    radial-gradient(circle at 72% 41%, var(--punto-a) 1.2px, transparent 2px),
-    radial-gradient(circle at 79% 87%, var(--punto-b) 0.9px, transparent 1.7px),
-    radial-gradient(circle at 88% 19%, var(--punto-a) 1.1px, transparent 1.9px),
-    radial-gradient(circle at 96% 62%, var(--punto-b) 1px, transparent 1.8px);
-}
-
-.clima__capa--cerca {
-  --ancho: 1370px;
-  --baldosa: 860px;
-  --duracion: 58s;
-  opacity: 0.8;
-  background-image:
-    radial-gradient(circle at 7% 64%, var(--punto-a) 1.8px, transparent 3px),
-    radial-gradient(circle at 16% 23%, var(--punto-b) 2.2px, transparent 3.6px),
-    radial-gradient(circle at 29% 84%, var(--punto-a) 1.6px, transparent 2.8px),
-    radial-gradient(circle at 41% 47%, var(--punto-b) 2px, transparent 3.2px),
-    radial-gradient(circle at 53% 9%, var(--punto-a) 1.7px, transparent 3px),
-    radial-gradient(circle at 64% 71%, var(--punto-b) 2.1px, transparent 3.4px),
-    radial-gradient(circle at 76% 33%, var(--punto-a) 1.6px, transparent 2.8px),
-    radial-gradient(circle at 91% 89%, var(--punto-b) 1.9px, transparent 3.2px);
-}
-
-/* El polvo dorado sube, como las burbujas, y va más lento que la nieve. */
-.clima--anio-nuevo .clima__capa { animation-name: clima-sube; animation-duration: calc(var(--duracion) * 1.5); }
-
-@keyframes clima-baja {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(0, var(--baldosa), 0); }
-}
-
-@keyframes clima-sube {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(0, calc(var(--baldosa) * -1), 0); }
+@keyframes brillo-dorado {
+  0%, 55% { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .clima__capa { animation: none; }
+  .guirnalda__halo, .guirnalda__foco { animation: none; opacity: 0.9; }
+  :root[data-surface="vidriera"] .title-sport .highlight-celeste { animation: none; }
 }
+
 
 /* ── Animaciones de Lottie ── */
 /* Dos: el murciélago en el hero y la araña en la sección de eventos. La regla

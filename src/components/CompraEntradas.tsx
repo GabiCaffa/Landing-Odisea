@@ -17,7 +17,7 @@ import {
   promoVigente,
   textoVencimiento,
 } from "@/lib/ticketPromos";
-import { useComisionTicketera } from "@/contexts/ThemeContext";
+import { useComisionTicketera, useTheme } from "@/contexts/ThemeContext";
 import { precioConComision } from "@/lib/siteSettings";
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
 import { generarCodigoPedido, prepararPedidoWeb, registrarPedidoWeb } from "@/lib/pedidosWeb";
@@ -79,6 +79,7 @@ const CompraEntradas = ({
   // Arriba del "if (!isOpen) return null" de abajo, como el resto de los
   // hooks: puesto donde se usa cambiaria el orden de los hooks entre renders.
   const comisionTicketera = useComisionTicketera();
+  const { theme } = useTheme();
 
   /**
    * En la página se entra derecho al formulario.
@@ -294,7 +295,7 @@ const CompraEntradas = ({
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (e?: React.MouseEvent<HTMLButtonElement>) => {
     if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim()) {
       toast.error("Completá tus datos");
       return;
@@ -308,6 +309,15 @@ const CompraEntradas = ({
     if (!message) return;
     const url = `https://wa.me/59892592179?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
+    // Año Nuevo: confeti dorado desde el botón. Va DESPUÉS de abrir WhatsApp
+    // para no demorar ni un cuadro lo que importa; en el celular casi no se
+    // llega a ver porque se abre la app, en la compu sí.
+    if (theme === "anio-nuevo" && e) {
+      const r = e.currentTarget.getBoundingClientRect();
+      void import("@/efectos/motorEfectos").then(({ estallido }) =>
+        estallido(r.left + r.width / 2, r.top + r.height / 2)
+      );
+    }
     // El pedido "por confirmar" (v40) sale DESPUÉS de abrir WhatsApp: esperar
     // la respuesta antes haría que el celular bloquee la ventana nueva. Si no
     // se guarda, el staff carga la venta a mano como siempre.
