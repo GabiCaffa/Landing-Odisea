@@ -101,6 +101,8 @@ import {
   type DeliveryStatus,
 } from "@/lib/deliveries";
 import FiltrosEntregasBarra from "@/components/admin/FiltrosEntregas";
+import ComprobantesVentaModal from "@/components/admin/ComprobantesVenta";
+import { ComprobanteVenta, comprobantesDe, fetchComprobantesVentas } from "@/lib/comprobantesVenta";
 import {
   FILTROS_INICIALES,
   FiltrosEntregas,
@@ -2122,9 +2124,15 @@ const DeliveryActions = ({
   onEdit,
   onDelete,
   onVerComprobante,
+  comprobantes = 0,
+  otraCuenta = false,
 }: {
   d: TicketDelivery;
   eventName: string;
+  /** Cuántos comprobantes tiene (v45). */
+  comprobantes?: number;
+  /** Alguno se transfirió a una cuenta que no es la del evento (v45). */
+  otraCuenta?: boolean;
   onSent: (d: TicketDelivery) => void;
   onPending: (d: TicketDelivery) => void;
   onConfirm: (d: TicketDelivery) => void;
@@ -2178,16 +2186,33 @@ const DeliveryActions = ({
         <Undo2 className="w-4 h-4" />
       </button>
     )}
-    {d.receiptPath && (
-      <button
-        onClick={() => onVerComprobante(d)}
-        className="p-2 hover:bg-secondary transition-colors"
-        title="Ver comprobante"
-        aria-label="Ver comprobante"
-      >
-        <Receipt className="w-4 h-4" />
-      </button>
-    )}
+    {/* Siempre, para poder agregar uno (v45). Con cantidad si hay más de
+        uno, y en ámbar si alguno fue a la cuenta de otro evento. */}
+    <button
+      onClick={() => onVerComprobante(d)}
+      className={`relative p-2 transition-colors ${
+        otraCuenta
+          ? "text-amber-600 hover:bg-amber-500/10"
+          : comprobantes === 0
+            ? "text-muted-foreground/50 hover:bg-secondary hover:text-foreground"
+            : "hover:bg-secondary"
+      }`}
+      title={
+        otraCuenta
+          ? "Comprobantes: alguno fue a la cuenta de otro evento"
+          : comprobantes === 0
+            ? "Agregar comprobante"
+            : `Comprobantes (${comprobantes})`
+      }
+      aria-label={comprobantes === 0 ? "Agregar comprobante" : `Ver comprobantes (${comprobantes})`}
+    >
+      <Receipt className="w-4 h-4" />
+      {(comprobantes > 1 || otraCuenta) && (
+        <span className="absolute -right-0.5 -top-0.5 min-w-[16px] rounded-full bg-foreground px-1 text-center text-[10px] font-bold leading-4 text-background">
+          {otraCuenta ? "!" : comprobantes}
+        </span>
+      )}
+    </button>
     {urlRespuesta && (
       <a
         href={urlRespuesta}
@@ -2264,6 +2289,10 @@ const DeliveriesAdmin = () => {
   const [revisandoIndex, setRevisandoIndex] = useState<number | null>(null);
   const [revisada, setRevisada] = useState<VentaRevisada | null>(null);
   const [verComprobante, setVerComprobante] = useState<TicketDelivery | null>(null);
+  // Todos los comprobantes por venta (v45). `null` = falta la migración: se usa
+  // el comprobante único de v39.
+  const [mapaComprobantes, setMapaComprobantes] = useState<Map<string, ComprobanteVenta[]> | null>(null);
+  const [cuentas, setCuentas] = useState<PaymentAccount[]>([]);
   // Evento, tipo de entrada, comprobante y origen (src/lib/filtrosEntregas.ts).
   const [filtros, setFiltrosState] = useState<FiltrosEntregas>(FILTROS_INICIALES);
   const setFiltros = (f: FiltrosEntregas) => {
@@ -2282,8 +2311,14 @@ const DeliveriesAdmin = () => {
 
   const reload = async () => {
     try {
-      const data = await fetchDeliveries();
+      // Los comprobantes son un adorno de esta lista: si fallan, las ventas se
+      // muestran igual con el comprobante de siempre.
+      const [data, mapa] = await Promise.all([
+        fetchDeliveries(),
+        fetchComprobantesVentas().catch(() => null),
+      ]);
       setDeliveries(data);
+      setMapaComprobantes(mapa);
       setLoadError(null);
       if (primeraCarga.current) {
         primeraCarga.current = false;
@@ -2305,7 +2340,14 @@ const DeliveriesAdmin = () => {
         { event: "*", schema: "public", table: "ticket_deliveries" },
         () => reload()
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "delivery_receipts" },
+        () => reload()
+      )
       .subscribe();
+    // A qué cuenta fue cada comprobante (v45).
+    fetchPaymentAccounts().then(setCuentas).catch(() => setCuentas([]));
     return () => {
       supabase.removeChannel(channel);
     };
@@ -2325,11 +2367,29 @@ const DeliveriesAdmin = () => {
     setFiltrosState((f) => ({ ...f, evento: valido && guardado ? guardado : eventoPorDefecto(eventosConVentas) }));
   }, [loading, eventosConVentas]);
 
+  const comprobantes = (d: TicketDelivery) => comprobantesDe(d, mapaComprobantes);
+  const cuentaDelEvento = (d: TicketDelivery) => events.find((e) => e.id === d.eventId)?.paymentAccountId || undefined;
+  const pagoAOtraCuenta = (d: TicketDelivery) => {
+    const cuenta = cuentaDelEvento(d);
+    return Boolean(cuenta) && comprobantes(d).some((c) => c.accountId && c.accountId !== cuenta);
+  };
+  const tieneComprobante = (d: TicketDelivery) => comprobantes(d).length > 0;
+  /** El mismo archivo ya está en alguna venta: avisa dónde (v45, igual que v39). */
+  const yaCargado = (hash: string) => {
+    for (const d of deliveries) {
+      if (comprobantes(d).some((c) => c.hash === hash)) {
+        const ev = events.find((e) => e.id === d.eventId)?.name ?? "otro evento";
+        return `Este comprobante ya está cargado en la venta de ${d.firstName} ${d.lastName} (${ev}).`;
+      }
+    }
+    return null;
+  };
+
   // Los contadores de cada pestaña reflejan la búsqueda y los filtros: al
   // tipear ves cuántos coinciden en cada estado al mismo tiempo.
   const term = search.trim().toLowerCase();
   const cuantos = (s: DeliveryStatus) =>
-    deliveries.filter((d) => d.status === s && deliveryMatches(d, term) && pasaFiltros(d, filtros)).length;
+    deliveries.filter((d) => d.status === s && deliveryMatches(d, term) && pasaFiltros(d, filtros, tieneComprobante)).length;
 
   // Los botones de tipo salen de lo que se está mirando (evento, estado y
   // búsqueda), sin el filtro de tipo: si no, al elegir VIP desaparecería General.
@@ -2340,17 +2400,18 @@ const DeliveriesAdmin = () => {
           (d) =>
             d.status === statusFilter &&
             deliveryMatches(d, term) &&
-            pasaFiltros(d, { ...filtros, tipo: TODOS })
+            pasaFiltros(d, { ...filtros, tipo: TODOS }, tieneComprobante)
         )
       ),
-    [deliveries, statusFilter, term, filtros]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deliveries, statusFilter, term, filtros, mapaComprobantes]
   );
 
   // Filtramos por estado + búsqueda + filtros y agrupamos por evento (con un
   // evento elegido queda un solo grupo).
   const groups = useMemo(() => {
     const rows = deliveries.filter(
-      (d) => d.status === statusFilter && deliveryMatches(d, term) && pasaFiltros(d, filtros)
+      (d) => d.status === statusFilter && deliveryMatches(d, term) && pasaFiltros(d, filtros, tieneComprobante)
     );
     const byEvent = new Map<string, TicketDelivery[]>();
     for (const d of rows) {
@@ -2374,7 +2435,8 @@ const DeliveriesAdmin = () => {
         };
       })
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
-  }, [deliveries, statusFilter, term, events, filtros]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveries, statusFilter, term, events, filtros, mapaComprobantes]);
 
   // Resumen del evento elegido (o de todos), sin importar pestaña, búsqueda ni
   // los otros filtros. La plata y las entradas cuentan sólo lo CONFIRMADO: un
@@ -2442,7 +2504,7 @@ const DeliveriesAdmin = () => {
     const ok = await confirm({
       title: "Confirmar pago",
       description: `¿Viste el comprobante de ${d.firstName} ${d.lastName} por ${fmtMoney(d.value)}? Pasa a Por enviar.${
-        d.receiptPath
+        tieneComprobante(d)
           ? ""
           : " No tiene el comprobante cargado: lo podés adjuntar después editando la venta, o confirmarlo con Cargar ventas pegando el mensaje y el comprobante."
       } Se guarda con los datos que tenía el pedido: si en el WhatsApp cambió el nombre o el documento (por ejemplo, la entrada es para otra persona), usá Cargar ventas, que toma los del mensaje.`,
@@ -2471,7 +2533,7 @@ const DeliveriesAdmin = () => {
     const result = await deleteDelivery(d.id);
     if (!result.ok) return toast.error(result.error ?? "No se pudo eliminar");
     // Borrar la fila no borra el archivo del bucket (misma lección que v17).
-    if (d.receiptPath) await removeComprobante(d.receiptPath);
+    for (const c of comprobantes(d)) await removeComprobante(c.path);
     await reload();
     toast.success("Cliente eliminado");
   };
@@ -2674,6 +2736,8 @@ const DeliveriesAdmin = () => {
                       onEdit={openEdit}
                       onDelete={handleDelete}
                       onVerComprobante={setVerComprobante}
+                      comprobantes={comprobantes(d).length}
+                      otraCuenta={pagoAOtraCuenta(d)}
                     />
                   </div>
                 </div>
@@ -2737,6 +2801,8 @@ const DeliveriesAdmin = () => {
                           onEdit={openEdit}
                           onDelete={handleDelete}
                           onVerComprobante={setVerComprobante}
+                          comprobantes={comprobantes(d).length}
+                          otraCuenta={pagoAOtraCuenta(d)}
                         />
                       </Td>
                     </tr>
@@ -2801,13 +2867,23 @@ const DeliveriesAdmin = () => {
         />
       )}
 
-      {verComprobante?.receiptPath && (
-        <VerComprobanteModal
-          path={verComprobante.receiptPath}
-          titulo={`${verComprobante.firstName} ${verComprobante.lastName}`.trim()}
-          onClose={() => setVerComprobante(null)}
-        />
-      )}
+      {verComprobante && (() => {
+        // La venta al día (después de agregar o quitar, `verComprobante` es la vieja).
+        const venta = deliveries.find((x) => x.id === verComprobante.id) ?? verComprobante;
+        return (
+          <ComprobantesVentaModal
+            venta={venta}
+            comprobantes={comprobantes(venta)}
+            conTabla={mapaComprobantes !== null}
+            cuentas={cuentas}
+            cuentaEvento={cuentaDelEvento(venta)}
+            eventName={events.find((e) => e.id === venta.eventId)?.name ?? "Evento eliminado"}
+            yaCargado={yaCargado}
+            onCambio={reload}
+            onClose={() => setVerComprobante(null)}
+          />
+        );
+      })()}
     </div>
   );
 };

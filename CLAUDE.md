@@ -102,7 +102,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
 `v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` →
-`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql`.
+`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -1687,6 +1687,36 @@ vencimiento—, `probar-carga-ventas.mjs` (+7 chequeos del número de pedido) y 
 navegador el toque en Enviar con la red interceptada (mensaje con número, pedido con
 `keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
 panel con sesión de staff.**
+
+### Varios comprobantes por venta, con a qué cuenta fue (v45)
+
+El caso que lo pidió: alguien compra la fecha equivocada (Colonia en vez de
+Paysandú), transfiere a la cuenta de Colonia —la de Gabriel— y después manda la
+diferencia, a veces a la de Paysandú —la de Salvador—. Eran dos comprobantes y la
+venta sólo guardaba uno; lo demás quedaba en comentarios.
+
+- **Tabla `delivery_receipts`** (venta, ruta, hash, `account_id`), sólo staff. El
+  primer comprobante sigue en `ticket_deliveries.receipt_path` como en v39 (Cargar
+  ventas y el formulario no cambiaron) y **un trigger lo copia a la tabla**; los
+  demás se agregan directo. La migración pasa los que ya había, con la cuenta del
+  evento.
+- **El botón 🧾 de cada venta está siempre** (gris si no tiene) y abre la lista:
+  ver, quitar, elegir **a qué cuenta se transfirió** cada uno y agregar otro (Ctrl+V,
+  arrastrar o elegir, igual que siempre). Si la venta no tenía ninguno, el que se
+  agrega pasa a ser el principal (`receipt_path`).
+- **Si un comprobante fue a una cuenta que no es la del evento**, la lista lo dice
+  ("Fue a Salvador, pero este evento cobra en Gabriel") y el botón 🧾 de la venta se
+  pone en ámbar con un "!": es la plata que hay que pasar entre cuentas.
+- Aviso de comprobante repetido al agregar (mismo archivo en cualquier venta). **Cargar
+  ventas** sigue mirando sólo el principal de cada venta.
+- Filtro "Con / Sin comprobante" cuenta todos. Borrar una venta borra todos sus archivos.
+- **Sin v45 todo sigue como antes**: un comprobante por venta, y el panel dice que falta
+  la migración si se quiere agregar un segundo.
+- Probado: la migración en un Postgres temporal (16 chequeos, dos corridas) y la
+  pantalla en navegador con datos de ejemplo. **No probado con el panel logueado ni
+  subiendo un archivo real.**
+- **Lo que NO hace:** no pasa una venta de un evento a otro (se sigue editando) ni
+  calcula la diferencia de precio.
 
 ### Entregas: un evento a la vez, con filtros (sin migración)
 

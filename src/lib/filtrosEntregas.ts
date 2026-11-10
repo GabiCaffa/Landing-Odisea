@@ -33,14 +33,19 @@ export const FILTROS_INICIALES: FiltrosEntregas = {
 };
 
 /** ¿La entrega pasa los filtros? (El estado y la búsqueda van aparte.) */
-export function pasaFiltros(d: TicketDelivery, f: FiltrosEntregas): boolean {
+export function pasaFiltros(
+  d: TicketDelivery,
+  f: FiltrosEntregas,
+  /** Con v45 una venta puede tener comprobantes además de `receiptPath`. */
+  tieneComprobante: (d: TicketDelivery) => boolean = (x) => Boolean(x.receiptPath)
+): boolean {
   if (f.evento !== TODOS && d.eventId !== f.evento) return false;
   if (f.tipo === SIN_DESGLOSE && d.tickets.length > 0) return false;
   if (f.tipo !== TODOS && f.tipo !== SIN_DESGLOSE && !d.tickets.some((t) => t.ticketTypeId === f.tipo)) {
     return false;
   }
-  if (f.comprobante === "con" && !d.receiptPath) return false;
-  if (f.comprobante === "sin" && d.receiptPath) return false;
+  if (f.comprobante === "con" && !tieneComprobante(d)) return false;
+  if (f.comprobante === "sin" && tieneComprobante(d)) return false;
   if (f.origen !== TODOS && d.origin !== f.origen) return false;
   return true;
 }
