@@ -150,6 +150,10 @@ import EventPromosEditor, {
   seleccionDesdeEvento,
 } from "@/components/admin/EventPromosEditor";
 import AdminShell from "@/components/admin/AdminShell";
+import BuscadorPanel, { IrA } from "@/components/admin/BuscadorPanel";
+import TareasDelDia from "@/components/admin/TareasDelDia";
+import { usePanelTema } from "@/lib/panelTema";
+import { Pendientes, insigniasDe, usePendientesPanel } from "@/lib/pendientesPanel";
 import UsersAdmin from "@/components/admin/UsersAdmin";
 import BotonActualizarPaginas from "@/components/admin/BotonActualizarPaginas";
 import CampoDireccion from "@/components/admin/CampoDireccion";
@@ -198,6 +202,19 @@ const Admin = () => {
   const confirm = useConfirm();
   const navigate = useNavigate();
   const [tab, setTab] = useState<AdminTab>("dashboard");
+  // Claro u oscuro del panel, y lo que espera en cada pestaña. Van antes de
+  // los returns de abajo: los hooks no pueden quedar después de uno.
+  const [tema, setTema] = usePanelTema();
+  const tabsDelRol = currentUser && isStaffRole(currentUser.role) ? tabsDe(currentUser.role) : [];
+  const pendientes = usePendientesPanel(tabsDelRol);
+  const [buscando, setBuscando] = useState(false);
+  // A dónde mandó el buscador o una tarea del inicio (pestaña + búsqueda).
+  const [irA, setIrA] = useState<IrA | null>(null);
+  const ir = (destino: Omit<IrA, "n">) => {
+    setTab(destino.tab);
+    setIrA({ ...destino, n: Date.now() });
+    window.scrollTo({ top: 0 });
+  };
 
   if (loading) return <LoadingScreen />;
   if (!currentUser) return <Navigate to="/login" replace />;
@@ -205,7 +222,7 @@ const Admin = () => {
 
   // Qué pestañas ve el rol sale de `adminPermisos`, que es la misma tabla que
   // decide si adentro puede borrar o sólo mirar. Antes eran dos listas sueltas.
-  const tabs = tabsDe(currentUser.role);
+  const tabs = tabsDelRol;
   // La pestaña pedida que el rol no puede ver cae en la primera permitida.
   const activeTab: AdminTab = tabs.includes(tab) ? tab : tabs[0] ?? "dashboard";
 
@@ -230,18 +247,26 @@ const Admin = () => {
       nombre={`${currentUser.firstName} ${currentUser.lastName}`}
       email={currentUser.email}
       onLogout={handleLogout}
+      insignias={insigniasDe(pendientes)}
+      tema={tema}
+      onTema={setTema}
+      // El buscador sirve si el rol ve ventas, usuarios o eventos.
+      onBuscar={tabs.some((t) => t === "deliveries" || t === "users" || t === "events") ? () => setBuscando(true) : undefined}
     >
-      {activeTab === "dashboard" && <Dashboard users={users} events={events} onGo={setTab} />}
-      {activeTab === "events" && <EventsAdmin />}
+      <BuscadorPanel abierto={buscando} onAbierto={setBuscando} tabs={tabs} onIr={ir} />
+      {activeTab === "dashboard" && (
+        <Dashboard users={users} events={events} onGo={setTab} pendientes={pendientes} onIr={ir} />
+      )}
+      {activeTab === "events" && <EventsAdmin irA={irA?.tab === "events" ? irA : null} />}
       {activeTab === "tickets" && <TicketTypesAdmin />}
       {activeTab === "promos" && <PromosAdmin />}
       {activeTab === "accounts" && <AccountsAdmin />}
-      {activeTab === "users" && <UsersAdmin />}
+      {activeTab === "users" && <UsersAdmin irA={irA?.tab === "users" ? irA : null} />}
       {activeTab === "banners" && <BannersAdmin />}
       {activeTab === "gallery" && <GaleriaAdmin />}
       {activeTab === "voting" && <VotacionAdmin />}
       {activeTab === "appearance" && <AppearanceAdmin />}
-      {activeTab === "deliveries" && <DeliveriesAdmin />}
+      {activeTab === "deliveries" && <DeliveriesAdmin irA={irA?.tab === "deliveries" ? irA : null} />}
       {activeTab === "birthdays" && <BirthdaysAdmin />}
     </AdminShell>
   );
@@ -254,10 +279,14 @@ const Dashboard = ({
   users,
   events,
   onGo,
+  pendientes,
+  onIr,
 }: {
   users: User[];
   events: AdminEvent[];
   onGo: (t: AdminTab) => void;
+  pendientes: Pendientes;
+  onIr: (destino: Omit<IrA, "n">) => void;
 }) => {
   const activeEvents = events.filter((e) => e.status === "activo").length;
   const totalCapacity = events.reduce((acc, e) => acc + e.capacity, 0);
@@ -274,6 +303,8 @@ const Dashboard = ({
 
   return (
     <div className="space-y-6">
+      <TareasDelDia pendientes={pendientes} onIr={onIr} />
+      <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground">Resumen</h2>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={<Users className="w-5 h-5" />}
@@ -445,7 +476,7 @@ const FlyerMini = ({ event, className = "" }: { event: AdminEvent; className?: s
     />
   </div>
 );
-const EventsAdmin = () => {
+const EventsAdmin = ({ irA }: { irA?: IrA | null }) => {
   const { events, createEvent, updateEvent, deleteEvent, refreshEvents } = useAuth();
   // Borrar un evento es sólo del admin (events_delete_admin, v22).
   const puedeBorrar = usePuede("eventos:borrar");
@@ -461,6 +492,10 @@ const EventsAdmin = () => {
    */
   const [fiesta, setFiesta] = useState<true | AdminEvent[] | null>(null);
   const [search, setSearch] = useState("");
+  // El buscador del panel trae un evento: se pone su nombre en la búsqueda.
+  useEffect(() => {
+    if (irA?.busqueda) setSearch(irA.busqueda);
+  }, [irA?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   // Cuentas de cobro: para el selector del form y la columna "Cuenta".
   const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
   // Catálogo de tipos de entrada, para armar las entradas de cada evento.
@@ -2273,7 +2308,7 @@ const PedidoInfo = ({ d }: { d: TicketDelivery }) => {
   );
 };
 
-const DeliveriesAdmin = () => {
+const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
   const { events, users } = useAuth();
   const confirm = useConfirm();
   const [deliveries, setDeliveries] = useState<TicketDelivery[]>([]);
@@ -2359,6 +2394,20 @@ const DeliveriesAdmin = () => {
   // última vez en este navegador, o el próximo. Una sola vez, cuando ya hay
   // entregas y eventos; después manda lo que elija la persona.
   const eventoInicial = useRef(false);
+
+  // Llegó desde el buscador o una tarea del inicio: todos los eventos, el
+  // estado pedido y la búsqueda puesta. Gana sobre la elección automática de
+  // evento y de pestaña de la primera carga, que si no la pisarían después.
+  useEffect(() => {
+    if (!irA) return;
+    eventoInicial.current = true;
+    setFiltrosState({ ...FILTROS_INICIALES, evento: TODOS });
+    setSearch(irA.busqueda ?? "");
+    if (irA.estado) {
+      primeraCarga.current = false;
+      setStatusFilter(irA.estado);
+    }
+  }, [irA?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (eventoInicial.current || loading || eventosConVentas.length === 0) return;
     eventoInicial.current = true;

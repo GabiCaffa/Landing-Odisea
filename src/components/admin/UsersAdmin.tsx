@@ -29,6 +29,7 @@ import { fetchBirthdays, type BirthdaySignup } from "@/lib/birthdays";
 import { getCountry } from "@/lib/locations";
 import { formatPhoneDisplay } from "@/lib/validators";
 import { SIN_DATO, contarPorValor, foldText } from "@/lib/utils";
+import type { IrA } from "@/components/admin/BuscadorPanel";
 import { descargarCsv } from "@/lib/csv";
 
 /**
@@ -237,7 +238,7 @@ const Dato = ({
 
 // ─── Componente ─────────────────────────────────────────────────────────────
 
-const UsersAdmin = () => {
+const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
   const { users, events, deleteUser, promoteUser, currentUser } = useAuth();
   const confirm = useConfirm();
   const puedeEditar = usePuede("usuarios:editar");
@@ -245,6 +246,10 @@ const UsersAdmin = () => {
   const [deliveries, setDeliveries] = useState<TicketDelivery[]>([]);
   const [birthdays, setBirthdays] = useState<BirthdaySignup[]>([]);
   const [f, setF] = useState<Filtros>(VACIOS);
+  // El buscador del panel trae a alguien: se busca por su mail, sin otros filtros.
+  useEffect(() => {
+    if (irA?.busqueda) setF({ ...VACIOS, texto: irA.busqueda });
+  }, [irA?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [orden, setOrden] = useState<Orden>("nombre");
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [viendo, setViendo] = useState<Ficha | null>(null);
