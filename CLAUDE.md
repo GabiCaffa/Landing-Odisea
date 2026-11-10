@@ -1688,6 +1688,28 @@ navegador el toque en Enviar con la red interceptada (mensaje con número, pedid
 `keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
 panel con sesión de staff.**
 
+### Entregas: un evento a la vez, con filtros (sin migración)
+
+Antes la pestaña mostraba todos los eventos uno debajo del otro, y con dos o tres
+fechas a la venta quien manda entradas bajaba buscando la suya. Ahora arriba hay un
+**desplegable de evento** (próximos por fecha y después los pasados; "Todos los
+eventos" sigue estando) y dentro de ese evento se filtra por **tipo de entrada**
+(botones: General, VIP… con cuántas ventas tiene cada uno, más "Sin tipo" para las
+anteriores a v18), **comprobante** (con / sin) y **origen** (web / a mano). Lógica en
+`src/lib/filtrosEntregas.ts`, barra en `components/admin/FiltrosEntregas.tsx`.
+
+- Abre en el evento elegido la última vez en ese navegador, o en el próximo con ventas.
+- Los contadores de las pestañas de estado y el resumen de arriba son **del evento
+  elegido** (el resumen ignora los demás filtros).
+- Con un tipo elegido, "N entradas" cuenta **sólo las de ese tipo** (una venta de 2
+  General + 1 VIP suma 1 en VIP): es lo que hay que mandar. Sin tipo elegido, el
+  encabezado muestra el reparto ("General 40 · VIP 12").
+- Los botones de tipo salen de lo que se está mirando **sin** el filtro de tipo: si no,
+  al elegir VIP desaparecería General.
+- El Excel sigue exportando todo, no lo filtrado.
+- Probado: `scripts/probar-filtros-entregas.mjs` (18 chequeos) y la barra en
+  navegador (375 y escritorio). **No probado con el panel logueado.**
+
 ### Cargar ventas: varios mensajes, comprobante y respuesta (v39)
 
 **El problema era de tiempo, no de datos.** El flujo real: el cliente manda por

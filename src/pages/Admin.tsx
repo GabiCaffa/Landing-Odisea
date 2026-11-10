@@ -100,6 +100,21 @@ import {
   esConfirmada,
   type DeliveryStatus,
 } from "@/lib/deliveries";
+import FiltrosEntregasBarra from "@/components/admin/FiltrosEntregas";
+import {
+  FILTROS_INICIALES,
+  FiltrosEntregas,
+  TODOS,
+  entradasPorTipo,
+  entradasQueCuentan,
+  eventoGuardado,
+  eventoPorDefecto,
+  guardarEvento,
+  hayFiltrosExtra,
+  opcionesEventos,
+  opcionesTipos,
+  pasaFiltros,
+} from "@/lib/filtrosEntregas";
 import {
   BirthdaySignup,
   BirthdayInput,
@@ -2249,6 +2264,12 @@ const DeliveriesAdmin = () => {
   const [revisandoIndex, setRevisandoIndex] = useState<number | null>(null);
   const [revisada, setRevisada] = useState<VentaRevisada | null>(null);
   const [verComprobante, setVerComprobante] = useState<TicketDelivery | null>(null);
+  // Evento, tipo de entrada, comprobante y origen (src/lib/filtrosEntregas.ts).
+  const [filtros, setFiltrosState] = useState<FiltrosEntregas>(FILTROS_INICIALES);
+  const setFiltros = (f: FiltrosEntregas) => {
+    setFiltrosState(f);
+    guardarEvento(f.evento);
+  };
 
   // Si la lectura falla se muestra el error y NO una lista vacía (ver
   // fetchDeliveries): "no hay ventas" y "no pude leerlas" tienen que verse
@@ -2290,16 +2311,46 @@ const DeliveriesAdmin = () => {
     };
   }, []);
 
-  // Los contadores de cada pestaña reflejan la búsqueda: al tipear ves cuántos
-  // coinciden en cada estado al mismo tiempo.
+  const eventosConVentas = useMemo(() => opcionesEventos(deliveries, events), [deliveries, events]);
+
+  // Al entrar se abre en un evento y no en todos juntos: el que se eligió la
+  // última vez en este navegador, o el próximo. Una sola vez, cuando ya hay
+  // entregas y eventos; después manda lo que elija la persona.
+  const eventoInicial = useRef(false);
+  useEffect(() => {
+    if (eventoInicial.current || loading || eventosConVentas.length === 0) return;
+    eventoInicial.current = true;
+    const guardado = eventoGuardado();
+    const valido = guardado === TODOS || eventosConVentas.some((e) => e.id === guardado);
+    setFiltrosState((f) => ({ ...f, evento: valido && guardado ? guardado : eventoPorDefecto(eventosConVentas) }));
+  }, [loading, eventosConVentas]);
+
+  // Los contadores de cada pestaña reflejan la búsqueda y los filtros: al
+  // tipear ves cuántos coinciden en cada estado al mismo tiempo.
   const term = search.trim().toLowerCase();
   const cuantos = (s: DeliveryStatus) =>
-    deliveries.filter((d) => d.status === s && deliveryMatches(d, term)).length;
+    deliveries.filter((d) => d.status === s && deliveryMatches(d, term) && pasaFiltros(d, filtros)).length;
 
-  // Filtramos por estado + búsqueda y agrupamos por evento (ordenados por fecha).
+  // Los botones de tipo salen de lo que se está mirando (evento, estado y
+  // búsqueda), sin el filtro de tipo: si no, al elegir VIP desaparecería General.
+  const tiposVisibles = useMemo(
+    () =>
+      opcionesTipos(
+        deliveries.filter(
+          (d) =>
+            d.status === statusFilter &&
+            deliveryMatches(d, term) &&
+            pasaFiltros(d, { ...filtros, tipo: TODOS })
+        )
+      ),
+    [deliveries, statusFilter, term, filtros]
+  );
+
+  // Filtramos por estado + búsqueda + filtros y agrupamos por evento (con un
+  // evento elegido queda un solo grupo).
   const groups = useMemo(() => {
     const rows = deliveries.filter(
-      (d) => d.status === statusFilter && deliveryMatches(d, term)
+      (d) => d.status === statusFilter && deliveryMatches(d, term) && pasaFiltros(d, filtros)
     );
     const byEvent = new Map<string, TicketDelivery[]>();
     for (const d of rows) {
@@ -2316,26 +2367,31 @@ const DeliveriesAdmin = () => {
           eventDate: event?.date ?? "",
           eventLocation: event?.location ?? "",
           rows: list,
-          totalTickets: list.reduce((a, d) => a + d.quantity, 0),
+          // Con un tipo elegido, cuentan sólo las entradas de ese tipo.
+          totalTickets: list.reduce((a, d) => a + entradasQueCuentan(d, filtros.tipo), 0),
           totalValue: list.reduce((a, d) => a + d.value, 0),
+          porTipo: entradasPorTipo(list),
         };
       })
       .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
-  }, [deliveries, statusFilter, term, events]);
+  }, [deliveries, statusFilter, term, events, filtros]);
 
-  // Resumen general (sin importar pestaña ni búsqueda). La plata y las entradas
-  // cuentan sólo lo CONFIRMADO: un pedido de la web sin comprobante no es una
-  // venta, y sumarlo inflaría la recaudación con gente que nunca pagó (v40).
+  // Resumen del evento elegido (o de todos), sin importar pestaña, búsqueda ni
+  // los otros filtros. La plata y las entradas cuentan sólo lo CONFIRMADO: un
+  // pedido de la web sin comprobante no es una venta, y sumarlo inflaría la
+  // recaudación con gente que nunca pagó (v40).
   const summary = useMemo(() => {
-    const confirmadas = deliveries.filter(esConfirmada);
+    const delEvento =
+      filtros.evento === TODOS ? deliveries : deliveries.filter((d) => d.eventId === filtros.evento);
+    const confirmadas = delEvento.filter(esConfirmada);
     return {
       totalTickets: confirmadas.reduce((a, d) => a + d.quantity, 0),
       totalValue: confirmadas.reduce((a, d) => a + d.value, 0),
-      porConfirmar: deliveries.filter((d) => d.status === "por_confirmar").length,
-      pending: deliveries.filter((d) => d.status === "pending").length,
-      sent: deliveries.filter((d) => d.status === "sent").length,
+      porConfirmar: delEvento.filter((d) => d.status === "por_confirmar").length,
+      pending: delEvento.filter((d) => d.status === "pending").length,
+      sent: delEvento.filter((d) => d.status === "sent").length,
     };
-  }, [deliveries]);
+  }, [deliveries, filtros.evento]);
 
   /**
    * Exporta a Excel con el formato de la planilla de siempre: una hoja por
@@ -2449,6 +2505,15 @@ const DeliveriesAdmin = () => {
         <MiniStat icon={<CheckCircle2 className="w-4 h-4" />} label="Enviadas" value={String(summary.sent)} />
       </div>
 
+      {eventosConVentas.length > 0 && (
+        <FiltrosEntregasBarra
+          filtros={filtros}
+          onChange={setFiltros}
+          eventos={eventosConVentas}
+          tipos={tiposVisibles}
+        />
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
         {/* El orden es el del camino de una venta (v40). */}
@@ -2507,7 +2572,21 @@ const DeliveriesAdmin = () => {
       {/* Grupos por evento */}
       {groups.length === 0 ? (
         <div className="bg-card border border-border py-16 text-center text-muted-foreground text-sm">
-          {
+          {hayFiltrosExtra(filtros) || term ? (
+            <>
+              Ninguna venta de esta pestaña coincide con la búsqueda o los filtros.{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setFiltros({ ...FILTROS_INICIALES, evento: filtros.evento });
+                }}
+                className="font-semibold text-foreground underline underline-offset-2"
+              >
+                Limpiar
+              </button>
+            </>
+          ) : (
             {
               por_confirmar:
                 "No hay pedidos por confirmar. Aparecen solos cuando alguien toca Enviar por WhatsApp en la web.",
@@ -2516,7 +2595,7 @@ const DeliveriesAdmin = () => {
               sent: "Todavía no marcaste ninguna entrega como enviada.",
               vencido: "No hay pedidos vencidos.",
             }[statusFilter]
-          }
+          )}
         </div>
       ) : (
         groups.map((g) => (
@@ -2539,9 +2618,20 @@ const DeliveriesAdmin = () => {
               )}
               <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                 <span><b className="text-foreground">{g.rows.length}</b> clientes</span>
-                <span><b className="text-foreground">{g.totalTickets}</b> entradas</span>
+                <span>
+                  <b className="text-foreground">{g.totalTickets}</b> entradas
+                  {filtros.tipo !== TODOS && tiposVisibles.find((t) => t.id === filtros.tipo)
+                    ? ` ${tiposVisibles.find((t) => t.id === filtros.tipo)!.nombre}`
+                    : ""}
+                </span>
                 <span><b className="text-foreground">{fmtMoney(g.totalValue)}</b> total</span>
               </div>
+              {/* Cuántas hay que mandar de cada tipo: es lo que se prepara. */}
+              {filtros.tipo === TODOS && g.porTipo.length > 1 && (
+                <p className="text-xs text-muted-foreground">
+                  {g.porTipo.map((t) => `${t.nombre} ${t.cantidad}`).join(" · ")}
+                </p>
+              )}
             </div>
 
             {/* Mobile: tarjetas apiladas */}
