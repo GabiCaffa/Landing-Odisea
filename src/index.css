@@ -893,3 +893,12 @@
   color-scheme: dark;
 }
 :root[data-admin] body { background: hsl(var(--background)); color: hsl(var(--foreground)); }
+/* La lista de un <select> la dibuja el navegador: en Chrome para Windows no
+   respeta color-scheme y sale blanca con la letra clara del oscuro encima (se
+   leía en blanco sobre blanco). Mismo arreglo que los temas oscuros del sitio. */
+:root[data-admin="oscuro"] option,
+:root[data-admin="oscuro"] optgroup {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+}
+:root[data-admin="oscuro"] optgroup { color: hsl(var(--muted-foreground)); }
