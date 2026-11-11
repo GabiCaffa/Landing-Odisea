@@ -151,6 +151,9 @@ import EventPromosEditor, {
 } from "@/components/admin/EventPromosEditor";
 import AdminShell from "@/components/admin/AdminShell";
 import AsignarEventoCumple from "@/components/admin/AsignarEventoCumple";
+import { BarraSeleccion, BotonSeleccionar, Casilla } from "@/components/admin/Seleccion";
+import { useSeleccion } from "@/lib/seleccion";
+import { borrarCumples, borrarVentas } from "@/lib/borrarEnLote";
 import { deEventosPasados, sinEvento } from "@/lib/cumplesConEvento";
 import BuscadorPanel, { IrA } from "@/components/admin/BuscadorPanel";
 import TareasDelDia from "@/components/admin/TareasDelDia";
@@ -2489,6 +2492,34 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveries, statusFilter, term, events, filtros, mapaComprobantes]);
 
+  // Borrar varias de una: sólo las que se están viendo (ver Seleccion.tsx).
+  const sel = useSeleccion(useMemo(() => groups.flatMap((g) => g.rows.map((d) => d.id)), [groups]));
+  const borrarSeleccion = async () => {
+    const elegidas = deliveries.filter((d) => sel.elegidas.includes(d.id));
+    const n = elegidas.length;
+    const confirmadas = elegidas.filter(esConfirmada).length;
+    const ok = await confirm({
+      title: `Borrar ${n} venta${n === 1 ? "" : "s"}`,
+      description: `Se borran con sus comprobantes.${
+        confirmadas ? ` ${confirmadas} ya ${confirmadas === 1 ? "tiene" : "tienen"} el pago confirmado.` : ""
+      } No se puede deshacer.`,
+      confirmText: `Borrar ${n}`,
+      destructive: true,
+    });
+    if (!ok) return;
+    setBorrandoLote(true);
+    const r = await borrarVentas(elegidas, (id) => {
+      const d = deliveries.find((x) => x.id === id);
+      return d ? comprobantes(d).map((c) => c.path) : [];
+    });
+    setBorrandoLote(false);
+    await reload();
+    sel.salir();
+    if (r.error || r.borradas < r.pedidas) {
+      toast.error(`Se borraron ${r.borradas} de ${r.pedidas}${r.error ? `: ${r.error}` : ""}`);
+    } else toast.success(`Se borraron ${r.borradas} venta${r.borradas === 1 ? "" : "s"}`);
+  };
+
   // Resumen del evento elegido (o de todos), sin importar pestaña, búsqueda ni
   // los otros filtros. La plata y las entradas cuentan sólo lo CONFIRMADO: un
   // pedido de la web sin comprobante no es una venta, y sumarlo inflaría la
@@ -2512,6 +2543,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
    * la pestaña abierta: la planilla es de todas las ventas.
    */
   const [exportando, setExportando] = useState(false);
+  const [borrandoLote, setBorrandoLote] = useState(false);
   const exportarExcel = async () => {
     if (!deliveries.some(esConfirmada)) {
       toast.error("Todavía no hay ventas confirmadas para exportar");
@@ -2649,8 +2681,10 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
           ))}
         </div>
 
-        <div className="flex flex-1 gap-3 lg:justify-end">
-          <div className="relative flex-1 max-w-md">
+        {/* En celular el buscador va solo en su fila y los botones abajo: en una
+            sola fila no entraban y el buscador quedaba aplastado a un ícono. */}
+        <div className="flex flex-1 flex-wrap gap-2 sm:gap-3 lg:justify-end">
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
@@ -2661,7 +2695,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
           </div>
           <button
             onClick={() => setPasteOpen(true)}
-            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2"
+            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2 px-4 sm:px-7"
             title="Pegar uno o varios mensajes de WhatsApp y cargar las ventas"
           >
             <ClipboardPaste className="w-4 h-4" />{" "}
@@ -2670,13 +2704,14 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
           <button
             onClick={exportarExcel}
             disabled={exportando}
-            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2 disabled:opacity-50"
+            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2 px-4 sm:px-7 disabled:opacity-50"
             title="Bajar la planilla de ventas en Excel: una hoja por evento, las enviadas en verde"
           >
             <Download className="w-4 h-4" />{" "}
             <span className="hidden sm:inline">{exportando ? "Armando…" : "Excel"}</span>
           </button>
-          <button onClick={openNew} className="btn-celeste whitespace-nowrap inline-flex items-center gap-2">
+          <BotonSeleccionar s={sel} />
+          <button onClick={openNew} className="btn-celeste ml-auto whitespace-nowrap inline-flex items-center gap-2 px-5 sm:ml-0 sm:px-7">
             <Plus className="w-4 h-4" /> Agregar
           </button>
         </div>
@@ -2750,9 +2785,12 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
             {/* Mobile: tarjetas apiladas */}
             <div className="md:hidden divide-y divide-border">
               {g.rows.map((d) => (
-                <div key={d.id} className="p-4 space-y-2">
+                <div key={d.id} className={`p-4 space-y-2 ${sel.tildada(d.id) ? "bg-celeste/10" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    {sel.activo && (
+                      <Casilla checked={sel.tildada(d.id)} onChange={() => sel.alternar(d.id)} etiqueta={`Seleccionar a ${d.firstName} ${d.lastName}`} />
+                    )}
+                    <div className="min-w-0 mr-auto">
                       <p className="font-semibold flex items-center gap-1.5 flex-wrap">
                         <span className="truncate">{d.firstName} {d.lastName}</span>
                         {d.userId && <RegBadge />}
@@ -2800,6 +2838,16 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
               <table className="w-full text-sm min-w-[820px]">
                 <thead>
                   <tr className="border-b border-border text-left">
+                    {sel.activo && (
+                      <Th>
+                        <Casilla
+                          checked={g.rows.every((d) => sel.tildada(d.id))}
+                          indeterminada={g.rows.some((d) => sel.tildada(d.id))}
+                          onChange={() => sel.grupo(g.rows.map((d) => d.id), !g.rows.every((d) => sel.tildada(d.id)))}
+                          etiqueta={`Seleccionar todas las de ${g.eventName}`}
+                        />
+                      </Th>
+                    )}
                     <Th>Cliente</Th>
                     <Th>Contacto</Th>
                     <Th>Entradas</Th>
@@ -2810,7 +2858,12 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
                 </thead>
                 <tbody>
                   {g.rows.map((d) => (
-                    <tr key={d.id} className="border-b border-border/50 hover:bg-secondary/30">
+                    <tr key={d.id} className={`border-b border-border/50 hover:bg-secondary/30 ${sel.tildada(d.id) ? "bg-celeste/10" : ""}`}>
+                      {sel.activo && (
+                        <Td>
+                          <Casilla checked={sel.tildada(d.id)} onChange={() => sel.alternar(d.id)} etiqueta={`Seleccionar a ${d.firstName} ${d.lastName}`} />
+                        </Td>
+                      )}
                       <Td>
                         <p className="font-semibold flex items-center gap-2">
                           {d.firstName} {d.lastName}
@@ -2917,6 +2970,14 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
           }}
         />
       )}
+
+      <BarraSeleccion
+        s={sel}
+        total={groups.reduce((a, g) => a + g.rows.length, 0)}
+        nombre={["venta", "ventas"]}
+        onBorrar={() => void borrarSeleccion()}
+        borrando={borrandoLote}
+      />
 
       {verComprobante && (() => {
         // La venta al día (después de agregar o quitar, `verComprobante` es la vieja).
@@ -3758,6 +3819,7 @@ const BirthdaysAdmin = () => {
   const [viewingPhoto, setViewingPhoto] = useState<BirthdaySignup | null>(null);
   // Ficha a la que se le está por mandar el mensaje de WhatsApp.
   const [messaging, setMessaging] = useState<BirthdaySignup | null>(null);
+  const [borrandoLote, setBorrandoLote] = useState(false);
 
   const reload = async () => {
     const data = await fetchBirthdays();
@@ -3829,6 +3891,28 @@ const BirthdaysAdmin = () => {
         return a.eventDate.localeCompare(b.eventDate);
       });
   }, [rows, giftFilter, term, events]);
+
+  // Borrar varios de una: sólo los que se están viendo (ver Seleccion.tsx).
+  const sel = useSeleccion(useMemo(() => groups.flatMap((g) => g.rows.map((b) => b.id)), [groups]));
+  const borrarSeleccion = async () => {
+    const elegidos = rows.filter((b) => sel.elegidas.includes(b.id));
+    const n = elegidos.length;
+    const ok = await confirm({
+      title: `Borrar ${n} cumpleañero${n === 1 ? "" : "s"}`,
+      description: "Se borran con la foto de su documento. No se puede deshacer.",
+      confirmText: `Borrar ${n}`,
+      destructive: true,
+    });
+    if (!ok) return;
+    setBorrandoLote(true);
+    const r = await borrarCumples(elegidos);
+    setBorrandoLote(false);
+    await reload();
+    sel.salir();
+    if (r.error || r.borradas < r.pedidas) {
+      toast.error(`Se borraron ${r.borradas} de ${r.pedidas}${r.error ? `: ${r.error}` : ""}`);
+    } else toast.success(`Se borraron ${r.borradas} cumpleañero${r.borradas === 1 ? "" : "s"}`);
+  };
 
   // Resumen general (sin importar pestaña ni búsqueda). Cuenta sólo lo
   // verificado, igual que las listas de regalo: si sumara las solicitudes sin
@@ -4074,8 +4158,10 @@ const BirthdaysAdmin = () => {
           </button>
         </div>
 
-        <div className="flex flex-1 gap-3 lg:justify-end">
-          <div className="relative flex-1 max-w-md">
+        {/* En celular el buscador va solo en su fila y los botones abajo: en una
+            sola fila no entraban y el buscador quedaba aplastado a un ícono. */}
+        <div className="flex flex-1 flex-wrap gap-2 sm:gap-3 lg:justify-end">
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
@@ -4086,12 +4172,13 @@ const BirthdaysAdmin = () => {
           </div>
           <button
             onClick={exportCsv}
-            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2"
+            className="btn-techno-outline whitespace-nowrap inline-flex items-center gap-2 px-4 sm:px-7"
             title="Exportar la lista visible a CSV (Excel)"
           >
             <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar</span>
           </button>
-          <button onClick={openNew} className="btn-celeste whitespace-nowrap inline-flex items-center gap-2">
+          <BotonSeleccionar s={sel} />
+          <button onClick={openNew} className="btn-celeste ml-auto whitespace-nowrap inline-flex items-center gap-2 px-5 sm:ml-0 sm:px-7">
             <Plus className="w-4 h-4" /> Agregar
           </button>
         </div>
@@ -4134,9 +4221,12 @@ const BirthdaysAdmin = () => {
             {/* Mobile: tarjetas apiladas */}
             <div className="md:hidden divide-y divide-border">
               {g.rows.map((b) => (
-                <div key={b.id} className="p-4 space-y-2">
+                <div key={b.id} className={`p-4 space-y-2 ${sel.tildada(b.id) ? "bg-celeste/10" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    {sel.activo && (
+                      <Casilla checked={sel.tildada(b.id)} onChange={() => sel.alternar(b.id)} etiqueta={`Seleccionar a ${b.firstName} ${b.lastName}`} />
+                    )}
+                    <div className="min-w-0 mr-auto">
                       <p className="font-semibold flex items-center gap-1.5 flex-wrap">
                         <span className="truncate">{b.firstName} {b.lastName}</span>
                         {b.userId && <RegBadge />}
@@ -4182,6 +4272,16 @@ const BirthdaysAdmin = () => {
               <table className="w-full text-sm min-w-[880px]">
                 <thead>
                   <tr className="border-b border-border text-left">
+                    {sel.activo && (
+                      <Th>
+                        <Casilla
+                          checked={g.rows.every((b) => sel.tildada(b.id))}
+                          indeterminada={g.rows.some((b) => sel.tildada(b.id))}
+                          onChange={() => sel.grupo(g.rows.map((b) => b.id), !g.rows.every((b) => sel.tildada(b.id)))}
+                          etiqueta={`Seleccionar todos los de ${g.eventName}`}
+                        />
+                      </Th>
+                    )}
                     <Th>Cumpleañero</Th>
                     <Th>Documento</Th>
                     <Th>Cumple</Th>
@@ -4193,7 +4293,12 @@ const BirthdaysAdmin = () => {
                 </thead>
                 <tbody>
                   {g.rows.map((b) => (
-                    <tr key={b.id} className="border-b border-border/50 hover:bg-secondary/30">
+                    <tr key={b.id} className={`border-b border-border/50 hover:bg-secondary/30 ${sel.tildada(b.id) ? "bg-celeste/10" : ""}`}>
+                      {sel.activo && (
+                        <Td>
+                          <Casilla checked={sel.tildada(b.id)} onChange={() => sel.alternar(b.id)} etiqueta={`Seleccionar a ${b.firstName} ${b.lastName}`} />
+                        </Td>
+                      )}
                       <Td>
                         <p className="font-semibold flex items-center gap-2 flex-wrap">
                           {b.firstName} {b.lastName}
@@ -4272,6 +4377,14 @@ const BirthdaysAdmin = () => {
           }}
         />
       )}
+
+      <BarraSeleccion
+        s={sel}
+        total={groups.reduce((a, g) => a + g.rows.length, 0)}
+        nombre={["cumpleañero", "cumpleañeros"]}
+        onBorrar={() => void borrarSeleccion()}
+        borrando={borrandoLote}
+      />
 
       {viewingPhoto && (
         <IdPhotoModal row={viewingPhoto} onClose={() => setViewingPhoto(null)} />
