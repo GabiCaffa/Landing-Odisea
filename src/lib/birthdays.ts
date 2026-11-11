@@ -104,6 +104,11 @@ function toDb(input: Partial<BirthdayInput>): Record<string, any> {
 
 // El trigger de la DB rechaza menores de 18; traducimos ese error a algo legible.
 function humanizeError(message: string): string {
+  // v46: todo cumpleañero tiene evento; una ficha vieja sin evento no se puede
+  // aprobar ni marcar con regalo hasta asignarle uno.
+  if (message.includes("birthday_signups_event_required")) {
+    return "Falta el evento: asignale uno antes de guardar";
+  }
   if (message.toLowerCase().includes("mayor de 18")) {
     return "La fecha de nacimiento indica que es menor de 18 años";
   }
