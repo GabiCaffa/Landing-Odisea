@@ -839,3 +839,57 @@
   animation: none;
   opacity: 0.45;
 }
+
+/* ─── Panel admin: claro y oscuro propios (src/lib/panelTema.ts) ──────────
+   El panel no lleva el tema de temporada; tiene su claro/oscuro, que elige
+   cada uno. Van en <html> (data-admin) y no en un contenedor porque modales y
+   toasts salen por portal. "--nav" es la barra lateral y la de abajo. */
+:root[data-admin="claro"] {
+  --papel: 220 20% 97%;
+  --tinta: 222 24% 12%;
+  --background: 220 20% 97%;
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --secondary: 220 16% 94%;
+  --muted: 220 16% 94%;
+  --muted-foreground: 220 9% 44%;
+  --border: 220 14% 88%;
+  --input: 220 14% 84%;
+  --nav: 0 0% 100%;
+  --nav-foreground: 222 24% 12%;
+  --nav-muted: 220 9% 44%;
+  --nav-hover: 220 16% 95%;
+  --nav-activo: var(--celeste-soft);
+  --nav-activo-foreground: var(--celeste-deep);
+  --shadow-sm: 0 1px 2px hsl(222 24% 12% / 0.05), 0 1px 3px hsl(222 24% 12% / 0.07);
+  --shadow-md: 0 4px 14px hsl(222 24% 12% / 0.08);
+  color-scheme: light;
+}
+:root[data-admin="oscuro"] {
+  --papel: 225 14% 7%;
+  --tinta: 220 14% 92%;
+  --background: 225 14% 7%;
+  --card: 225 12% 11%;
+  --card-foreground: var(--tinta);
+  --popover: 225 12% 12%;
+  --popover-foreground: var(--tinta);
+  --secondary: 225 10% 16%;
+  --muted: 225 10% 16%;
+  --muted-foreground: 220 9% 64%;
+  --border: 225 9% 21%;
+  --input: 225 9% 26%;
+  --celeste-soft: 16 60% 14%;
+  --celeste-deep: 18 95% 64%;
+  --charrua: 4 85% 64%;
+  --nav: 225 14% 9%;
+  --nav-foreground: 220 14% 92%;
+  --nav-muted: 220 9% 60%;
+  --nav-hover: 225 10% 15%;
+  --nav-activo: 16 60% 16%;
+  --nav-activo-foreground: 18 95% 66%;
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.4);
+  --shadow-md: 0 4px 14px hsl(0 0% 0% / 0.45);
+  --shadow-lg: 0 14px 36px hsl(0 0% 0% / 0.5);
+  color-scheme: dark;
+}
+:root[data-admin] body { background: hsl(var(--background)); color: hsl(var(--foreground)); }

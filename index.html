@@ -122,6 +122,9 @@
         opacity: 1;
         transition: opacity 0.6s ease;
       }
+      html[data-admin="oscuro"],
+      html[data-admin="oscuro"] body { background: #101217; color: #E7E9EE; }
+      html[data-admin="oscuro"] #arranque { background-color: #101217; background-image: url("/email-logo-white.png"); }
       html[data-theme="halloween"] #arranque {
         background-color: #0B1D22;
         background-image: url("/email-logo-white.png");
@@ -202,7 +205,19 @@
 
         // El panel no se tematiza (ver isThemedPath en ThemeContext). Se QUITA
         // y no se ignora, porque el atributo puede venir escrito en el HTML.
-        if (location.pathname.indexOf('/admin') === 0) return quitar();
+        if (location.pathname.indexOf('/admin') === 0) {
+          // El panel tiene su claro/oscuro (src/lib/panelTema.ts). Se aplica ya
+          // para que el oscuro no arranque con un destello blanco.
+          try {
+            var pt = localStorage.getItem('odisea:panel-tema');
+            if (pt !== 'claro' && pt !== 'oscuro') {
+              pt = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro';
+            }
+            el.dataset.admin = pt;
+            if (pt === 'oscuro') el.classList.add('dark');
+          } catch (e) {}
+          return quitar();
+        }
         // La fiesta aparte tampoco (RUTA_APARTE en src/lib/fiestasAparte.ts).
         if (location.pathname === '/expofiesta') return quitar();
 

@@ -14,6 +14,15 @@ export default {
     },
     extend: {
       colors: {
+        // Barras de navegación del panel (src/lib/panelTema.ts).
+        nav: {
+          DEFAULT: "hsl(var(--nav))",
+          foreground: "hsl(var(--nav-foreground))",
+          muted: "hsl(var(--nav-muted))",
+          hover: "hsl(var(--nav-hover))",
+          activo: "hsl(var(--nav-activo))",
+          "activo-foreground": "hsl(var(--nav-activo-foreground))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

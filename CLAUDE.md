@@ -1688,6 +1688,40 @@ navegador el toque en Enviar con la red interceptada (mensaje con número, pedid
 `keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
 panel con sesión de staff.**
 
+### El panel nuevo: claro/oscuro, barra de abajo, pendientes, inicio y buscador
+
+Rediseño del panel pedido por el autor ("más intuitivo, mobile first"). **Sin
+librerías nuevas**: shadcn/ui ya estaba instalado (Sheet, Dialog, Command), y una
+dependencia nueva iría a `vendor`, que se precarga en la landing (§6.9).
+
+- **Claro y oscuro propios del panel** (`src/lib/panelTema.ts`). Botón en la barra
+  lateral, en el menú y arriba en celular; se guarda por navegador y sin elección
+  sigue al sistema. Va como `data-admin` + clase `dark` en `<html>` (modales y
+  toasts salen por portal) y `index.css` redefine los tokens en
+  `:root[data-admin=...]`, más los colores `nav-*` de las barras. El script de
+  `index.html` lo aplica antes de React para que el oscuro no arranque en blanco. Al
+  salir del panel se quita. El tema de temporada del sitio no se toca.
+- **Barra de abajo en celular** (`AdminShell`): las 4 pestañas más usadas que el rol
+  ve (`ABAJO`: Inicio, Ventas, Eventos, Cumples…) y "Más", que abre todas desde
+  abajo. Reemplaza al menú hamburguesa de arriba a la izquierda, el rincón más lejos
+  del pulgar. Con una sola pestaña (rol `cumples`) no hay barra.
+- **Números de pendientes** en el menú (`src/lib/pendientesPanel.ts`): Entregas =
+  pagos por confirmar + entradas por enviar; Cumpleaños = solicitudes a revisar. Son
+  consultas de conteo (no bajan filas), sólo de lo que el rol ve, refrescadas por
+  realtime y cada 2 min. Si una falla no se muestra (un 0 inventado mentiría).
+- **Inicio con tareas del día** (`TareasDelDia`): pagos por confirmar, entradas por
+  enviar, cumpleaños a revisar (cada una lleva derecho a eso, con la pestaña y el
+  estado puestos) y lo vendido en los últimos 7 días. La pestaña "Dashboard" pasó a
+  llamarse **Inicio**; los números de antes siguen abajo como "Resumen".
+- **Buscador** (`BuscadorPanel`, lupa o Ctrl+K): ventas, usuarios y eventos por
+  nombre, mail, teléfono, documento o número de pedido. Lleva a la pestaña con la
+  búsqueda puesta (prop `irA` en Entregas, Usuarios y Eventos). Filtra por su cuenta
+  (`shouldFilter={false}`): con miles de ventas, dejar que cmdk dibuje todo traba el
+  teclado. `cmdk` va fuera de `vendor` en `manualChunks`.
+- Probado en navegador con un banco de pruebas (claro, oscuro, 375 px y escritorio,
+  menú "Más" y buscador). **No probado con el panel logueado**: ojo con pantallas
+  internas que tengan colores escritos a mano y en oscuro queden raras.
+
 ### Varios comprobantes por venta, con a qué cuenta fue (v45)
 
 El caso que lo pidió: alguien compra la fecha equivocada (Colonia en vez de

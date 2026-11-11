@@ -466,6 +466,9 @@ export default defineConfig(({ mode }) => {
             // carga con import(): en "vendor" lo bajaría cualquiera que entre
             // a ver una fiesta. Misma trampa que lottie-web.
             if (id.includes('exceljs')) return;
+            // cmdk (el buscador del panel, Ctrl+K): sólo lo usa el panel, que es un
+            // chunk lazy. En "vendor" lo bajaría cualquiera que entre a ver una fiesta.
+            if (id.includes('cmdk')) return;
             if (id.includes('libphonenumber')) return 'telefono';
             if (id.includes('recharts') || id.includes('d3-')) return 'graficos';
             if (id.includes('@radix-ui')) return 'radix';
