@@ -1688,6 +1688,26 @@ navegador el toque en Enviar con la red interceptada (mensaje con número, pedid
 `keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
 panel con sesión de staff.**
 
+### Borrar varias de una en Entregas y Cumpleaños (sin migración)
+
+Botón **"Seleccionar"** en la barra de cada lista: aparecen casillas en cada fila (y una
+en el encabezado de cada grupo, para tildar todo el evento) y abajo una barra con
+**"Todas"** (todo lo que se está viendo), "Ninguna" y **"Borrar N"**, que pide
+confirmación. El flujo pedido: "seleccionar todo y después destildar los que no".
+
+- **Sólo se borra lo que se está viendo** (`src/lib/seleccion.ts`): si se tilda algo y
+  después se cambia de pestaña o filtro, lo escondido no se borra aunque siga tildado.
+- `src/lib/borrarEnLote.ts` borra de a tandas de 100 con `.select("id")` para saber
+  cuántas se borraron **de verdad** (RLS no da error, simplemente no borra), y recién
+  después los archivos: comprobantes (v45) de las ventas y fotos de cédula de los
+  cumpleaños. Si se borraron menos de las pedidas, lo dice.
+- Al borrar ventas avisa cuántas ya tenían el pago confirmado.
+- En Usuarios no, a propósito: dar de baja gente es sólo del admin y de a una.
+- **La barra de herramientas de las dos listas en celular**: el buscador va solo en su
+  fila y los botones abajo. En una sola fila no entraban y el buscador quedaba aplastado
+  a un ícono (reportado con captura).
+- Probado en navegador con datos de ejemplo (375 px). **No probado con el panel logueado.**
+
 ### Todo cumpleañero tiene evento (v46)
 
 v12 dejó el evento opcional ("si no sabés, lo coordinamos después") y se juntaron
