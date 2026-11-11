@@ -102,7 +102,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
 `v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` →
-`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql` → `v46_cumples_con_evento.sql`.
+`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql` → `v46_cumples_con_evento.sql` → `v47_historia_odisea.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -1687,6 +1687,40 @@ vencimiento—, `probar-carga-ventas.mjs` (+7 chequeos del número de pedido) y 
 navegador el toque en Enviar con la red interceptada (mensaje con número, pedido con
 `keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
 panel con sesión de staff.**
+
+### Historia de ODÍSEA y ranking de compradores (v47)
+
+Pestaña **Historia** (admin y operador, mismo permiso que Entregas): el archivo de cada
+evento con sus números congelados, y el ranking de los que más van. Nace del borrado en
+lote: las ventas se limpian, y lo que no queda guardado en otro lado se pierde.
+
+- **Tablas `event_history`** (un evento: entradas, ventas, recaudado, compradores, por
+  tipo en jsonb, cumpleañeros) **y `event_history_buyers`** (cada comprador con sus
+  entradas y lo que gastó). `is_staff()`. `event_id` es único y `set null`: borrar el
+  evento del sitio NO borra su historia. Las de planilla no tienen evento.
+- **Se guarda con un botón** (decisión del autor): "Para guardar" lista los eventos que ya
+  pasaron (o están finalizados) con ventas confirmadas y sin guardar; "Guardar en la
+  historia" congela los números. El ícono de recargar de cada tarjeta vuelve a guardar con
+  las ventas de hoy (reemplaza). Después las ventas se pueden borrar sin perder nada.
+- **Importar planilla** (decisión del autor, desde el panel): un .xlsx con una hoja por
+  fiesta, como la planilla de siempre o la que exporta el panel. Lee con el mismo criterio
+  que `scripts/planilla-a-sql.mjs` (encabezado con "Nombre del comprador", el total es la
+  columna sin título antes del nombre o "Precio total"), toma la fecha del nombre de la
+  hoja si la tiene (Excel no deja "/" en el nombre: "Halloween 31-10-2025") y deja
+  revisar nombre y fecha antes de guardar. Avisa si ya existe uno con el mismo nombre y
+  fecha. `exceljs` se baja recién al leer.
+- **Ranking** (`rankingCompradores`): por cantidad de **eventos distintos** en los que
+  compró, desempatan entradas y plata; empatados comparten puesto. La misma persona se une
+  por **mail, teléfono o documento** (union-find: mail en una planilla y sólo teléfono en
+  otra cuentan como una si en algún evento aparecen juntos). Sin ningún dato, por nombre.
+  **Mide a quien COMPRA**: el que compra 4 entradas para amigos cuenta una vez y los amigos
+  no aparecen. Exporta a CSV.
+- **Recaudado por tipo** reparte el total de cada venta según el precio de lista de sus
+  líneas: los tipos suman exactamente lo cobrado aunque haya habido promo.
+- Cuentas en `src/lib/historiaCalculo.ts` (sin base ni React), probadas con
+  `scripts/probar-historia.mjs` (22 chequeos). Migración probada en un Postgres temporal
+  (10 chequeos). Pantalla e importación probadas en navegador con Supabase simulado.
+  **No probado con el panel logueado ni con una planilla real.**
 
 ### Borrar varias de una en Entregas y Cumpleaños (sin migración)
 

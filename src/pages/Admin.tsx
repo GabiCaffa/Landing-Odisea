@@ -157,6 +157,7 @@ import { borrarCumples, borrarVentas } from "@/lib/borrarEnLote";
 import { deEventosPasados, sinEvento } from "@/lib/cumplesConEvento";
 import BuscadorPanel, { IrA } from "@/components/admin/BuscadorPanel";
 import TareasDelDia from "@/components/admin/TareasDelDia";
+import HistoriaAdmin from "@/components/admin/HistoriaAdmin";
 import { usePanelTema } from "@/lib/panelTema";
 import { Pendientes, insigniasDe, usePendientesPanel } from "@/lib/pendientesPanel";
 import UsersAdmin from "@/components/admin/UsersAdmin";
@@ -272,6 +273,7 @@ const Admin = () => {
       {activeTab === "voting" && <VotacionAdmin />}
       {activeTab === "appearance" && <AppearanceAdmin />}
       {activeTab === "deliveries" && <DeliveriesAdmin irA={irA?.tab === "deliveries" ? irA : null} />}
+      {activeTab === "history" && <HistoriaAdmin />}
       {activeTab === "birthdays" && <BirthdaysAdmin />}
     </AdminShell>
   );
