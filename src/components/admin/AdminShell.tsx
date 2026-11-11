@@ -1,6 +1,7 @@
 import { ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  Archive,
   Cake,
   CalendarDays,
   CreditCard,
@@ -87,6 +88,12 @@ const TAB_META: Record<AdminTab, TabMeta> = {
     icon: <Send className="h-[18px] w-[18px]" />,
     kicker: "Ventas y envío de entradas",
     title: "ENTREGAS",
+  },
+  history: {
+    label: "Historia",
+    icon: <Archive className="h-[18px] w-[18px]" />,
+    kicker: "Eventos y ranking",
+    title: "HISTORIA DE ODÍSEA",
   },
   birthdays: {
     label: "Cumpleaños",

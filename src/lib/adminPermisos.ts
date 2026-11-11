@@ -40,6 +40,7 @@ export type AdminTab =
   | "gallery"
   | "voting"
   | "deliveries"
+  | "history"
   | "birthdays";
 
 export type Permiso =
@@ -180,6 +181,8 @@ export const PERMISO_DE_TAB: Record<AdminTab, Permiso> = {
   gallery: "galeria",
   voting: "votacion",
   deliveries: "entregas",
+  // La historia son montos y compradores: lo mismo que Entregas (v47).
+  history: "entregas",
   birthdays: "cumples",
 };
 
@@ -190,6 +193,7 @@ export const ORDEN_TABS: readonly AdminTab[] = [
   "tickets",
   "promos",
   "deliveries",
+  "history",
   "birthdays",
   "accounts",
   "users",
