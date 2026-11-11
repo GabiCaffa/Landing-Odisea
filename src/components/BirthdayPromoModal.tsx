@@ -157,6 +157,8 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
     if (!form.email.trim()) return toast.error("Indicá tu email");
     if (!phoneE164) return toast.error("Teléfono inválido");
     if (!photoFile) return toast.error("Adjuntá la foto del frente de tu documento");
+    // El beneficio es para una fecha (v46): sin evento no se sabe en qué noche darlo.
+    if (!form.eventId) return toast.error("Elegí a qué evento vas");
 
     setSending(true);
 
@@ -304,15 +306,17 @@ const BirthdayPromoModal = ({ isOpen, onClose }: BirthdayPromoModalProps) => {
             <div>
               <h3 className="text-lg font-medium mb-2">¿A qué evento vas?</h3>
               <p className="text-xs text-muted-foreground mb-3">
-                Opcional. Si todavía no sabés, dejalo sin elegir y lo coordinamos cuando te
-                confirmemos el beneficio.
+                El beneficio es para una fecha: elegí la noche en la que vas a festejar.
               </p>
               <select
                 value={form.eventId}
                 onChange={(e) => setForm({ ...form, eventId: e.target.value })}
+                required
                 className="w-full p-3 border border-border bg-background focus:outline-none focus:border-foreground transition-colors"
               >
-                <option value="">Todavía no lo elegí</option>
+                <option value="" disabled>
+                  Elegí el evento
+                </option>
                 {eventOptions.map((e) => (
                   <option key={e.id} value={e.id}>
                     {formatEventDate(e.date)} · {e.name}

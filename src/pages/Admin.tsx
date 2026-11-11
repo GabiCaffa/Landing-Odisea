@@ -150,6 +150,8 @@ import EventPromosEditor, {
   seleccionDesdeEvento,
 } from "@/components/admin/EventPromosEditor";
 import AdminShell from "@/components/admin/AdminShell";
+import AsignarEventoCumple from "@/components/admin/AsignarEventoCumple";
+import { deEventosPasados, sinEvento } from "@/lib/cumplesConEvento";
 import BuscadorPanel, { IrA } from "@/components/admin/BuscadorPanel";
 import TareasDelDia from "@/components/admin/TareasDelDia";
 import { usePanelTema } from "@/lib/panelTema";
@@ -3905,6 +3907,12 @@ const BirthdaysAdmin = () => {
    * que su beneficio está confirmado cuando en la base no lo está.
    */
   const handleApprove = async (b: BirthdaySignup) => {
+    // El beneficio es para una fecha (v46): sin evento no hay noche en la que
+    // darle el regalo. La base igual lo rechazaría.
+    if (!b.eventId) {
+      toast.error(`Asignale un evento a ${b.firstName} antes de aprobarla`);
+      return;
+    }
     // El teléfono ahora es obligatorio en los dos formularios, pero hay fichas
     // viejas cargadas sin él. Avisar ANTES y no después: enterarse de que no se
     // le puede escribir cuando el botón ya salió gris es enterarse tarde. Mismo
@@ -3963,8 +3971,64 @@ const BirthdaysAdmin = () => {
   if (loading)
     return <div className="py-12 text-center text-muted-foreground text-sm">Cargando cumpleaños...</div>;
 
+  const faltanEvento = sinEvento(rows);
+  const pasados = deEventosPasados(rows, events);
+
+  /**
+   * Borra los cumpleañeros de eventos que ya pasaron, con la foto de su cédula
+   * (v46). Uno por uno con `deleteBirthday`, que borra la fila Y el archivo:
+   * desde la base no se pueden borrar los archivos del bucket.
+   */
+  const borrarPasados = async () => {
+    const ok = await confirm({
+      title: "Borrar los de eventos pasados",
+      description: `Se borran ${pasados.length} cumpleañero(s) de eventos que ya pasaron, con la foto de su documento. No se puede deshacer.`,
+      confirmText: `Borrar ${pasados.length}`,
+      destructive: true,
+    });
+    if (!ok) return;
+    let fallas = 0;
+    for (const b of pasados) {
+      const r = await deleteBirthday(b);
+      if (!r.ok) fallas++;
+    }
+    await reload();
+    if (fallas) toast.error(`Se borraron ${pasados.length - fallas}; ${fallas} no se pudieron borrar`);
+    else toast.success(`Se borraron ${pasados.length} cumpleañero(s) de eventos pasados`);
+  };
+
   return (
     <div className="space-y-5">
+      {(faltanEvento.length > 0 || pasados.length > 0) && (
+        <div className="space-y-2">
+          {faltanEvento.length > 0 && (
+            <div role="alert" className="rounded-lg border border-charrua/40 bg-charrua/10 p-3 text-sm">
+              <p className="font-semibold text-charrua">
+                {faltanEvento.length} cumpleañero(s) sin evento
+              </p>
+              <p className="mt-0.5 text-muted-foreground">
+                El beneficio es para una fecha: asignales el evento con el selector que tienen debajo del
+                nombre. Desde ahora no se puede reclamar ni cargar sin evento.
+              </p>
+            </div>
+          )}
+          {pasados.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card p-3 text-sm">
+              <p className="text-muted-foreground">
+                <b className="text-foreground">{pasados.length}</b> cumpleañero(s) de eventos que ya pasaron.
+              </p>
+              <button
+                type="button"
+                onClick={() => void borrarPasados()}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-charrua/50 px-3 text-xs font-semibold text-charrua transition-colors hover:bg-charrua hover:text-white"
+              >
+                <Trash2 className="h-4 w-4" /> Borrar los de eventos pasados
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Resumen general */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MiniStat icon={<Cake className="w-4 h-4" />} label="Cargados" value={String(summary.total)} />
@@ -4048,7 +4112,7 @@ const BirthdaysAdmin = () => {
             <div className="px-4 py-3 bg-secondary/50 border-b border-border space-y-1">
               <div className="flex items-center gap-2 min-w-0">
                 <Calendar className="w-4 h-4 text-celeste-deep shrink-0" />
-                <span className="font-bold truncate">{g.eventName}</span>
+                <span className={`font-bold truncate ${g.eventId ? "" : "text-charrua"}`}>{g.eventName}</span>
                 {g.eventDate && (
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
                     · {formatEventDate(g.eventDate)}
@@ -4063,6 +4127,7 @@ const BirthdaysAdmin = () => {
               )}
               <div className="text-xs text-muted-foreground">
                 <b className="text-foreground">{g.rows.length}</b> cumpleañero/s
+                {!g.eventId && " · asignales el evento debajo de cada nombre"}
               </div>
             </div>
 
@@ -4080,6 +4145,7 @@ const BirthdaysAdmin = () => {
                       <p className="text-xs text-muted-foreground">
                         {birthdayLabel(b.birthDate)} · {ageFromBirthDate(b.birthDate)} años
                       </p>
+                      {!b.eventId && <AsignarEventoCumple b={b} onListo={reload} />}
                     </div>
                     <BirthdayCountdown birthDate={b.birthDate} />
                   </div>
@@ -4137,6 +4203,7 @@ const BirthdaysAdmin = () => {
                         <p className="text-xs text-muted-foreground">
                           {ageFromBirthDate(b.birthDate)} años
                         </p>
+                        {!b.eventId && <AsignarEventoCumple b={b} onListo={reload} />}
                       </Td>
                       <Td className="text-xs font-mono">{fmtDoc(b.documentId, b.country)}</Td>
                       <Td>
@@ -4676,6 +4743,7 @@ const BirthdayFormModal = ({
       if (!ok) return;
     }
 
+    if (!form.eventId) return toast.error("Elegí el evento al que va");
     const input: BirthdayInput = {
       eventId: form.eventId || null,
       userId: form.userId || null,
@@ -4770,14 +4838,17 @@ const BirthdayFormModal = ({
             </p>
           )}
 
-          {/* Evento (opcional) */}
-          <FormField label="Evento (opcional)">
+          {/* Evento: obligatorio desde v46, el beneficio es para una fecha. */}
+          <FormField label="Evento">
             <select
               value={form.eventId}
               onChange={(e) => set("eventId", e.target.value)}
               className="input-techno"
+              required
             >
-              <option value="">Sin evento asignado</option>
+              <option value="" disabled>
+                Elegí el evento
+              </option>
               {events.map((ev) => (
                 <option key={ev.id} value={ev.id}>
                   {ev.name} · {formatEventDate(ev.date)}

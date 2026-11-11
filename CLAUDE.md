@@ -102,7 +102,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
 `v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` →
-`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql`.
+`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql` → `v46_cumples_con_evento.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -1687,6 +1687,31 @@ vencimiento—, `probar-carga-ventas.mjs` (+7 chequeos del número de pedido) y 
 navegador el toque en Enviar con la red interceptada (mensaje con número, pedido con
 `keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
 panel con sesión de staff.**
+
+### Todo cumpleañero tiene evento (v46)
+
+v12 dejó el evento opcional ("si no sabés, lo coordinamos después") y se juntaron
+decenas sin evento: el staff no sabía en qué noche dar el regalo. Pedido del autor: que
+se reclame siempre PARA un evento y que se borren los de eventos que ya pasaron.
+
+- **Web** (`BirthdayPromoModal`): elegir el evento es obligatorio; se sacó "Todavía no lo
+  elegí". **Panel** (`BirthdayFormModal`): lo mismo, y aprobar una solicitud sin evento
+  pide asignarlo antes.
+- **Los que quedaron sin evento se asignan a mano** (decisión del autor; hay gente que
+  cumple esa misma semana): aviso en rojo arriba con cuántos son y un selector
+  `AsignarEventoCumple` debajo de cada nombre, con las fechas que no pasaron.
+- **Botón "Borrar los de eventos pasados"** (decisión del autor, sobre borrarlos solo cada
+  día): aparece si hay alguno, confirma cuántos y borra fila **y foto de la cédula**
+  (`deleteBirthday`). Un evento cuenta como pasado desde el día siguiente. Lógica en
+  `src/lib/cumplesConEvento.ts`.
+- **v46**: CHECK `birthday_signups_event_required` **`not valid`**: vale para todo lo
+  nuevo y para cada fila que se edite, sin fallar por las viejas. Una ficha vieja sin
+  evento no se puede aprobar ni marcar con regalo hasta asignarle uno. **Cuando no quede
+  ninguna sin evento, correr v46 de nuevo la valida.** La FK del evento pasa de
+  `set null` a `cascade` (con la regla, `set null` haría fallar el borrado del evento;
+  las fotos quedarían en el bucket, por eso conviene el botón).
+- Probado: la migración en un Postgres temporal (9 chequeos). **No probado con el panel
+  logueado ni el reclamo con sesión.**
 
 ### El panel nuevo: claro/oscuro, barra de abajo, pendientes, inicio y buscador
 
