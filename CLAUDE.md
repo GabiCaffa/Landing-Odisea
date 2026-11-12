@@ -1853,6 +1853,29 @@ anteriores a v18), **comprobante** (con / sin) y **origen** (web / a mano). Lóg
 - Probado: `scripts/probar-filtros-entregas.mjs` (18 chequeos) y la barra en
   navegador (375 y escritorio). **No probado con el panel logueado.**
 
+**Más filtros: precio, promo, fecha y orden** (pedido del autor, sin migración).
+
+- **Precio** (botones, como el tipo): los precios unitarios que aparecen en lo que se
+  está mirando, de menor a mayor, con cuántas ventas tiene cada uno ("$800 (18)"). Es el
+  precio de **lista** de la línea (`unit_price`), que es lo que identifica el **lote**,
+  no lo pagado después de una promo. Una venta sin desglose (anterior a v18) entra por su
+  promedio (`total / cantidad`). Con un solo precio la fila no se muestra.
+- **Tipo y precio se miran en la MISMA entrada**: con "VIP" y "$800", una venta de General
+  a $800 y VIP a $1.500 no pasa. Con un tipo elegido los botones de precio son sólo los de
+  ese tipo; cambiar de tipo o de evento suelta el precio. "N entradas" cuenta las de esa
+  combinación.
+- **Promo** (con / sin): si alguna línea tiene `promo_id`. **Fecha** (hoy / ayer / últimos
+  7 días): por `created_at` en hora local, o sea cuándo se cargó la venta o entró el pedido
+  de la web, no cuándo se confirmó el pago.
+- **Orden**: más nuevas primero (el de siempre), las que más esperan, mayor monto o por
+  nombre. No es un filtro: "Limpiar filtros" (`limpiarFiltros`) deja el evento y el orden.
+- **En celular los cinco desplegables van plegados** detrás del botón "Filtros", con el
+  número de los que están puestos; abiertos siempre eran tres filas antes de ver una
+  venta. Desde `md:` van siempre a la vista (3 columnas, 5 desde `xl:`).
+- Probado: el script pasó a 39 chequeos (precio, tipo+precio, promo, fecha con un "ahora"
+  fijo, los cuatro órdenes, limpiar) y la barra en navegador (375 px y escritorio).
+  **No probado con el panel logueado.**
+
 ### Cargar ventas: varios mensajes, comprobante y respuesta (v39)
 
 **El problema era de tiempo, no de datos.** El flujo real: el cliente manda por

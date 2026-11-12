@@ -113,6 +113,9 @@ import {
   eventoPorDefecto,
   guardarEvento,
   hayFiltrosExtra,
+  limpiarFiltros,
+  opcionesPrecios,
+  ordenar,
   opcionesEventos,
   opcionesTipos,
   pasaFiltros,
@@ -2463,6 +2466,22 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
     [deliveries, statusFilter, term, filtros, mapaComprobantes]
   );
 
+  // Lo mismo para los precios: sin el filtro de precio, y del tipo elegido.
+  const preciosVisibles = useMemo(
+    () =>
+      opcionesPrecios(
+        deliveries.filter(
+          (d) =>
+            d.status === statusFilter &&
+            deliveryMatches(d, term) &&
+            pasaFiltros(d, { ...filtros, precio: TODOS }, tieneComprobante)
+        ),
+        filtros.tipo
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deliveries, statusFilter, term, filtros, mapaComprobantes]
+  );
+
   // Filtramos por estado + búsqueda + filtros y agrupamos por evento (con un
   // evento elegido queda un solo grupo).
   const groups = useMemo(() => {
@@ -2483,9 +2502,9 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
           eventName: event?.name ?? "Evento eliminado",
           eventDate: event?.date ?? "",
           eventLocation: event?.location ?? "",
-          rows: list,
-          // Con un tipo elegido, cuentan sólo las entradas de ese tipo.
-          totalTickets: list.reduce((a, d) => a + entradasQueCuentan(d, filtros.tipo), 0),
+          rows: ordenar(list, filtros.orden),
+          // Con un tipo o un precio elegido, cuentan sólo esas entradas.
+          totalTickets: list.reduce((a, d) => a + entradasQueCuentan(d, filtros), 0),
           totalValue: list.reduce((a, d) => a + d.value, 0),
           porTipo: entradasPorTipo(list),
         };
@@ -2658,6 +2677,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
           onChange={setFiltros}
           eventos={eventosConVentas}
           tipos={tiposVisibles}
+          precios={preciosVisibles}
         />
       )}
 
@@ -2729,7 +2749,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
                 type="button"
                 onClick={() => {
                   setSearch("");
-                  setFiltros({ ...FILTROS_INICIALES, evento: filtros.evento });
+                  setFiltros(limpiarFiltros(filtros));
                 }}
                 className="font-semibold text-foreground underline underline-offset-2"
               >
@@ -2773,11 +2793,12 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
                   {filtros.tipo !== TODOS && tiposVisibles.find((t) => t.id === filtros.tipo)
                     ? ` ${tiposVisibles.find((t) => t.id === filtros.tipo)!.nombre}`
                     : ""}
+                  {filtros.precio !== TODOS ? ` de ${fmtMoney(Number(filtros.precio))}` : ""}
                 </span>
                 <span><b className="text-foreground">{fmtMoney(g.totalValue)}</b> total</span>
               </div>
               {/* Cuántas hay que mandar de cada tipo: es lo que se prepara. */}
-              {filtros.tipo === TODOS && g.porTipo.length > 1 && (
+              {filtros.tipo === TODOS && filtros.precio === TODOS && g.porTipo.length > 1 && (
                 <p className="text-xs text-muted-foreground">
                   {g.porTipo.map((t) => `${t.nombre} ${t.cantidad}`).join(" · ")}
                 </p>
