@@ -1,5 +1,6 @@
 import type { DeliveryTicketLine, TicketDelivery } from "@/lib/deliveries";
 import { foldText } from "@/lib/utils";
+import { Moneda, fmtSimple } from "./moneda";
 
 /**
  * Controles antes de guardar una venta pegada desde WhatsApp.
@@ -77,9 +78,12 @@ function hace(iso: string, ahora: Date): string {
 export function revisarDuplicados(
   candidata: VentaCandidata,
   existentes: TicketDelivery[],
-  opciones: { ahora?: Date; nombreEvento?: (eventId: string) => string } = {}
+  opciones: { ahora?: Date; nombreEvento?: (eventId: string) => string; moneda?: Moneda } = {}
 ): AvisoVenta[] {
   const ahora = opciones.ahora ?? new Date();
+  // La del evento de la venta que se está cargando (v48): el aviso de "misma
+  // compra" sólo compara contra ventas de ese mismo evento.
+  const moneda = opciones.moneda ?? "UYU";
   const evento = (id: string) => opciones.nombreEvento?.(id) ?? "otro evento";
   const email = candidata.email?.trim().toLowerCase() || null;
   const phone = candidata.phone?.trim() || null;
@@ -118,7 +122,7 @@ export function revisarDuplicados(
     if (mismaCompra) {
       fuertes.push({
         nivel: "fuerte",
-        texto: `Parece la misma compra: ${nombreDe(d)} ya tiene ${entradas(d.quantity)} por $${d.value} para este evento, cargada ${hace(d.createdAt, ahora)} (${estadoDe(d)}).`,
+        texto: `Parece la misma compra: ${nombreDe(d)} ya tiene ${entradas(d.quantity)} por ${fmtSimple(d.value, moneda)} para este evento, cargada ${hace(d.createdAt, ahora)} (${estadoDe(d)}).`,
       });
     } else {
       avisos.push({
@@ -139,7 +143,8 @@ export function revisarDuplicados(
  */
 export function revisarPrecios(
   lines: DeliveryTicketLine[],
-  tickets: { ticketTypeId: string; price: number }[]
+  tickets: { ticketTypeId: string; price: number }[],
+  moneda: Moneda = "UYU"
 ): AvisoVenta[] {
   const out: AvisoVenta[] = [];
   for (const line of lines) {
@@ -148,7 +153,7 @@ export function revisarPrecios(
     if (!hoy || Math.abs(hoy.price - line.unitPrice) < 0.5) continue;
     out.push({
       nivel: "aviso",
-      texto: `${line.name}: el mensaje dice $${Math.round(line.unitPrice)} c/u y hoy se vende a $${hoy.price}. ¿Es de un lote anterior?`,
+      texto: `${line.name}: el mensaje dice ${fmtSimple(Math.round(line.unitPrice), moneda)} c/u y hoy se vende a ${fmtSimple(hoy.price, moneda)}. ¿Es de un lote anterior?`,
     });
   }
   return out;
@@ -204,7 +209,7 @@ export interface DatosDelMensaje {
  * cuando el cliente edita el texto en WhatsApp antes de mandarlo (típico: la
  * entrada es para otra persona). Manda el MENSAJE: es lo último que escribió.
  */
-export function cambiosDelPedido(pedido: TicketDelivery, m: DatosDelMensaje): string[] {
+export function cambiosDelPedido(pedido: TicketDelivery, m: DatosDelMensaje, moneda: Moneda = "UYU"): string[] {
   const cambios: string[] = [];
   const antes = `${pedido.firstName} ${pedido.lastName}`.trim();
   const nombre = (m.fullName ?? "").trim();
@@ -214,6 +219,22 @@ export function cambiosDelPedido(pedido: TicketDelivery, m: DatosDelMensaje): st
   if (m.email && m.email.toLowerCase() !== pedido.email.toLowerCase()) cambios.push(`Email: ${pedido.email} → ${m.email}`);
   if (m.phoneE164 && m.phoneE164 !== pedido.phone) cambios.push(`Teléfono: ${pedido.phone ?? "—"} → ${m.phoneE164}`);
   if (m.quantity && m.quantity !== pedido.quantity) cambios.push(`Entradas: ${pedido.quantity} → ${m.quantity}`);
-  if (m.total !== null && Math.abs(m.total - pedido.value) > 0.01) cambios.push(`Total: $${pedido.value} → $${m.total}`);
+  if (m.total !== null && Math.abs(m.total - pedido.value) > 0.01) cambios.push(`Total: ${fmtSimple(pedido.value, moneda)} → ${fmtSimple(m.total, moneda)}`);
   return cambios;
+}
+
+/**
+ * El mensaje viene en una moneda y el evento se vende en otra (v48). Casi
+ * siempre es el evento equivocado —el cruce es por nombre— o un mensaje armado
+ * antes de que al evento se le corrigiera la moneda. No bloquea: avisa.
+ */
+export function revisarMoneda(delMensaje: Moneda, delEvento: Moneda | null | undefined): AvisoVenta[] {
+  if (!delEvento || delMensaje === delEvento) return [];
+  const nombre = (m: Moneda) => (m === "USD" ? "dólares" : "pesos");
+  return [
+    {
+      nivel: "aviso",
+      texto: `El mensaje está en ${nombre(delMensaje)} y este evento se vende en ${nombre(delEvento)}. ¿Es el evento correcto?`,
+    },
+  ];
 }

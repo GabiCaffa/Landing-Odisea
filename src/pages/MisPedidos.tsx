@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { formatEventDate, useAuth } from "@/contexts/AuthContext";
 import { EstadoPedido, fetchMisPedidos } from "@/lib/pedidosWeb";
+import { fmtSimple } from "@/lib/moneda";
 
 /**
  * "Mis pedidos" (v44): la lista, a la que lleva el botón del menú.
@@ -25,7 +26,7 @@ const ESTADO: Record<EstadoPedido["estado"], { texto: string; clase: string }> =
 };
 
 const MisPedidos = () => {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, loading, events } = useAuth();
   const navigate = useNavigate();
   const [pedidos, setPedidos] = useState<EstadoPedido[] | null>(null);
   const [error, setError] = useState(false);
@@ -105,7 +106,8 @@ const MisPedidos = () => {
                           {formatEventDate(p.fecha)} · #{p.codigo}
                         </p>
                         <p className="mt-1 truncate text-sm">
-                          {p.detalle || `${p.cantidad} entrada${p.cantidad === 1 ? "" : "s"}`} · ${p.total}
+                          {p.detalle || `${p.cantidad} entrada${p.cantidad === 1 ? "" : "s"}`} ·{" "}
+                          {fmtSimple(p.total, events.find((e) => e.slug === p.slug)?.currency ?? "UYU")}
                         </p>
                         <span
                           className={`mt-2 inline-block rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${estado.clase}`}

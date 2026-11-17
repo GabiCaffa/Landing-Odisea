@@ -4,6 +4,8 @@
  * Separado para poder probarlo solo (`scripts/probar-historia.mjs`).
  */
 
+import type { Moneda, Totales } from "./moneda";
+
 // ─── Personas ───────────────────────────────────────────────────────────────
 
 const fold = (s: unknown) =>
@@ -170,6 +172,8 @@ export interface EventoGuardado {
   id: string;
   name: string;
   eventDate?: string | null;
+  /** Moneda en la que se vendió (v48). Sin dato, pesos. */
+  currency?: Moneda;
 }
 
 export interface PuestoRanking {
@@ -180,7 +184,8 @@ export interface PuestoRanking {
   documentId: string | null;
   eventos: number;
   entradas: number;
-  monto: number;
+  /** Lo gastado, por moneda (v48): cada evento se vendió en la suya. */
+  monto: Totales;
   /** Los eventos a los que compró, del más nuevo al más viejo. */
   fiestas: EventoGuardado[];
 }
@@ -209,11 +214,25 @@ export function rankingCompradores(compradores: CompradorGuardado[], eventos: Ev
       documentId: g.find((x) => normDocumento(x.documentId))?.documentId ?? null,
       eventos: ids.length,
       entradas: g.reduce((a, x) => a + x.entradas, 0),
-      monto: redondo(g.reduce((a, x) => a + Number(x.monto), 0)),
+      monto: g.reduce<Totales>(
+        (a, x) => {
+          const m = evento.get(x.historyId)?.currency ?? "UYU";
+          a[m] = redondo(a[m] + Number(x.monto));
+          return a;
+        },
+        { UYU: 0, USD: 0 }
+      ),
       fiestas,
     };
   });
-  lista.sort((a, b) => b.eventos - a.eventos || b.entradas - a.entradas || b.monto - a.monto);
+  // La plata sólo desempata, y no hay tipo de cambio: pesos primero, después dólares.
+  lista.sort(
+    (a, b) =>
+      b.eventos - a.eventos ||
+      b.entradas - a.entradas ||
+      b.monto.UYU - a.monto.UYU ||
+      b.monto.USD - a.monto.USD
+  );
   // Empatados en eventos y entradas comparten el puesto.
   lista.forEach((p, i) => {
     const prev = lista[i - 1];

@@ -8,6 +8,7 @@ import {
   fetchTicketPromos,
 } from "@/lib/ticketPromos";
 import type { EventTicket } from "@/lib/ticketTypes";
+import { Moneda, fmtPrecio } from "@/lib/moneda";
 
 /**
  * Qué promos aplica un evento, sobre qué tipo de entrada, y —desde v24—
@@ -115,7 +116,10 @@ const EventPromosEditor = ({
   value,
   onChange,
   onCatalogo,
+  moneda = "UYU",
 }: {
+  /** Moneda del evento (v48), para el precio de lista que se muestra de guía. */
+  moneda?: Moneda;
   /** Tipos que el evento vende, tal como están en el form en este momento. */
   tickets: EventTicket[];
   value: EventPromoSelection[];
@@ -331,7 +335,7 @@ const EventPromosEditor = ({
                             type="number"
                             min={0}
                             inputMode="numeric"
-                            placeholder={ticket ? `Lista $${ticket.price}` : ""}
+                            placeholder={ticket ? `Lista ${fmtPrecio(ticket.price, moneda)}` : ""}
                             value={f.specialPrice}
                             onChange={(e) =>
                               setFila(p.id, f.ticketTypeId, { specialPrice: e.target.value })
@@ -344,7 +348,8 @@ const EventPromosEditor = ({
                       )}
                       {noAhorra && (
                         <p className="col-span-2 text-[11px] font-semibold text-charrua">
-                          El precio especial no es más barato que el de lista (${ticket?.price}): la
+                          El precio especial no es más barato que el de lista (
+                          {fmtPrecio(ticket?.price ?? 0, moneda)}): la
                           promo no va a descontar nada.
                         </p>
                       )}

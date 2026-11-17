@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { traerTodo } from "@/lib/traerTodo";
+import { Moneda, monedaDe } from "@/lib/moneda";
 import type { Comprador, CompradorGuardado, HojaLeida, ResumenEvento, TipoHistoria } from "@/lib/historiaCalculo";
 
 /**
@@ -18,6 +19,8 @@ export interface EventoHistoria {
   ventas: number;
   entradas: number;
   recaudado: number;
+  /** Moneda de `recaudado` y de lo de cada comprador (v48). */
+  currency: Moneda;
   compradores: number;
   porTipo: TipoHistoria[];
   cumpleaneros: number;
@@ -34,6 +37,8 @@ interface FilaHistoria {
   ventas: number;
   entradas: number;
   recaudado: number | string;
+  /** Falta si v48 no se corrió. */
+  currency?: string;
   compradores: number;
   por_tipo: TipoHistoria[] | null;
   cumpleaneros: number;
@@ -61,6 +66,7 @@ const desdeFila = (r: FilaHistoria): EventoHistoria => ({
   ventas: r.ventas,
   entradas: r.entradas,
   recaudado: Number(r.recaudado),
+  currency: monedaDe(r.currency),
   compradores: r.compradores,
   porTipo: r.por_tipo ?? [],
   cumpleaneros: r.cumpleaneros,
@@ -113,6 +119,10 @@ export interface DatosGuardado {
   origin: "panel" | "planilla";
   resumen: ResumenEvento;
   cumpleaneros?: number;
+  /** Moneda del evento (v48). Sin dato, pesos. */
+  currency?: Moneda;
+  /** Al volver a guardar: la moneda con la que estaba guardado. */
+  currencyGuardada?: Moneda;
 }
 
 /**
@@ -134,12 +144,18 @@ export async function guardarEnHistoria(d: DatosGuardado): Promise<{ ok: boolean
     por_tipo: d.resumen.porTipo,
     cumpleaneros: d.cumpleaneros ?? 0,
     saved_at: new Date().toISOString(),
+    // Sólo si es dólares o si cambió respecto de lo guardado: un evento en
+    // pesos se guarda aunque falte la migración v48.
+    ...(d.currency === "USD" || (d.currency && d.currencyGuardada && d.currency !== d.currencyGuardada)
+      ? { currency: d.currency }
+      : {}),
   };
   const { data, error } = d.existenteId
     ? await supabase.from("event_history").update(fila).eq("id", d.existenteId).select("id").single()
     : await supabase.from("event_history").insert(fila).select("id").single();
   if (error || !data) {
     const m = error?.message ?? "No se pudo guardar";
+    if (/currency/i.test(m)) return { ok: false, error: "Falta correr la migración v48 (moneda por evento)." };
     return { ok: false, error: faltaMigracion(m) ? AVISO_V47 : m };
   }
   const id = (data as { id: string }).id;

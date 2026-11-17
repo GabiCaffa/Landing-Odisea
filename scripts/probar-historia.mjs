@@ -63,6 +63,20 @@ check("el nombre es el del evento más nuevo", rk[0].name === "Ana Pérez");
 check("sus fiestas, de la más nueva a la más vieja", rk[0].fiestas.map((f) => f.id).join() === "h3,h2,h1", rk[0].fiestas);
 check("empatados comparten el puesto", rk[2].puesto === 3 && rk[3].puesto === 3, rk.map((p) => p.puesto));
 
+// Moneda (v48): lo gastado se suma por moneda, según la del evento guardado.
+{
+  const evm = [
+    { id: "p1", name: "Halloween", eventDate: "2026-10-31" },
+    { id: "d1", name: "Sunset Punta", eventDate: "2027-01-02", currency: "USD" },
+  ];
+  const r = rankingCompradores(
+    [comp("p1", "Ana", "ana@x.com", null, 2, 1600), comp("d1", "Ana", "ana@x.com", null, 1, 40)],
+    evm
+  );
+  check("ranking: pesos y dólares por separado", r.length === 1 && r[0].monto.UYU === 1600 && r[0].monto.USD === 40, r[0]?.monto);
+  check("ranking: sin eventos en dólares, USD queda en 0", rk[0].monto.UYU === 3300 && rk[0].monto.USD === 0, rk[0].monto);
+}
+
 // ─── Planillas ───
 const hoja = [
   ["ODISEA VENTA HALLOWEEN"],

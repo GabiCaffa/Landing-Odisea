@@ -2,6 +2,8 @@ import { ReactNode } from "react";
 import { ArrowRight, Cake, CheckCircle2, Clock, Send, TrendingUp } from "lucide-react";
 import type { Pendientes } from "@/lib/pendientesPanel";
 import type { IrA } from "@/components/admin/BuscadorPanel";
+import { useAuth } from "@/contexts/AuthContext";
+import { fmtTotales, sumarPorMoneda } from "@/lib/moneda";
 
 /**
  * Lo primero que se ve al entrar: lo que hay que hacer hoy, con un toque para
@@ -11,7 +13,6 @@ import type { IrA } from "@/components/admin/BuscadorPanel";
  * Una tarjeta en cero se muestra apagada y no desaparece: que diga "0 pagos
  * por confirmar" también es información ("está todo al día").
  */
-const plata = (n: number) => `$${Math.round(n).toLocaleString("es-UY")}`;
 
 const Tarjeta = ({
   icono,
@@ -68,6 +69,17 @@ const TareasDelDia = ({
   onIr: (destino: Omit<IrA, "n">) => void;
 }) => {
   const { porConfirmar, porEnviar, cumplesARevisar, semana } = pendientes;
+  // La plata de la semana, junta por moneda (v48): la moneda es del evento.
+  const { events } = useAuth();
+  const plataSemana = semana
+    ? fmtTotales(
+        sumarPorMoneda(
+          Object.entries(semana.plataPorEvento),
+          ([, monto]) => monto,
+          ([eventId]) => events.find((e) => e.id === eventId)?.currency ?? "UYU"
+        )
+      )
+    : "";
   const hayTareas = [porConfirmar, porEnviar, cumplesARevisar].some((n) => n !== null);
   if (!hayTareas && !semana) return null;
   const todoAlDia = !porConfirmar && !porEnviar && !cumplesARevisar;
@@ -119,7 +131,7 @@ const TareasDelDia = ({
               <TrendingUp className="h-[18px] w-[18px]" />
             </span>
             <div className="mt-3">
-              <p className="text-2xl font-black leading-none tabular-nums text-tinta">{plata(semana.plata)}</p>
+              <p className="text-2xl font-black leading-none tabular-nums text-tinta">{plataSemana}</p>
               <p className="mt-1 text-sm font-semibold">Últimos 7 días</p>
               <p className="text-xs text-muted-foreground">
                 {semana.ventas} ventas · {semana.entradas} entradas

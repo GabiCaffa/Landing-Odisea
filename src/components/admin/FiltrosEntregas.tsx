@@ -11,6 +11,7 @@ import {
   hayFiltrosExtra,
   limpiarFiltros,
 } from "@/lib/filtrosEntregas";
+import { Moneda, fmtPrecio } from "@/lib/moneda";
 
 /**
  * La barra de filtros de Entregas. Presentacional; la lógica vive en
@@ -30,6 +31,8 @@ interface Props {
   eventos: OpcionEvento[];
   tipos: OpcionTipo[];
   precios: OpcionPrecio[];
+  /** Moneda de lo que se está mirando (v48). `null` = monedas mezcladas. */
+  moneda?: Moneda | null;
 }
 
 const chip = (activo: boolean) =>
@@ -39,9 +42,10 @@ const chip = (activo: boolean) =>
       : "border-border bg-background text-muted-foreground hover:bg-secondary"
   }`;
 
-const plata = (n: number) => `$${n.toLocaleString("es-UY")}`;
-
-const FiltrosEntregas = ({ filtros, onChange, eventos, tipos, precios }: Props) => {
+const FiltrosEntregas = ({ filtros, onChange, eventos, tipos, precios, moneda = "UYU" }: Props) => {
+  // `null` = hay eventos en pesos y en dólares a la vista: va el número solo,
+  // porque "$20" y "US$ 20" serían el mismo botón.
+  const plata = (n: number) => (moneda ? fmtPrecio(n, moneda) : n.toLocaleString("es-UY"));
   const [abierto, setAbierto] = useState(false);
   const set = <K extends keyof Filtros>(k: K, v: Filtros[K]) => onChange({ ...filtros, [k]: v });
   const proximos = eventos.filter((e) => !e.pasado);

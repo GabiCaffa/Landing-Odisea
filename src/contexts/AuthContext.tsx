@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { supabase, EVENT_IMAGES_BUCKET } from "@/lib/supabase";
 import { traerTodo } from "@/lib/traerTodo";
 import { EventTicket, eventTicketFromDb, fetchStockLotes, sortEventTickets } from "@/lib/ticketTypes";
+import { Moneda, monedaDe } from "@/lib/moneda";
 import {
   EventPromo,
   eventPromoFromDb,
@@ -144,6 +145,11 @@ export interface AdminEvent {
    * página del evento. Es sólo un letrero: no calcula nada ni toca el precio.
    */
   badge?: string;
+  /**
+   * v48: moneda en la que se vende el evento ENTERO (entradas, promos, total y
+   * ventas). Nunca falta: sin la migración corrida es pesos.
+   */
+  currency: Moneda;
   createdAt: string;
 }
 
@@ -156,9 +162,15 @@ export interface AdminEvent {
  * compatibilidad con el form —`eventToDb` lo ignora—, pero para algo nuevo no
  * tiene sentido repetir eso.
  */
-export type NewEventInput = Omit<AdminEvent, "id" | "createdAt" | "promos" | "slug"> & {
+export type NewEventInput = Omit<AdminEvent, "id" | "createdAt" | "promos" | "slug" | "currency"> & {
   /** Vacío o ausente = lo deriva la DB del nombre (trigger `events_slug`, v25). */
   slug?: string;
+  /**
+   * Opcional a propósito: los formularios la mandan sólo si es dólares o si
+   * cambió. Ausente, la base pone pesos —y guardar un evento antes de correr
+   * v48 sigue andando—.
+   */
+  currency?: Moneda;
 };
 
 interface AuthResult {
@@ -254,6 +266,7 @@ function eventFromDb(row: any): AdminEvent {
     groupName: row.group_name ?? undefined,
     homeOrder: row.home_order ?? undefined,
     badge: row.badge ?? undefined,
+    currency: monedaDe(row.currency),
     createdAt: row.created_at,
   };
 }
@@ -284,6 +297,8 @@ function eventToDb(e: Partial<NewEventInput>) {
   // Vacío = sin etiqueta. El formulario sólo manda este campo si cambió (ver
   // `handleSubmit`), así guardar un evento antes de correr v34 sigue andando.
   if (e.badge !== undefined) out.badge = e.badge.trim() || null;
+  // Igual que la etiqueta: sólo viaja si el formulario la mandó (v48).
+  if (e.currency !== undefined) out.currency = e.currency;
   return out;
 }
 

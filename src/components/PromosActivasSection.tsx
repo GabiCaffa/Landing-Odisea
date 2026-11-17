@@ -5,6 +5,7 @@ import { formatEventDate, AdminEvent } from "@/contexts/AuthContext";
 import { HORAS_CONTADOR, formatFinPromo, partesRestantes } from "@/lib/ticketPromos";
 import { MIN, Oferta, useOfertas } from "@/lib/ofertasActivas";
 import { playThud } from "@/lib/spookySound";
+import { fmtSimple } from "@/lib/moneda";
 
 // Diferido, igual que en EventCard y PromosSection: arrastra PhoneInput ->
 // libphonenumber, y sólo hace falta si alguien toca "Comprar".
@@ -130,11 +131,13 @@ const OfertaCard = ({
               {t.name}{" "}
               {t.specialPrice !== undefined && t.specialPrice < t.price ? (
                 <>
-                  <b className="text-tinta">${t.specialPrice}</b>{" "}
-                  <span className="text-muted-foreground line-through">${t.price}</span>
+                  <b className="text-tinta">{fmtSimple(t.specialPrice, event.currency)}</b>{" "}
+                  <span className="text-muted-foreground line-through">
+                    {fmtSimple(t.price, event.currency)}
+                  </span>
                 </>
               ) : (
-                <b className="text-tinta">${t.price}</b>
+                <b className="text-tinta">{fmtSimple(t.price, event.currency)}</b>
               )}
             </li>
           ))}

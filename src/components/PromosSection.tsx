@@ -16,6 +16,7 @@ import { useComisionTicketera } from "@/contexts/ThemeContext";
 import { precioConComision } from "@/lib/siteSettings";
 import ModalShell from "./ModalShell";
 import WhatsAppIcon from "./WhatsAppIcon";
+import { Moneda, fmtSimple } from "@/lib/moneda";
 
 // Evento que consume el selector / modal de compra (derivado de los eventos reales).
 type PickerEvent = {
@@ -26,6 +27,8 @@ type PickerEvent = {
   tickets: EventTicket[];
   /** Promos de entrada del evento (v21). */
   promos: EventPromo[];
+  /** Moneda del evento (v48). */
+  currency: Moneda;
 };
 
 // ── Datos de las 3 promos ─────────────────────────────────────────────────────
@@ -106,6 +109,7 @@ const PromosSection = () => {
           location: e.location,
           tickets: e.tickets.filter((t) => t.active),
           promos: e.promos,
+          currency: e.currency,
         })),
     [events]
   );
@@ -260,10 +264,15 @@ const EventPickerOverlay = ({
               <p className="flex items-baseline justify-end gap-1.5">
                 {precioConComision(event.tickets[0].price, comisionTicketera) > 0 && (
                   <span className="text-xs text-muted-foreground line-through tabular-nums group-hover:text-background/60">
-                    ${precioConComision(event.tickets[0].price, comisionTicketera)}
+                    {fmtSimple(
+                      precioConComision(event.tickets[0].price, comisionTicketera),
+                      event.currency
+                    )}
                   </span>
                 )}
-                <span className="font-semibold">${event.tickets[0].price}</span>
+                <span className="font-semibold">
+                  {fmtSimple(event.tickets[0].price, event.currency)}
+                </span>
               </p>
               <p className="text-xs text-muted-foreground group-hover:text-background/60">
                 por entrada

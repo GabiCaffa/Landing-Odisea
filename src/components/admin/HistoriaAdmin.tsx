@@ -27,6 +27,7 @@ import { hoyLocal } from "@/lib/cumplesConEvento";
 import { descargarCsv } from "@/lib/csv";
 import { formatPhoneDisplay } from "@/lib/validators";
 import { foldText } from "@/lib/utils";
+import { Moneda, fmtPrecio, fmtTotales, sumarPorMoneda } from "@/lib/moneda";
 
 /**
  * Historia de ODÍSEA (v47): cada evento con sus números congelados, y el
@@ -41,7 +42,7 @@ import { foldText } from "@/lib/utils";
  * - **Ranking**: quiénes compraron para más eventos distintos.
  */
 
-const plata = (n: number) => `$${Math.round(n).toLocaleString("es-UY")}`;
+const plata = (n: number, moneda: Moneda = "UYU") => fmtPrecio(Math.round(n), moneda);
 
 const Stat = ({ label, value }: { label: string; value: string }) => (
   <div className="rounded-xl border border-border bg-card p-4">
@@ -102,7 +103,7 @@ const HistoriaAdmin = () => {
     if (existenteId) {
       const ok = await confirm({
         title: "Volver a guardar",
-        description: `Se reemplazan los números guardados de ${e.name} por los de las ventas de hoy (${resumen.entradas} entradas, ${plata(resumen.recaudado)}).`,
+        description: `Se reemplazan los números guardados de ${e.name} por los de las ventas de hoy (${resumen.entradas} entradas, ${plata(resumen.recaudado, e.currency)}).`,
         confirmText: "Reemplazar",
       });
       if (!ok) return;
@@ -117,6 +118,8 @@ const HistoriaAdmin = () => {
       origin: "panel",
       resumen,
       cumpleaneros: cumples.filter((b) => b.eventId === eventId).length,
+      currency: e.currency,
+      currencyGuardada: historia?.find((h) => h.id === existenteId)?.currency,
     });
     setGuardando(null);
     if (!r.ok) return toast.error(r.error ?? "No se pudo guardar");
@@ -142,12 +145,13 @@ const HistoriaAdmin = () => {
     return {
       eventos: h.length,
       entradas: h.reduce((a, x) => a + x.entradas, 0),
-      recaudado: h.reduce((a, x) => a + x.recaudado, 0),
+      // Por moneda: un evento en dólares no se suma con los de pesos.
+      recaudado: sumarPorMoneda(h, (x) => x.recaudado, (x) => x.currency),
     };
   }, [historia]);
 
   const ranking = useMemo(
-    () => rankingCompradores(compradores, (historia ?? []).map((h) => ({ id: h.id, name: h.name, eventDate: h.eventDate }))),
+    () => rankingCompradores(compradores, (historia ?? []).map((h) => ({ id: h.id, name: h.name, eventDate: h.eventDate, currency: h.currency }))),
     [compradores, historia]
   );
 
@@ -174,7 +178,7 @@ const HistoriaAdmin = () => {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Eventos guardados" value={String(totales.eventos)} />
         <Stat label="Entradas vendidas" value={totales.entradas.toLocaleString("es-UY")} />
-        <Stat label="Recaudado" value={plata(totales.recaudado)} />
+        <Stat label="Recaudado" value={fmtTotales(totales.recaudado)} />
         <Stat label="Compradores distintos" value={ranking.length.toLocaleString("es-UY")} />
       </div>
 
@@ -221,7 +225,7 @@ const HistoriaAdmin = () => {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold">{evento.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatEventDate(evento.date)} · {r.entradas} entradas · {plata(r.recaudado)} ·{" "}
+                        {formatEventDate(evento.date)} · {r.entradas} entradas · {plata(r.recaudado, evento.currency)} ·{" "}
                         {r.compradores.length} compradores
                       </p>
                     </div>
@@ -299,7 +303,7 @@ const HistoriaAdmin = () => {
                           <p className="text-[11px] text-muted-foreground">entradas</p>
                         </div>
                         <div className="rounded-lg bg-secondary/60 p-2">
-                          <p className="text-lg font-black tabular-nums">{plata(h.recaudado)}</p>
+                          <p className="text-lg font-black tabular-nums">{plata(h.recaudado, h.currency)}</p>
                           <p className="text-[11px] text-muted-foreground">recaudado</p>
                         </div>
                         <div className="rounded-lg bg-secondary/60 p-2">
@@ -311,7 +315,7 @@ const HistoriaAdmin = () => {
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           {h.porTipo.map((t) => (
                             <span key={t.nombre} className="rounded-full border border-border px-2.5 py-1 text-xs">
-                              <b>{t.entradas}</b> {t.nombre} · {plata(t.recaudado)}
+                              <b>{t.entradas}</b> {t.nombre} · {plata(t.recaudado, h.currency)}
                             </span>
                           ))}
                         </div>
@@ -359,7 +363,7 @@ const Ranking = ({ ranking }: { ranking: ReturnType<typeof rankingCompradores> }
   const exportar = () =>
     descargarCsv(
       "ranking-odisea",
-      ["Puesto", "Nombre", "Mail", "Teléfono", "Documento", "Eventos", "Entradas", "Gastado", "Fiestas"],
+      ["Puesto", "Nombre", "Mail", "Teléfono", "Documento", "Eventos", "Entradas", "Gastado ($)", "Gastado (US$)", "Fiestas"],
       ranking.map((p) => [
         p.puesto,
         p.name,
@@ -368,7 +372,8 @@ const Ranking = ({ ranking }: { ranking: ReturnType<typeof rankingCompradores> }
         p.documentId ?? "",
         p.eventos,
         p.entradas,
-        p.monto,
+        p.monto.UYU,
+        p.monto.USD,
         p.fiestas.map((f) => f.name).join(" | "),
       ])
     );
@@ -419,7 +424,7 @@ const Ranking = ({ ranking }: { ranking: ReturnType<typeof rankingCompradores> }
               <p className="text-lg font-black tabular-nums leading-none">{p.eventos}</p>
               <p className="text-[11px] text-muted-foreground">{p.eventos === 1 ? "evento" : "eventos"}</p>
               <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                {p.entradas} entr. · {plata(p.monto)}
+                {p.entradas} entr. · {fmtTotales(p.monto)}
               </p>
             </div>
           </li>
