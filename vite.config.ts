@@ -4,6 +4,7 @@ import path from "path";
 // Importados de la app con ruta relativa: dentro de la config de Vite el alias
 // "@" todavía no existe. Los dos archivos son texto puro, sin nada del navegador.
 import { paginasDeEventos } from "./vite/paginasEvento";
+import { fmtPrecio, monedaDe } from "./src/lib/moneda";
 import { componentTagger } from "lovable-tagger";
 
 /**
@@ -157,6 +158,8 @@ interface EventoDb {
   description: string;
   image_url: string;
   status: string;
+  /** v48: UYU o USD. Falta si la migración no se corrió: se toma como pesos. */
+  currency?: string;
   event_ticket_types?: Array<{ price: number; active: boolean }>;
 }
 
@@ -199,7 +202,7 @@ function bakeEventos(url?: string, key?: string): Plugin {
         if (!url || !key) return html;
         try {
           const res = await fetch(
-            `${url}/rest/v1/events?select=name,date,location,description,image_url,status,event_ticket_types(price,active)&order=date.asc`,
+            `${url}/rest/v1/events?select=*,event_ticket_types(price,active)&order=date.asc`,
             {
               headers: { apikey: key, Authorization: `Bearer ${key}` },
               signal: AbortSignal.timeout(8000),
@@ -251,7 +254,7 @@ function bakeEventos(url?: string, key?: string): Plugin {
                     offers: {
                       "@type": "Offer",
                       price: precio,
-                      priceCurrency: "UYU",
+                      priceCurrency: monedaDe(e.currency),
                       url: SITIO,
                       availability:
                         e.status === "agotado"
@@ -297,7 +300,7 @@ function bakeEventos(url?: string, key?: string): Plugin {
               const [a, m, d] = e.date.split("-");
               const precio = precioDesde(e);
               return `<li>${e.name} — ${d}/${m}/${a} — ${e.location}${
-                precio !== null ? ` — desde $${precio}` : ""
+                precio !== null ? ` — desde ${fmtPrecio(precio, monedaDe(e.currency))}` : ""
               }</li>`;
             })
             .join("");

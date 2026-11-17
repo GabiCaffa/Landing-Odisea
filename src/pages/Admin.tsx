@@ -142,6 +142,7 @@ import OrdenHomeEventos from "@/components/admin/OrdenHomeEventos";
 import FiestaFormModal from "@/components/admin/FiestaFormModal";
 import {
   EventCardPreview,
+  CampoMoneda,
   FormField,
   ImageEditorControls,
   TicketsEditor,
@@ -167,6 +168,7 @@ import UsersAdmin from "@/components/admin/UsersAdmin";
 import BotonActualizarPaginas from "@/components/admin/BotonActualizarPaginas";
 import CampoDireccion from "@/components/admin/CampoDireccion";
 import { descargarCsv } from "@/lib/csv";
+import { MONEDAS, Moneda, fmtPrecio, fmtTotales, simbolo, sumarPorMoneda } from "@/lib/moneda";
 import { exportarVentasExcel } from "@/lib/exportarVentasExcel";
 import { AdminTab, rotuloDePanel, tabsDe, usePuede } from "@/lib/adminPermisos";
 import { saveEventPromos, descuentoDe } from "@/lib/ticketPromos";
@@ -302,9 +304,15 @@ const Dashboard = ({
   const totalCapacity = events.reduce((acc, e) => acc + e.capacity, 0);
   // El evento ya no tiene precio propio: e.price es el tipo de entrada más
   // barato (lo deriva la DB), así que esto es el promedio de esos mínimos.
-  const avgEntryPrice = events.length
-    ? Math.round(events.reduce((acc, e) => acc + e.price, 0) / events.length)
-    : 0;
+  // Por moneda (v48): promediar pesos con dólares no da un número que exista.
+  const avgEntryPrice = MONEDAS.map((m) => {
+    const deEsa = events.filter((e) => e.currency === m);
+    return deEsa.length
+      ? fmtPrecio(Math.round(deEsa.reduce((acc, e) => acc + e.price, 0) / deEsa.length), m)
+      : null;
+  })
+    .filter(Boolean)
+    .join(" · ") || fmtPrecio(0);
   const newThisMonth = users.filter((u) => {
     const created = new Date(u.createdAt);
     const now = new Date();
@@ -337,7 +345,7 @@ const Dashboard = ({
         <StatCard
           icon={<TrendingUp className="w-5 h-5" />}
           label="Entrada más barata"
-          value={`$${avgEntryPrice}`}
+          value={avgEntryPrice}
           hint="promedio entre eventos"
         />
       </div>
@@ -694,7 +702,7 @@ const EventsAdmin = ({ irA }: { irA?: IrA | null }) => {
                               t.active ? "" : "text-muted-foreground line-through"
                             }`}
                           >
-                            {t.name} ${t.price}
+                            {t.name} {fmtPrecio(t.price, e.currency)}
                           </span>
                         ))}
                       </div>
@@ -788,7 +796,10 @@ const EventsAdmin = ({ irA }: { irA?: IrA | null }) => {
                                     t.active ? "" : "text-muted-foreground line-through"
                                   }`}
                                 >
-                                  {t.name} <span className="text-muted-foreground">${t.price}</span>
+                                  {t.name}{" "}
+                                  <span className="text-muted-foreground">
+                                    {fmtPrecio(t.price, e.currency)}
+                                  </span>
                                 </p>
                               ))}
                             </div>
@@ -1626,6 +1637,8 @@ const EventFormModal = ({
     groupName: initial?.groupName ?? "",
     badge: initial?.badge ?? "",
   });
+  // Aparte de `form`: sólo se manda si es dólares o si cambió (ver handleSubmit).
+  const [moneda, setMoneda] = useState<Moneda>(initial?.currency ?? "UYU");
 
   /**
    * Fiestas de varios días (v26). Los grupos que ya existen salen de los
@@ -1746,8 +1759,12 @@ const EventFormModal = ({
       // omite: así un evento se puede guardar aunque la migración no esté corrida.
       const { badge, ...sinEtiqueta } = form;
       const hayEtiqueta = (badge ?? "").trim() !== "" || !!initial?.badge;
+      // La moneda (v48), igual: viaja si es dólares o si se le cambió a un evento
+      // que ya existe. Un evento en pesos se guarda aunque falte la migración.
+      const mandarMoneda = moneda !== "UYU" || (!!initial && initial.currency !== moneda);
       await onSave({
         ...(hayEtiqueta ? { ...sinEtiqueta, badge: badge ?? "" } : sinEtiqueta),
+        ...(mandarMoneda ? { currency: moneda } : {}),
         // datetime-local (hora local) → ISO UTC; vacío → "" (se guarda null)
         saleEndsAt: form.saleEndsAt ? new Date(form.saleEndsAt).toISOString() : "",
       }, promosSel);
@@ -1858,11 +1875,14 @@ const EventFormModal = ({
               />
             </FormField>
 
+            <CampoMoneda value={moneda} onChange={setMoneda} original={initial?.currency} />
+
             <FormField label="Entradas a la venta">
               <TicketsEditor
                 catalog={ticketTypes}
                 value={form.tickets}
                 onChange={(tickets) => setForm((p) => ({ ...p, tickets }))}
+                moneda={moneda}
               />
             </FormField>
 
@@ -1875,6 +1895,7 @@ const EventFormModal = ({
                 value={promosSel}
                 onChange={setPromosSel}
                 onCatalogo={setNombresPromos}
+                moneda={moneda}
               />
             </FormField>
 
@@ -2115,8 +2136,8 @@ const EventFormModal = ({
 // ────────────────────────────────────────────────────────────────────────────
 // Entregas de entradas (carga manual, agrupadas por evento)
 // ────────────────────────────────────────────────────────────────────────────
-const fmtMoney = (n: number) =>
-  `$${n.toLocaleString("es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+/** La moneda es la del EVENTO de la venta (v48); sin decirla, pesos. */
+const fmtMoney = (n: number, moneda: Moneda = "UYU") => fmtPrecio(n, moneda);
 
 // ¿La entrega matchea el término de búsqueda? (nombre, email, documento, teléfono)
 const deliveryMatches = (d: TicketDelivery, term: string) => {
@@ -2482,6 +2503,10 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
     [deliveries, statusFilter, term, filtros, mapaComprobantes]
   );
 
+  // Moneda de cada venta = la de su evento (v48): las ventas no la guardan.
+  const monedas = useMemo(() => new Map(events.map((e) => [e.id, e.currency])), [events]);
+  const monedaDeVenta = (d: { eventId: string }): Moneda => monedas.get(d.eventId) ?? "UYU";
+
   // Filtramos por estado + búsqueda + filtros y agrupamos por evento (con un
   // evento elegido queda un solo grupo).
   const groups = useMemo(() => {
@@ -2502,6 +2527,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
           eventName: event?.name ?? "Evento eliminado",
           eventDate: event?.date ?? "",
           eventLocation: event?.location ?? "",
+          currency: event?.currency ?? ("UYU" as Moneda),
           rows: ordenar(list, filtros.orden),
           // Con un tipo o un precio elegido, cuentan sólo esas entradas.
           totalTickets: list.reduce((a, d) => a + entradasQueCuentan(d, filtros), 0),
@@ -2551,12 +2577,14 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
     const confirmadas = delEvento.filter(esConfirmada);
     return {
       totalTickets: confirmadas.reduce((a, d) => a + d.quantity, 0),
-      totalValue: confirmadas.reduce((a, d) => a + d.value, 0),
+      // Por moneda: con "Todos los eventos" puede haber fechas en pesos y en
+      // dólares, y esas dos plata no se suman.
+      totales: sumarPorMoneda(confirmadas, (d) => d.value, (d) => monedas.get(d.eventId) ?? "UYU"),
       porConfirmar: delEvento.filter((d) => d.status === "por_confirmar").length,
       pending: delEvento.filter((d) => d.status === "pending").length,
       sent: delEvento.filter((d) => d.status === "sent").length,
     };
-  }, [deliveries, filtros.evento]);
+  }, [deliveries, filtros.evento, monedas]);
 
   /**
    * Exporta a Excel con el formato de la planilla de siempre: una hoja por
@@ -2607,7 +2635,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
   const handleConfirm = async (d: TicketDelivery) => {
     const ok = await confirm({
       title: "Confirmar pago",
-      description: `¿Viste el comprobante de ${d.firstName} ${d.lastName} por ${fmtMoney(d.value)}? Pasa a Por enviar.${
+      description: `¿Viste el comprobante de ${d.firstName} ${d.lastName} por ${fmtMoney(d.value, monedaDeVenta(d))}? Pasa a Por enviar.${
         tieneComprobante(d)
           ? ""
           : " No tiene el comprobante cargado: lo podés adjuntar después editando la venta, o confirmarlo con Cargar ventas pegando el mensaje y el comprobante."
@@ -2665,7 +2693,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
 
       {/* Resumen general */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MiniStat icon={<DollarSign className="w-4 h-4" />} label="Recaudado" value={fmtMoney(summary.totalValue)} />
+        <MiniStat icon={<DollarSign className="w-4 h-4" />} label="Recaudado" value={fmtTotales(summary.totales)} />
         <MiniStat icon={<Clock className="w-4 h-4" />} label="Por confirmar" value={String(summary.porConfirmar)} />
         <MiniStat icon={<Send className="w-4 h-4" />} label="Por enviar" value={String(summary.pending)} />
         <MiniStat icon={<CheckCircle2 className="w-4 h-4" />} label="Enviadas" value={String(summary.sent)} />
@@ -2678,6 +2706,15 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
           eventos={eventosConVentas}
           tipos={tiposVisibles}
           precios={preciosVisibles}
+          moneda={
+            // Un evento elegido → su moneda. Con todos, sólo si coinciden: si
+            // hay pesos y dólares mezclados el botón muestra el número solo.
+            filtros.evento !== TODOS
+              ? monedas.get(filtros.evento) ?? "UYU"
+              : new Set(groups.map((g) => g.currency)).size === 1
+                ? groups[0].currency
+                : null
+          }
         />
       )}
 
@@ -2793,9 +2830,9 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
                   {filtros.tipo !== TODOS && tiposVisibles.find((t) => t.id === filtros.tipo)
                     ? ` ${tiposVisibles.find((t) => t.id === filtros.tipo)!.nombre}`
                     : ""}
-                  {filtros.precio !== TODOS ? ` de ${fmtMoney(Number(filtros.precio))}` : ""}
+                  {filtros.precio !== TODOS ? ` de ${fmtMoney(Number(filtros.precio), g.currency)}` : ""}
                 </span>
-                <span><b className="text-foreground">{fmtMoney(g.totalValue)}</b> total</span>
+                <span><b className="text-foreground">{fmtMoney(g.totalValue, g.currency)}</b> total</span>
               </div>
               {/* Cuántas hay que mandar de cada tipo: es lo que se prepara. */}
               {filtros.tipo === TODOS && filtros.precio === TODOS && g.porTipo.length > 1 && (
@@ -2825,7 +2862,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
                         {d.quantity}
                         <span className="text-xs font-normal text-muted-foreground"> entr.</span>
                       </p>
-                      <p className="text-sm font-semibold">{fmtMoney(d.value)}</p>
+                      <p className="text-sm font-semibold">{fmtMoney(d.value, g.currency)}</p>
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground space-y-0.5">
@@ -2912,7 +2949,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
                           </span>
                         )}
                       </Td>
-                      <Td className="font-semibold">{fmtMoney(d.value)}</Td>
+                      <Td className="font-semibold">{fmtMoney(d.value, g.currency)}</Td>
                       {statusFilter === "sent" && (
                         <Td className="text-xs text-muted-foreground">
                           {d.sentAt ? formatEventDate(d.sentAt.slice(0, 10)) : "—"}
@@ -3532,7 +3569,9 @@ const DeliveryFormModal = ({
                               </span>
                             )}
                           </p>
-                          <p className="text-xs text-muted-foreground">{fmtMoney(row.price)} c/u</p>
+                          <p className="text-xs text-muted-foreground">
+                            {fmtMoney(row.price, selectedEvent?.currency)} c/u
+                          </p>
                         </div>
                         <input
                           type="number"
@@ -3589,7 +3628,7 @@ const DeliveryFormModal = ({
                 className="input-techno"
               />
             </FormField>
-            <FormField label="Total de la compra ($)">
+            <FormField label={`Total de la compra (${simbolo(selectedEvent?.currency ?? "UYU")})`}>
               <input
                 type="number"
                 min={0}
@@ -3604,7 +3643,8 @@ const DeliveryFormModal = ({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Total registrado: <b className="text-foreground">{fmtMoney(total)}</b>
+            Total registrado:{" "}
+            <b className="text-foreground">{fmtMoney(total, selectedEvent?.currency)}</b>
           </p>
 
           {/* El desglose y la cantidad pueden diferir a propósito, pero conviene verlo. */}

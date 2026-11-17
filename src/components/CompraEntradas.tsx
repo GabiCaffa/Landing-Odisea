@@ -22,6 +22,7 @@ import { precioConComision } from "@/lib/siteSettings";
 import { buildPurchaseMessage } from "@/lib/purchaseMessage";
 import { generarCodigoPedido, guardarPedidoLocal, prepararPedidoWeb, registrarPedidoWeb } from "@/lib/pedidosWeb";
 import { rastrear } from "@/lib/pixel";
+import { Moneda, fmtSimple } from "@/lib/moneda";
 import { esFiestaAparte } from "@/lib/fiestasAparte";
 import { toast } from "sonner";
 import {
@@ -87,6 +88,10 @@ const CompraEntradas = ({
   diasDeLaFiesta = 1,
 }: CompraEntradasProps) => {
   const { currentUser, events, register } = useAuth();
+  // Moneda del evento (v48). Todo precio de esta pantalla, el total y el
+  // mensaje salen de acá. Sin evento (no debería pasar) es pesos.
+  const moneda: Moneda = (eventId ? events.find((e) => e.id === eventId)?.currency : undefined) ?? "UYU";
+  const plata = (n: number) => fmtSimple(n, moneda);
   const navigate = useNavigate();
   // Arriba del "if (!isOpen) return null" de abajo, como el resto de los
   // hooks: puesto donde se usa cambiaria el orden de los hooks entre renders.
@@ -310,6 +315,7 @@ const CompraEntradas = ({
           monto: l.descuento!.monto,
         })),
       total,
+      currency: moneda,
       account,
       // Sin evento no hay pedido que registrar, y entonces tampoco número.
       orderCode: eventId ? codigoPedido.current : null,
@@ -385,7 +391,7 @@ const CompraEntradas = ({
         ...(evento ? { content_ids: [evento.slug] } : {}),
         content_type: "product",
         value: total,
-        currency: "UYU",
+        currency: moneda,
       },
       evento && esFiestaAparte(evento) ? "web+expo" : "web"
     );
@@ -657,10 +663,10 @@ const CompraEntradas = ({
                           <span className="flex flex-shrink-0 items-baseline gap-1.5 text-sm">
                             {conComision > 0 && (
                               <span className="text-xs text-muted-foreground line-through tabular-nums">
-                                ${conComision}
+                                {plata(conComision)}
                               </span>
                             )}
-                            <span className="text-muted-foreground">${ticket.price}</span>
+                            <span className="text-muted-foreground">{plata(ticket.price)}</span>
                           </span>
                         </p>
                       ) : (
@@ -669,10 +675,10 @@ const CompraEntradas = ({
                           <p className="flex items-baseline gap-1.5 text-sm text-muted-foreground">
                             {conComision > 0 && (
                               <span className="text-xs line-through tabular-nums">
-                                ${conComision}
+                                {plata(conComision)}
                               </span>
                             )}
-                            <span>${ticket.price}</span>
+                            <span>{plata(ticket.price)}</span>
                           </p>
                         </>
                       )}
@@ -726,9 +732,9 @@ const CompraEntradas = ({
                             >
                               {p.name}
                               {p.kind === "precio_especial" && p.specialPrice !== undefined
-                                ? ` · $${p.specialPrice}`
+                                ? ` · ${plata(p.specialPrice)}`
                                 : ""}
-                              {aplicada && l?.descuento ? ` · −$${l.descuento.monto}` : ""}
+                              {aplicada && l?.descuento ? ` · −${plata(l.descuento.monto)}` : ""}
                             </p>
                             {(vence || p.remaining !== undefined) && (
                               <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -945,7 +951,7 @@ const CompraEntradas = ({
                 <div className="mt-4 border-t border-border/50 pt-3">
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     <strong>Importante:</strong> Transfiere el monto total de{" "}
-                    <strong>${total}</strong> a la cuenta indicada. Si te equivocas con el monto,
+                    <strong>{plata(total)}</strong> a la cuenta indicada. Si te equivocas con el monto,
                     nos pondremos en contacto contigo: si es menor no enviaremos las entradas, y
                     si es mayor devolveremos el dinero en un plazo de 90 días.
                   </p>
@@ -986,21 +992,21 @@ const CompraEntradas = ({
                   {ahorroMostrado > 0 &&
                     (compacto ? (
                       <span className="text-xs font-semibold text-celeste-deep">
-                        Ahorrás ${ahorroMostrado}
+                        Ahorrás {plata(ahorroMostrado)}
                       </span>
                     ) : (
                       <p className="text-xs font-semibold text-celeste-deep">
-                        Ahorrás ${ahorroMostrado}
+                        Ahorrás {plata(ahorroMostrado)}
                       </p>
                     ))}
                 </div>
                 <div className="text-right">
                   {totalTachado > 0 && (
                     <span className="mr-2 text-sm text-muted-foreground line-through tabular-nums">
-                      ${totalTachado}
+                      {plata(totalTachado)}
                     </span>
                   )}
-                  <span className="text-2xl font-semibold tabular-nums">${total}</span>
+                  <span className="text-2xl font-semibold tabular-nums">{plata(total)}</span>
                 </div>
               </div>
             )}

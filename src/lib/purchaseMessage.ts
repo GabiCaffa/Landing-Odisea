@@ -4,6 +4,7 @@ import { DEFAULT_COUNTRY_CODE } from "@/lib/locations";
 import { foldText } from "@/lib/utils";
 import type { PaymentAccount } from "@/lib/paymentAccounts";
 import { urlAbsolutaDePedido } from "@/lib/rutas";
+import { Moneda, fmtSimple } from "@/lib/moneda";
 
 /**
  * El mensaje de WhatsApp de una compra de entradas: cómo se ARMA y cómo se LEE.
@@ -121,25 +122,31 @@ export interface PurchaseMessageInput {
   account?: PaymentAccount | null;
   /** Número del pedido registrado en la web (v40). Sin número no va la línea. */
   orderCode?: string | null;
+  /**
+   * Moneda del evento (v48). En pesos el mensaje queda EXACTAMENTE como antes
+   * ("$1600"); en dólares cada monto va como "US$ 40". El lector acepta las dos.
+   */
+  currency?: Moneda;
 }
 
 export function buildPurchaseMessage(input: PurchaseMessageInput): string {
   const firstName = input.fullName.trim().split(/\s+/)[0] ?? "";
+  const plata = (n: number) => fmtSimple(n, input.currency ?? "UYU");
 
   let msg = `${MSG.greeting} ${firstName}\n`;
   msg += `${MSG.event} ${input.eventName} (${input.eventDate}):\n`;
   for (const item of input.items) {
     // Ya viene con la promo descontada cuando hay; si no, es precio × cantidad.
     const subtotal = item.subtotal ?? item.price * item.qty;
-    msg += `- ${item.qty} entrada${item.qty > 1 ? "s" : ""} ${item.name} ($${subtotal})\n`;
+    msg += `- ${item.qty} entrada${item.qty > 1 ? "s" : ""} ${item.name} (${plata(subtotal)})\n`;
   }
   // Las promos van DESPUÉS de los ítems y ANTES del total: explican por qué el
   // total es más bajo que el precio de lista. Sin esta línea, al vendedor le
   // llega un número que no le cierra y parece un error del cliente.
   for (const p of input.promos ?? []) {
-    msg += `${MSG.promo} ${p.label} en ${p.ticketName} (-$${p.monto})\n`;
+    msg += `${MSG.promo} ${p.label} en ${p.ticketName} (-${plata(p.monto)})\n`;
   }
-  msg += `\n${MSG.total} $${input.total}\n`;
+  msg += `\n${MSG.total} ${plata(input.total)}\n`;
   if (input.orderCode) {
     msg += `${MSG.order} #${input.orderCode}\n`;
     msg += `${MSG.tracking} ${urlAbsolutaDePedido(input.orderCode)}\n`;
@@ -225,6 +232,12 @@ export interface ParsedPurchase {
   itemsSummary: string;
   /** Número de pedido de la web (v40), sin el "#". null en los mensajes viejos. */
   orderCode: string | null;
+  /**
+   * Moneda en la que venían escritos los montos (v48): dólares si el TOTAL o
+   * alguna línea dice "US$"; si no, pesos. El panel la compara con la del
+   * evento y avisa si no coinciden.
+   */
+  currency: Moneda;
 }
 
 export interface ParsePurchaseResult {
@@ -253,9 +266,19 @@ const CHAT_STAMP = new RegExp(
   "i"
 );
 
-const ITEM_RE = /^-\s*(\d+)\s+entradas?\s+(.+?)\s*\(\s*\$?\s*([\d.,]+)\s*\)\s*$/i;
+/**
+ * Lo que puede ir delante de un monto (v48): "$", "US$", "U$S" o "USD". Se
+ * aceptan las tres formas de escribir dólares porque el mensaje se puede
+ * editar a mano antes de mandarlo.
+ */
+const SIGNO = String.raw`(?:US\$|U\$S|USD|\$)?`;
+const EN_DOLARES = /US\$|U\$S|USD/i;
+const ITEM_RE = new RegExp(
+  String.raw`^-\s*(\d+)\s+entradas?\s+(.+?)\s*\(\s*${SIGNO}\s*([\d.,]+)\s*\)\s*$`,
+  "i"
+);
 const EVENT_RE = /^quiero comprar para\s+(.+?)\s*\(([^)]*)\)\s*:?\s*$/i;
-const TOTAL_RE = /^total:\s*\$?\s*([\d.,]+)\s*$/i;
+const TOTAL_RE = new RegExp(String.raw`^total:\s*${SIGNO}\s*([\d.,]+)\s*$`, "i");
 const ORDER_RE = /^pedido:\s*#?\s*([a-z0-9]{6})\s*$/i;
 /**
  * Lo que sigue a "PROMO:", tal como lo arma `buildPurchaseMessage`:
@@ -263,7 +286,10 @@ const ORDER_RE = /^pedido:\s*#?\s*([a-z0-9]{6})\s*$/i;
  * admin la llamó "Preventa en pareja", el " en " que separa es el último, y
  * los nombres de los tipos de entrada del catálogo no llevan " en ".
  */
-const PROMO_LINE_RE = /^(.+)\s+en\s+(.+?)\s*\(\s*-\s*\$?\s*([\d.,]+)\s*\)\s*$/i;
+const PROMO_LINE_RE = new RegExp(
+  String.raw`^(.+)\s+en\s+(.+?)\s*\(\s*-\s*${SIGNO}\s*([\d.,]+)\s*\)\s*$`,
+  "i"
+);
 
 /** Etiquetas conocidas: si una línea empieza con una, no es el nombre del que manda. */
 const KNOWN_LABELS = Object.values(MSG).map(foldText);
@@ -385,6 +411,7 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
   let eventDateLabel: string | null = null;
   let total: number | null = null;
   let orderCode: string | null = null;
+  let currency: Moneda = "UYU";
 
   for (const line of lines) {
     const order = ORDER_RE.exec(line);
@@ -402,13 +429,17 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
     if (item) {
       const qty = parseInt(item[1], 10);
       const amount = parseMoney(item[3]);
+      if (EN_DOLARES.test(line.slice(line.lastIndexOf("(")))) currency = "USD";
       if (Number.isFinite(qty) && qty > 0) {
         items.push({ qty, name: item[2].trim(), amount: amount ?? 0 });
       }
       continue;
     }
     const totalMatch = TOTAL_RE.exec(line);
-    if (totalMatch) total = parseMoney(totalMatch[1]);
+    if (totalMatch) {
+      total = parseMoney(totalMatch[1]);
+      if (EN_DOLARES.test(line)) currency = "USD";
+    }
   }
 
   const fullName = valueFor(lines, MSG.fullName);
@@ -457,7 +488,7 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
   }
   if (total !== null && itemsTotal !== null && Math.abs(total - itemsTotal) > 0.01) {
     warnings.push(
-      `El TOTAL del mensaje ($${total}) no coincide con la suma de las entradas ($${itemsTotal}). Puede estar editado a mano.`
+      `El TOTAL del mensaje (${fmtSimple(total, currency)}) no coincide con la suma de las entradas (${fmtSimple(itemsTotal, currency)}). Puede estar editado a mano.`
     );
   }
 
@@ -482,6 +513,7 @@ export function parsePurchaseMessage(text: string): ParsePurchaseResult {
       promoLines,
       itemsSummary,
       orderCode,
+      currency,
     },
     warnings,
   };

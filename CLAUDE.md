@@ -102,7 +102,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
 `v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` →
-`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql` → `v46_cumples_con_evento.sql` → `v47_historia_odisea.sql`.
+`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql` → `v46_cumples_con_evento.sql` → `v47_historia_odisea.sql` → `v48_moneda_evento.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -1687,6 +1687,61 @@ vencimiento—, `probar-carga-ventas.mjs` (+7 chequeos del número de pedido) y 
 navegador el toque en Enviar con la red interceptada (mensaje con número, pedido con
 `keepalive`, mismo número al tocar dos veces). **No probado contra la base real ni el
 panel con sesión de staff.**
+
+### Moneda por evento: pesos o dólares (v48)
+
+Hay eventos que se venden en dólares. Hasta acá el "$" estaba escrito a mano en cada
+pantalla. Ahora el evento tiene **Moneda** (`events.currency`, `UYU` por defecto o `USD`),
+que se elige en el formulario de evento y en el de fiesta de varios días (una sola para
+todos los días), al lado de las entradas.
+
+- **La moneda es del EVENTO, no de cada tipo de entrada.** Un evento se vende entero en una
+  moneda (entradas, promos, total, cuenta de cobro). En `event_ticket_types` dejaría armar
+  un carrito con pesos y dólares mezclados, que no se puede sumar ni transferir de una vez.
+- **Las ventas NO guardan moneda**: `ticket_deliveries.value` se lee en la moneda de su
+  evento (que no se puede borrar mientras tenga ventas). **La Historia SÍ**
+  (`event_history.currency`), porque sobrevive al evento.
+- **Todo sale de `src/lib/moneda.ts`**: `fmtPrecio` ("$1.500" / "US$ 20", lo usa el panel),
+  `fmtSimple` ("$1600" / "US$ 40", sin separador de miles: es como la web pública y el
+  mensaje escribieron siempre los pesos, y así **en pesos no cambia nada de lo que se ve**),
+  `monedaDe` (lo desconocido es pesos) y `sumarPorMoneda` + `fmtTotales`.
+- **Nunca se suman pesos con dólares.** Donde se juntan varios eventos el total va por
+  moneda ("$62.800 · US$ 1.200"): Recaudado de Entregas, "Últimos 7 días" del Inicio,
+  lo gastado en Usuarios, los totales de la Historia y el ranking. Cuando ordenan por
+  plata (Usuarios "Más gastaron", desempate del ranking) van los pesos primero y los
+  dólares para desempatar: **no hay tipo de cambio en el sitio**. Los CSV de Usuarios y
+  del ranking tienen dos columnas ("Gastado ($)" y "Gastado (US$)").
+- **Mensaje de WhatsApp** (`purchaseMessage.ts`, armado y lector tocados a la vez): en
+  dólares cada monto va como `US$ 40` (`TOTAL: US$ 80`); en pesos el mensaje es **byte a
+  byte el de antes** (comparado contra el de master). El lector acepta `US$`, `U$S` y `USD`
+  y devuelve `currency`; **Cargar ventas avisa si el mensaje está en una moneda y el evento
+  en otra** (`revisarMoneda`: casi siempre es el evento equivocado).
+- **Web pública**: la página del evento, la compra, las promos y el selector de Compra
+  directa escriben con la moneda del evento. **Mi pedido y Mis pedidos la toman del evento
+  por su slug** (de `events` del `AuthContext`), para no tocar las funciones de v44. El
+  píxel de Meta manda `currency` del evento. Los datos estructurados y el texto del preview
+  (horneados en el build) llevan `priceCurrency` y "desde US$ X"; las consultas del build
+  pasaron a `select=*` para no fallar si la columna todavía no existe.
+- **Excel de ventas**: la hoja de un evento en dólares y su fila del Resumen van con
+  formato `US$`. El Resumen no suma el recaudado entre eventos.
+- **Filtro de precio en Entregas**: los botones llevan la moneda del evento elegido; con
+  "Todos los eventos" y monedas mezcladas muestran el número solo.
+- **Cambiar la moneda de un evento que ya existe no se bloquea**: el formulario avisa en
+  rojo. Los precios y las ventas ya cargadas conservan el número y pasan a leerse en la
+  moneda nueva; sirve para corregir un evento cargado mal antes de vender.
+- **Tolera v48 sin correr**: los formularios mandan `currency` sólo si es dólares o si
+  cambió (mismo patrón que la etiqueta, v34), y todo lo que lee cae en pesos. Guardar un
+  evento en dólares sin la migración da error de la base.
+- **La cuenta de cobro tiene que ser en dólares** y eso NO se valida: `payment_accounts`
+  no tiene moneda. El formulario lo recuerda en el texto de ayuda.
+- **Las planillas que se importan a la Historia entran siempre en pesos** (no hay selector).
+- Probado: v48 en un Postgres temporal (11 chequeos, dos corridas, con y sin
+  `event_history`), `probar-carga-ventas.mjs` (69 chequeos, +31 de moneda),
+  `probar-historia.mjs` (24), `probar-excel-ventas.mjs` (25), la página horneada de un
+  evento en dólares, y en navegador el sitio real con un evento pasado a dólares sólo en
+  esa pestaña (página del evento y carrito: US$ 85 por 2×30 + 25, sin scroll horizontal
+  en 375 px) más el selector del formulario. **No probado con el panel logueado ni
+  mandando un pedido real en dólares.**
 
 ### Historia de ODÍSEA y ranking de compradores (v47)
 

@@ -15,6 +15,7 @@ import { rastrear } from "@/lib/pixel";
 import VisorFlyer from "@/components/VisorFlyer";
 import { stockAMostrar, useStockHoja } from "@/lib/stockHoja";
 import { urlDeEvento } from "@/lib/rutas";
+import { fmtPrecio } from "@/lib/moneda";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
 
@@ -109,7 +110,7 @@ const Evento = () => {
         content_name: titulo,
         content_ids: [evento.slug],
         content_type: "product",
-        ...(minimo.length ? { value: Math.min(...minimo), currency: "UYU" } : {}),
+        ...(minimo.length ? { value: Math.min(...minimo), currency: evento.currency } : {}),
       },
       esAparte ? "web+expo" : "web"
     );
@@ -251,10 +252,10 @@ const Evento = () => {
                           src/lib/siteSettings.ts. */}
                       {desdeConComision > 0 && (
                         <span className="text-xs font-normal text-muted-foreground line-through tabular-nums">
-                          ${desdeConComision.toLocaleString("es-UY")}
+                          {fmtPrecio(desdeConComision, evento.currency)}
                         </span>
                       )}
-                      <span>Desde ${desde.toLocaleString("es-UY")}</span>
+                      <span>Desde {fmtPrecio(desde, evento.currency)}</span>
                     </span>
                   </p>
                 )}

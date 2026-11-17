@@ -15,6 +15,7 @@ import {
   ImageTransform,
 } from "@/contexts/AuthContext";
 import { EventTicket, TicketType, sortEventTickets } from "@/lib/ticketTypes";
+import { MONEDAS, MONEDA_NOMBRE, Moneda, simbolo } from "@/lib/moneda";
 
 // Vivía suelto en Admin.tsx, al lado de los componentes que se movieron.
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -42,6 +43,51 @@ export const FormField = ({ label, children }: { label: string; children: React.
 );
 
 /**
+ * Moneda del evento (v48). Lo usan el formulario de evento y el de fiesta de
+ * varios días, donde es una sola para todos los días.
+ *
+ * `original` es la moneda con la que el evento ya está guardado: si se cambia,
+ * avisa. La base no lo impide —sirve para corregir un evento cargado mal—,
+ * pero lo ya vendido pasa a leerse en la moneda nueva con el mismo número.
+ */
+export const CampoMoneda = ({
+  value,
+  onChange,
+  original,
+}: {
+  value: Moneda;
+  onChange: (m: Moneda) => void;
+  original?: Moneda;
+}) => (
+  <FormField label="Moneda">
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value === "USD" ? "USD" : "UYU")}
+      className="input-techno"
+    >
+      {MONEDAS.map((m) => (
+        <option key={m} value={m}>
+          {MONEDA_NOMBRE[m]}
+        </option>
+      ))}
+    </select>
+    {original && original !== value ? (
+      <p className="mt-1 text-[11px] font-semibold text-charrua">
+        Vas a cambiar la moneda de un evento que ya existe. Los precios y las ventas ya
+        cargadas conservan el número y pasan a leerse en {value === "USD" ? "dólares" : "pesos"}:
+        revisá los precios de las entradas antes de guardar.
+      </p>
+    ) : (
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {value === "USD"
+          ? "Todo el evento se vende en dólares: entradas, promos, total y mensaje de WhatsApp. La cuenta de cobro tiene que ser en dólares."
+          : "Todo el evento se vende en esta moneda: entradas, promos y total."}
+      </p>
+    )}
+  </FormField>
+);
+
+/**
  * Elegir qué tipos vende el evento y a qué precio. El precio vive acá y no en
  * el catálogo porque el mismo "VIP" vale distinto en cada fecha.
  */
@@ -49,10 +95,13 @@ export const TicketsEditor = ({
   catalog,
   value,
   onChange,
+  moneda = "UYU",
 }: {
   catalog: TicketType[];
   value: EventTicket[];
   onChange: (tickets: EventTicket[]) => void;
+  /** Moneda del evento (v48): sólo cambia el símbolo junto al precio. */
+  moneda?: Moneda;
 }) => {
   const selected = useMemo(
     () => new Map(value.map((t) => [t.ticketTypeId, t])),
@@ -158,7 +207,9 @@ export const TicketsEditor = ({
               </div>
               {row && (
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <span className="text-sm text-muted-foreground">$</span>
+                  <span className="text-sm text-muted-foreground">
+                    {simbolo(moneda)}
+                  </span>
                   <input
                     type="number"
                     min={0}

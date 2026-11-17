@@ -49,7 +49,7 @@ const ventas = [
 const eventos = [
   { id: "nav", name: "NAVIDAD COLONIA", date: "2026-12-24", slug: "navidad-colonia", capacity: 400, paymentAccountId: "acc" },
   { id: "hal", name: "HALLOWEEN COLONIA", date: "2026-10-31", slug: "halloween-colonia", capacity: 0, paymentAccountId: "acc" },
-  { id: "hal2", name: "HALLOWEEN COLONIA", date: "2026-11-01", slug: "halloween-colonia-2", paymentAccountId: "otra" },
+  { id: "hal2", name: "HALLOWEEN COLONIA", date: "2026-11-01", slug: "halloween-colonia-2", paymentAccountId: "otra", currency: "USD" },
 ];
 const cuentas = [{ id: "acc", holderName: "Gabi Caffarel" }];
 
@@ -92,6 +92,17 @@ const { default: JSZip } = await import("jszip");
 const xml = await (await JSZip.loadAsync(buffer)).file("xl/workbook.xml").async("string");
 check("al abrirlo, Excel recalcula todo", /<calcPr[^>]*fullCalcOnLoad="1"/.test(xml), xml.match(/<calcPr[^>]*>/)?.[0]);
 check("resumen: recaudado", res.getCell(`H${filaNav}`).value.result === 5400);
+
+// Moneda por evento (v48): la hoja de un evento en dólares va en US$, y su
+// fila del Resumen también. Las de pesos no cambian.
+const enDolares = wb.worksheets.find((w) => /HALLOWEEN COLONIA 01-11/.test(w.name));
+check("evento en dólares: su hoja va en US$", enDolares.getCell("A2").numFmt === '"US$" #,##0' && enDolares.getCell("N1").numFmt === '"US$" #,##0', enDolares.getCell("A2").numFmt);
+let filaDolares = 0;
+res.eachRow((row, n) => {
+  if (row.getCell(2).value === "halloween-colonia-2") filaDolares = n;
+});
+check("…y su fila del Resumen también", res.getCell(`H${filaDolares}`).numFmt === '"US$" #,##0', res.getCell(`H${filaDolares}`).numFmt);
+check("las de pesos siguen en $", res.getCell(`H${filaNav}`).numFmt === '"$"#,##0', res.getCell(`H${filaNav}`).numFmt);
 
 console.log(fallas ? `\n${fallas} falla(s)` : "\nTodo bien");
 process.exit(fallas ? 1 : 0);

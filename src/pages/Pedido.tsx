@@ -8,6 +8,7 @@ import { formatEventDate, useAuth } from "@/contexts/AuthContext";
 import PedirIngresoPedidos from "@/components/PedirIngresoPedidos";
 import { EstadoPedido, fetchEstadoPedido } from "@/lib/pedidosWeb";
 import { urlDeEvento } from "@/lib/rutas";
+import { fmtSimple } from "@/lib/moneda";
 
 /**
  * "Mi pedido": el cliente ve en qué está su compra (v43).
@@ -42,7 +43,7 @@ const MENSAJES: Record<number, string> = {
 
 const Pedido = () => {
   const { codigo = "" } = useParams();
-  const { currentUser, loading } = useAuth();
+  const { currentUser, loading, events } = useAuth();
   const numero = codigo.toUpperCase();
   const [pedido, setPedido] = useState<EstadoPedido | null>(null);
   const [estado, setEstado] = useState<"cargando" | "listo" | "no-existe" | "error">("cargando");
@@ -137,7 +138,14 @@ const Pedido = () => {
                   <span>
                     {pedido.detalle || `${pedido.cantidad} entrada${pedido.cantidad === 1 ? "" : "s"}`}
                   </span>
-                  <span className="text-lg font-semibold tabular-nums">${pedido.total}</span>
+                  <span className="text-lg font-semibold tabular-nums">
+                    {/* La moneda es la del evento (v48); se busca por el slug para
+                        no tocar la función que devuelve el pedido (v44). */}
+                    {fmtSimple(
+                      pedido.total,
+                      events.find((e) => e.slug === pedido.slug)?.currency ?? "UYU"
+                    )}
+                  </span>
                 </div>
               </div>
 

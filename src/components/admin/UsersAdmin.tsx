@@ -31,6 +31,7 @@ import { formatPhoneDisplay } from "@/lib/validators";
 import { SIN_DATO, contarPorValor, foldText } from "@/lib/utils";
 import type { IrA } from "@/components/admin/BuscadorPanel";
 import { descargarCsv } from "@/lib/csv";
+import { Moneda, Totales, fmtPrecio, fmtTotales, sumarPorMoneda } from "@/lib/moneda";
 
 /**
  * Pestaña Usuarios: la comunidad entera, con filtros y ficha completa.
@@ -99,7 +100,8 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-const plata = (n: number) => `$${n.toLocaleString("es-UY", { maximumFractionDigits: 0 })}`;
+/** Algo de plata en alguna moneda. */
+const hayPlata = (t: Totales) => t.UYU > 0 || t.USD > 0;
 
 // ─── La ficha: el perfil más lo que se le cruza ─────────────────────────────
 
@@ -110,7 +112,8 @@ interface Ficha {
   /** Entregas cargadas a nombre de este perfil. */
   compras: TicketDelivery[];
   entradas: number;
-  gastado: number;
+  /** Por moneda (v48): cada compra vale en la moneda de su evento. */
+  gastado: Totales;
   ultimaCompra?: string;
   /** Solicitud de promo de cumpleaños más reciente, si pidió alguna. */
   cumple?: BirthdaySignup;
@@ -279,6 +282,10 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
     () => new Map(events.map((e) => [e.id, e.name])),
     [events]
   );
+  const monedaPorId = useMemo(
+    () => new Map<string, Moneda>(events.map((e) => [e.id, e.currency])),
+    [events]
+  );
 
   const fichas = useMemo<Ficha[]>(() => {
     const porUsuario = new Map<string, TicketDelivery[]>();
@@ -304,7 +311,7 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
         diasCumple: diasAlCumple(u.birthDate),
         compras,
         entradas: compras.reduce((a, d) => a + d.quantity, 0),
-        gastado: compras.reduce((a, d) => a + d.value, 0),
+        gastado: sumarPorMoneda(compras, (d) => d.value, (d) => monedaPorId.get(d.eventId) ?? "UYU"),
         ultimaCompra: compras
           .map((d) => d.createdAt)
           .sort()
@@ -378,7 +385,9 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
         case "viejos":
           return a.u.createdAt.localeCompare(b.u.createdAt);
         case "gastado":
-          return b.gastado - a.gastado;
+          // Pesos primero y dólares para desempatar: no hay tipo de cambio en
+          // el sitio, así que no se pueden poner en una sola escala.
+          return b.gastado.UYU - a.gastado.UYU || b.gastado.USD - a.gastado.USD;
         case "cumple":
           // Los que no tienen fecha válida van al final, no al principio.
           return (a.diasCumple ?? 9999) - (b.diasCumple ?? 9999);
@@ -449,7 +458,10 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
     () => ({
       staff: filtradas.filter((x) => x.u.role !== "user").length,
       compradores: filtradas.filter((x) => x.compras.length > 0).length,
-      recaudado: filtradas.reduce((a, x) => a + x.gastado, 0),
+      recaudado: filtradas.reduce<Totales>(
+        (a, x) => ({ UYU: a.UYU + x.gastado.UYU, USD: a.USD + x.gastado.USD }),
+        { UYU: 0, USD: 0 }
+      ),
     }),
     [filtradas]
   );
@@ -500,7 +512,7 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
       "odisea-usuarios",
       [
         "Nombre", "Apellido", "Email", "Cédula", "Teléfono", "Nacimiento", "Edad",
-        "País", "Departamento", "Ciudad", "Rol", "Alta", "Compras", "Entradas", "Gastado",
+        "País", "Departamento", "Ciudad", "Rol", "Alta", "Compras", "Entradas", "Gastado ($)", "Gastado (US$)",
         "Promo cumple", "Regalo entregado",
       ],
       filtradas.map((x) => [
@@ -518,7 +530,8 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
         x.u.createdAt.slice(0, 10),
         x.compras.length,
         x.entradas,
-        x.gastado,
+        x.gastado.UYU,
+        x.gastado.USD,
         x.cumple?.status ?? "",
         x.cumple?.giftGiven ? "Sí" : "",
       ])
@@ -728,9 +741,9 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
         <span>
           <b className="text-foreground">{resumen.staff}</b> con rol de staff
         </span>
-        {resumen.recaudado > 0 && (
+        {hayPlata(resumen.recaudado) && (
           <span>
-            <b className="text-foreground">{plata(resumen.recaudado)}</b> en compras
+            <b className="text-foreground">{fmtTotales(resumen.recaudado)}</b> en compras
           </span>
         )}
       </div>
@@ -768,7 +781,7 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
                       )}
                       {x.compras.length > 0 && (
                         <span className="text-foreground">
-                          {x.entradas} entradas · {plata(x.gastado)}
+                          {x.entradas} entradas · {fmtTotales(x.gastado)}
                         </span>
                       )}
                       {!x.u.phone && <span className="text-charrua">Sin teléfono</span>}
@@ -846,7 +859,7 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
                             <span className="text-xs text-muted-foreground">—</span>
                           ) : (
                             <div className="text-xs">
-                              <p className="font-semibold">{plata(x.gastado)}</p>
+                              <p className="font-semibold">{fmtTotales(x.gastado)}</p>
                               <p className="text-muted-foreground">
                                 {x.entradas} entradas · {x.compras.length} compras
                               </p>
@@ -931,6 +944,7 @@ const UsersAdmin = ({ irA }: { irA?: IrA | null }) => {
         <FichaModal
           x={viendo}
           eventoPorId={eventoPorId}
+          monedaPorId={monedaPorId}
           puedeEditar={puedeEditar}
           onRol={handleRol}
           onDelete={handleDelete}
@@ -962,6 +976,7 @@ const Td = ({
 const FichaModal = ({
   x,
   eventoPorId,
+  monedaPorId,
   puedeEditar,
   onRol,
   onDelete,
@@ -969,6 +984,7 @@ const FichaModal = ({
 }: {
   x: Ficha;
   eventoPorId: Map<string, string>;
+  monedaPorId: Map<string, Moneda>;
   puedeEditar: boolean;
   onRol: (u: User, r: UserRole) => void;
   onDelete: (u: User) => void;
@@ -1063,7 +1079,7 @@ const FichaModal = ({
           ) : (
             <>
               <p className="text-sm">
-                <b>{plata(x.gastado)}</b>{" "}
+                <b>{fmtTotales(x.gastado)}</b>{" "}
                 <span className="text-muted-foreground">
                   en {x.entradas} entradas · {x.compras.length} compras
                 </span>
@@ -1080,7 +1096,7 @@ const FichaModal = ({
                         {eventoPorId.get(d.eventId) ?? "Evento eliminado"}
                       </span>
                       <span className="text-muted-foreground">
-                        {d.quantity} × · {plata(d.value)} ·{" "}
+                        {d.quantity} × · {fmtPrecio(d.value, monedaPorId.get(d.eventId))} ·{" "}
                         {d.status === "sent" ? "enviada" : "pendiente"}
                       </span>
                     </li>

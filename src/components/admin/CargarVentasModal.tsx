@@ -26,10 +26,12 @@ import {
   mismaPersona,
   revisarDuplicados,
   revisarEvento,
+  revisarMoneda,
   revisarPrecios,
   type AvisoVenta,
 } from "@/lib/duplicadosVenta";
 import { buildConfirmacionVenta, whatsappUrl } from "@/lib/ventaMessage";
+import { fmtPrecio } from "@/lib/moneda";
 
 /**
  * Cargar ventas pegando los mensajes de WhatsApp (reemplaza a "Pegar mensaje").
@@ -215,7 +217,7 @@ function interpretar(
 
   // Lo que el cliente cambió a mano en el WhatsApp (ver cambiosDelPedido).
   const cambios = pedido
-    ? cambiosDelPedido(pedido, { ...data, total: data.total ?? data.itemsTotal })
+    ? cambiosDelPedido(pedido, { ...data, total: data.total ?? data.itemsTotal }, selectedEvent?.currency)
     : [];
 
   return {
@@ -401,10 +403,14 @@ const CargarVentasModal = ({
           excluirId: pedido?.id,
         },
         existing,
-        { nombreEvento: (id) => events.find((e) => e.id === id)?.name ?? "otro evento" }
+        {
+          nombreEvento: (id) => events.find((e) => e.id === id)?.name ?? "otro evento",
+          moneda: selectedEvent?.currency,
+        }
       ),
       ...revisarEvento(selectedEvent),
-      ...revisarPrecios(lines, selectedEvent?.tickets ?? []),
+      ...revisarMoneda(data.currency, selectedEvent?.currency),
+      ...revisarPrecios(lines, selectedEvent?.tickets ?? [], selectedEvent?.currency),
       ...actual.parsed.warnings.map((texto): AvisoVenta => ({ nivel: "aviso", texto })),
     ];
   }, [actual, estado?.guardadaId, estado?.comprobante?.hash, existing, events]);
@@ -780,7 +786,7 @@ const CargarVentasModal = ({
               </Fila>
               <Fila label="Total">
                 {actual.value !== null ? (
-                  <b>${actual.value.toLocaleString("es-UY")}</b>
+                  <b>{fmtPrecio(actual.value, actual.selectedEvent?.currency)}</b>
                 ) : null}
               </Fila>
               {data.birthdayPromo && (

@@ -21,6 +21,12 @@ import {
   whatsappUrl,
   mismaPersona,
   cambiosDelPedido,
+  revisarMoneda,
+  fmtPrecio,
+  fmtSimple,
+  fmtTotales,
+  sumarPorMoneda,
+  monedaDe,
 } from "./cargaVentas.bundle.mjs";
 
 let fallas = 0;
@@ -270,6 +276,85 @@ Comprobante: `).data;
   const url = whatsappUrl("+598 99 111 222", texto);
   check("link de WhatsApp sin + ni espacios", url?.startsWith("https://wa.me/59899111222?text="), url);
   check("sin teléfono → sin link", whatsappUrl(null, texto) === null);
+}
+
+// ─── Moneda por evento (v48) ───
+{
+  const base = {
+    fullName: "Juan Pérez",
+    email: "juan@mail.com",
+    phoneE164: "+59899111222",
+    eventName: "SUNSET PUNTA",
+    eventDate: "2 de enero",
+    items: [
+      { name: "General", qty: 2, price: 20, subtotal: 30 },
+      { name: "VIP", qty: 1, price: 50 },
+    ],
+    promos: [{ label: "2da al 50%", ticketName: "General", monto: 10 }],
+    total: 80,
+    account: null,
+    orderCode: "K7Q2XM",
+  };
+
+  // En pesos el mensaje no puede cambiar ni un carácter: hay mensajes ya
+  // armados en teléfonos de clientes y el staff los lee de memoria.
+  const pesos = buildPurchaseMessage(base);
+  check("pesos: sin moneda y con UYU dan el mismo mensaje", pesos === buildPurchaseMessage({ ...base, currency: "UYU" }));
+  check(
+    "pesos: las líneas quedan como siempre",
+    pesos.includes("- 2 entradas General ($30)\n") &&
+      pesos.includes("- 1 entrada VIP ($50)\n") &&
+      pesos.includes("2da al 50% en General (-$10)\n") &&
+      pesos.includes("TOTAL: $80\n") &&
+      !pesos.includes("US$"),
+    pesos
+  );
+  check("pesos: el lector dice UYU", parsePurchaseMessage(pesos).data.currency === "UYU");
+
+  const dolares = buildPurchaseMessage({ ...base, currency: "USD" });
+  check(
+    "dólares: cada monto va con US$",
+    dolares.includes("- 2 entradas General (US$ 30)\n") &&
+      dolares.includes("- 1 entrada VIP (US$ 50)\n") &&
+      dolares.includes("2da al 50% en General (-US$ 10)\n") &&
+      dolares.includes("TOTAL: US$ 80\n"),
+    dolares
+  );
+  const d = parsePurchaseMessage(dolares);
+  check("dólares: el panel lo lee entero", d.usable && d.data.total === 80 && d.data.quantity === 3, d.data);
+  check("…con la suma de las líneas", d.data.itemsTotal === 80, d.data.itemsTotal);
+  check("…la moneda", d.data.currency === "USD", d.data.currency);
+  check("…la promo desarmada", d.data.promoLines.length === 1 && d.data.promoLines[0].amount === 10, d.data.promoLines);
+  check("…y el número de pedido", d.data.orderCode === "K7Q2XM");
+  check("…sin avisos de que no cierra", !d.warnings.some((w) => /no coincide/.test(w)), d.warnings);
+
+  // Escrito a mano: las otras formas de decir dólares.
+  for (const forma of ["US$40", "U$S 40", "USD 40", "us$ 40"]) {
+    const m = dolares.replace("TOTAL: US$ 80", `TOTAL: ${forma}`);
+    const r = parsePurchaseMessage(m).data;
+    check(`total escrito "${forma}"`, r.total === 40 && r.currency === "USD", r);
+  }
+  check(
+    "si el total no cierra, el aviso lo dice en dólares",
+    parsePurchaseMessage(dolares.replace("TOTAL: US$ 80", "TOTAL: US$ 70")).warnings.some((w) => w.includes("US$ 70") && w.includes("US$ 80"))
+  );
+
+  check("fmtPrecio", fmtPrecio(800) === "$800" && fmtPrecio(20, "USD") === "US$ 20", [fmtPrecio(800), fmtPrecio(20, "USD")]);
+  check("fmtSimple no pone separador de miles", fmtSimple(1600) === "$1600" && fmtSimple(1600, "USD") === "US$ 1600");
+  check("monedaDe: lo desconocido es pesos", monedaDe("USD") === "USD" && monedaDe(undefined) === "UYU" && monedaDe("EUR") === "UYU");
+  const t = sumarPorMoneda(
+    [{ v: 1000, m: "UYU" }, { v: 40, m: "USD" }, { v: 500, m: "UYU" }],
+    (x) => x.v,
+    (x) => x.m
+  );
+  check("los totales no mezclan monedas", t.UYU === 1500 && t.USD === 40, t);
+  check("…y se escriben separados", /^\$1\.?500 · US\$ 40$/.test(fmtTotales(t)), fmtTotales(t));
+  check("una sola moneda: sin la otra", fmtTotales({ UYU: 0, USD: 40 }) === "US$ 40" && fmtTotales({ UYU: 0, USD: 0 }) === "$0");
+
+  check("mensaje en dólares para un evento en pesos: avisa", revisarMoneda("USD", "UYU").length === 1);
+  check("misma moneda o sin evento: no avisa", revisarMoneda("USD", "USD").length === 0 && revisarMoneda("UYU", null).length === 0);
+  const av = revisarPrecios([{ ticketTypeId: "g", name: "General", quantity: 1, unitPrice: 25 }], [{ ticketTypeId: "g", price: 20 }], "USD");
+  check("el aviso de precio distinto va en la moneda del evento", av.length === 1 && av[0].texto.includes("US$ 25") && av[0].texto.includes("US$ 20"), av);
 }
 
 console.log(fallas ? `\n${fallas} falla(s)` : "\nTodo bien");

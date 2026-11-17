@@ -22,8 +22,12 @@ export interface Pendientes {
   porEnviar: number | null;
   /** Solicitudes de cumpleaños sin revisar (v16). */
   cumplesARevisar: number | null;
-  /** Ventas confirmadas de los últimos 7 días. */
-  semana: { ventas: number; entradas: number; plata: number } | null;
+  /**
+   * Ventas confirmadas de los últimos 7 días. La plata va POR EVENTO y no en un
+   * solo número: la moneda es del evento (v48) y pesos con dólares no se suman.
+   * Quien la muestra la junta por moneda.
+   */
+  semana: { ventas: number; entradas: number; plataPorEvento: Record<string, number> } | null;
 }
 
 const VACIO: Pendientes = { porConfirmar: null, porEnviar: null, cumplesARevisar: null, semana: null };
@@ -40,7 +44,7 @@ async function ventasDeLaSemana(): Promise<Pendientes["semana"]> {
   const desde = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
   const { data, error } = await supabase
     .from("ticket_deliveries")
-    .select("quantity, value")
+    .select("quantity, value, event_id")
     .in("status", ["pending", "sent"])
     .gte("created_at", desde)
     .limit(5000);
@@ -48,7 +52,10 @@ async function ventasDeLaSemana(): Promise<Pendientes["semana"]> {
   return {
     ventas: data.length,
     entradas: data.reduce((a, d) => a + (d.quantity ?? 0), 0),
-    plata: data.reduce((a, d) => a + Number(d.value ?? 0), 0),
+    plataPorEvento: data.reduce<Record<string, number>>((a, d) => {
+      a[d.event_id] = (a[d.event_id] ?? 0) + Number(d.value ?? 0);
+      return a;
+    }, {}),
   };
 }
 

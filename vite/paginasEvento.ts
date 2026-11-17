@@ -3,6 +3,7 @@ import path from "path";
 import type { Plugin } from "vite";
 import { RUTA_EVENTO, SITIO } from "../src/lib/rutas";
 import { imagenRedimensionada } from "../src/lib/imagenes";
+import { fmtPrecio, monedaDe } from "../src/lib/moneda";
 
 /**
  * Páginas por evento (v25). Vive fuera de `vite.config.ts` por dos motivos:
@@ -24,6 +25,8 @@ export interface EventoPagina {
   image_url: string;
   status: string;
   instagram_url?: string;
+  /** v48: UYU o USD. Falta si la migración no se corrió: se toma como pesos. */
+  currency?: string;
   event_ticket_types?: Array<{ price: number; active: boolean }>;
 }
 
@@ -95,13 +98,14 @@ export function htmlDeEvento(base: string, e: EventoPagina): string {
 
   const activos = (e.event_ticket_types ?? []).filter((t) => t.active);
   const precio = activos.length ? Math.min(...activos.map((t) => t.price)) : null;
+  const moneda = monedaDe(e.currency);
 
   // La descripción propia del evento si la hay; si no, una armada con los
   // datos, que es mejor que repetir la de la home en todas las páginas.
   const descripcion = (
     e.description?.trim() ||
     `${e.name} el ${fechaCorta(e.date)} en ${e.location}.` +
-      (precio !== null ? ` Entradas desde $${precio}.` : "") +
+      (precio !== null ? ` Entradas desde ${fmtPrecio(precio, moneda)}.` : "") +
       " Comprá por WhatsApp."
   )
     .replace(/\s+/g, " ")
@@ -170,7 +174,7 @@ export function htmlDeEvento(base: string, e: EventoPagina): string {
           offers: {
             "@type": "Offer",
             price: precio,
-            priceCurrency: "UYU",
+            priceCurrency: moneda,
             // Ahora sí apunta a la página de ESTE evento y no a la home.
             url: urlEvento,
             availability:
@@ -211,7 +215,7 @@ export function htmlDeEvento(base: string, e: EventoPagina): string {
   const bloqueNoscript =
     `<noscript><h1>${texto(e.name)}</h1>` +
     `<p>${texto(fechaCorta(e.date))} · ${texto(e.location)}` +
-    (precio !== null ? ` · entradas desde $${precio}` : "") +
+    (precio !== null ? ` · entradas desde ${fmtPrecio(precio, moneda)}` : "") +
     `</p>` +
     (e.description ? `<p>${texto(e.description)}</p>` : "") +
     `<p><a href="${SITIO}/">Ver todas las fechas de ODÍSEA</a></p></noscript>`;
@@ -290,7 +294,7 @@ export function paginasDeEventos(url?: string, key?: string): Plugin {
 
       try {
         const res = await fetch(
-          `${url}/rest/v1/events?select=slug,name,date,location,description,image_url,status,instagram_url,event_ticket_types(price,active)&order=date.asc`,
+          `${url}/rest/v1/events?select=*,event_ticket_types(price,active)&order=date.asc`,
           {
             headers: { apikey: key, Authorization: `Bearer ${key}` },
             signal: AbortSignal.timeout(8000),

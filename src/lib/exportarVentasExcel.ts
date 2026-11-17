@@ -27,13 +27,16 @@ export interface EventoParaExcel {
   slug?: string;
   capacity?: number;
   paymentAccountId?: string;
+  /** Moneda del evento (v48): "UYU" o "USD". Sin dato, pesos. */
+  currency?: string;
 }
 
 // Los colores son los de la planilla original.
 const NARANJA = "FFFF9900";
 const VERDE_ENVIADA = "FFD9EAD3";
 const FUENTE = "Arial";
-const PLATA = '"$"#,##0';
+/** Formato de plata de la hoja de un evento: el de su moneda (v48). */
+const formatoPlata = (currency?: string) => (currency === "USD" ? '"US$" #,##0' : '"$"#,##0');
 
 /** Encabezados de la hoja de cada evento, tal cual la plantilla "Navidad". */
 const COLUMNAS = [
@@ -141,6 +144,7 @@ export async function armarExcelVentas(
     });
 
     const cuenta = cuentas.find((a) => a.id === evento.paymentAccountId)?.holderName ?? "";
+    const PLATA = formatoPlata(evento.currency);
     const filas = (porEvento.get(evento.id) ?? []).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
     filas.forEach((d, i) => {
@@ -257,7 +261,9 @@ export async function armarExcelVentas(
       { formula: `SUM(${ref}!A2:A${ultima})`, result: total },
     ];
     resumen.getRow(n).eachCell((c) => (c.font = { name: FUENTE, size: 10 }));
-    resumen.getCell(n, 8).numFmt = PLATA;
+    // Cada fila en la moneda de su evento: el Resumen no suma el recaudado
+    // entre eventos, así que pesos y dólares no se mezclan.
+    resumen.getCell(n, 8).numFmt = formatoPlata(evento.currency);
   });
 
   const buffer = (await wb.xlsx.writeBuffer()) as ArrayBuffer;

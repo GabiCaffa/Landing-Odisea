@@ -4,6 +4,7 @@ import { Loader2, Plus, Trash2, Upload } from "lucide-react";
 import ModalAdmin from "@/components/admin/ModalAdmin";
 import {
   EventCardPreview,
+  CampoMoneda,
   FormField,
   ImageEditorControls,
   PistaTab,
@@ -20,6 +21,7 @@ import {
 import { PaymentAccount } from "@/lib/paymentAccounts";
 import { EventTicket, TicketType, saveEventTickets } from "@/lib/ticketTypes";
 import { claveDeGrupo, etiquetaDeDia, rangoDeFechas } from "@/lib/grupos";
+import { Moneda, simbolo } from "@/lib/moneda";
 
 /**
  * Crear **o editar** una fiesta de varios días, tratándola como una sola cosa.
@@ -124,6 +126,8 @@ const FiestaFormModal = ({
   const [paymentAccountId, setPaymentAccountId] = useState(
     base?.paymentAccountId ?? accounts.find((a) => a.isDefault)?.id ?? ""
   );
+  // Una sola para todos los días (v48): es la misma fiesta y la misma cuenta.
+  const [moneda, setMoneda] = useState<Moneda>(base?.currency ?? "UYU");
   const [image, setImage] = useState(base?.image ?? "");
   /**
    * El encuadre, COMPARTIDO por los tres días.
@@ -285,6 +289,9 @@ const FiestaFormModal = ({
         instagramUrl: instagramUrl.trim(),
         groupKey,
         groupName: nombre.trim(),
+        // Sólo si es dólares o si cambió: en pesos, la fiesta se guarda aunque
+        // falte la migración v48.
+        ...(moneda !== "UYU" || (!!base && base.currency !== moneda) ? { currency: moneda } : {}),
       };
 
       // Día que ya existe → update. Día nuevo → create. Así la misma pantalla
@@ -429,6 +436,8 @@ const FiestaFormModal = ({
               </select>
             </FormField>
 
+            <CampoMoneda value={moneda} onChange={setMoneda} original={base?.currency} />
+
             <FormField label="Instagram (opcional)">
               <input
                 type="url"
@@ -551,7 +560,7 @@ const FiestaFormModal = ({
                 </select>
               </FormField>
 
-              <FormField label="Precio del abono">
+              <FormField label={`Precio del abono (${simbolo(moneda)})`}>
                 <input
                   type="number"
                   min={0}
@@ -651,6 +660,7 @@ const FiestaFormModal = ({
                     catalog={ticketTypes.filter((t) => !t.isAbono)}
                     value={d.tickets}
                     onChange={(tickets) => setDia(d.id, { tickets })}
+                    moneda={moneda}
                   />
                 </div>
               </div>
