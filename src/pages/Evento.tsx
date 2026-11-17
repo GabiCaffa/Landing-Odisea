@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { CalendarDays, Flame, Instagram, MapPin, Ticket } from "lucide-react";
+import { CalendarDays, Flame, Instagram, Lock, MapPin, Ticket } from "lucide-react";
+import ContadorReveal from "@/components/ContadorReveal";
+import { esProximamente, useAhora } from "@/lib/proximamente";
 import Header from "@/components/Header";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
@@ -85,6 +87,9 @@ const Evento = () => {
   // Para un grupo manda el nombre de la fiesta: es el que dice el anuncio por
   // el que llegó la persona. El del día va abajo del selector si es distinto.
   const titulo = (enGrupo && evento?.groupName) || evento?.name || "";
+  // v49: se refresca en el momento de revelar el evento y la página se desbloquea sola.
+  const ahora = useAhora([evento?.revealAt]);
+  const proximo = esProximamente(evento?.revealAt, ahora);
 
   useEffect(() => {
     if (!evento) return;
@@ -102,7 +107,8 @@ const Evento = () => {
   const eventoId = evento?.id;
   const esAparte = !!evento && esFiestaAparte(evento);
   useEffect(() => {
-    if (!evento) return;
+    // Un teaser todavía no se vende: no cuenta como "vio el producto".
+    if (!evento || esProximamente(evento.revealAt)) return;
     const minimo = evento.tickets.filter((t) => t.active).map((t) => t.price);
     rastrear(
       "ViewContent",
@@ -137,6 +143,45 @@ const Evento = () => {
           </Link>
         </main>
         </div>
+    );
+  }
+
+  // Teaser (v49): flyer borroso, contador y nada más. Sin entradas, promos ni compra.
+  if (proximo && evento.revealAt) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <Header />
+        <main className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-10 pt-[100px] text-center">
+          <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-2xl bg-papel">
+            {evento.image && (
+              <img
+                // Versión diminuta y desenfocada: el flyer real no se descarga.
+                src={imagenRedimensionada(evento.image, 48)}
+                alt=""
+                draggable={false}
+                className="pointer-events-none h-full w-full scale-110 select-none object-cover blur-md"
+              />
+            )}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/70 text-white ring-1 ring-white/30">
+                <Lock className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="rounded-full bg-black/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-white ring-1 ring-white/30">
+                Próximamente
+              </span>
+            </div>
+          </div>
+          <h1 className="title-sport max-w-md text-3xl font-black tracking-wide text-tinta">{titulo}</h1>
+          <p className="text-sm font-semibold uppercase tracking-wide text-celeste-deep">
+            {formatEventDate(evento.date)} · {evento.location}
+          </p>
+          <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.18em] text-tinta/70">Se revela en</p>
+          <ContadorReveal revealAt={evento.revealAt} />
+          <Link to="/#eventos" className="btn-techno mt-3 min-h-[44px] px-5 py-3 text-xs">
+            Ver todas las fechas
+          </Link>
+        </main>
+      </div>
     );
   }
 

@@ -2,6 +2,7 @@ import { useMemo, useState, lazy, Suspense } from "react";
 import { Cake, ChevronRight, Users, Zap, type LucideIcon } from "lucide-react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { useAuth, formatEventDate } from "@/contexts/AuthContext";
+import { esProximamente, useAhora } from "@/lib/proximamente";
 // Diferido, igual que en EventCard: arrastra PhoneInput -> libphonenumber.
 // Estaba importado directo acá, y por eso esos ~35 KB seguían entrando en la
 // carga inicial de la home aunque EventCard ya lo tuviera diferido.
@@ -92,6 +93,8 @@ const promos: Promo[] = [
 const PromosSection = () => {
   const { ref: headerRef, isVisible: headerVisible } = useScrollReveal({ threshold: 0.3 });
   const { events } = useAuth();
+  // Un evento sin revelar (v49) no se ofrece; se suma solo cuando llega su hora.
+  const ahora = useAhora(events.map((e) => e.revealAt));
 
   // Eventos comprables vía "Precio Directo": los activos (no agotados/finalizados),
   // tomados de la base y ordenados por fecha. Reemplaza la lista estática vieja.
@@ -99,7 +102,12 @@ const PromosSection = () => {
     () =>
       events
         // Sin tipos de entrada a la venta no hay nada que comprar: no se ofrece.
-        .filter((e) => e.status === "activo" && e.tickets.some((t) => t.active))
+        .filter(
+          (e) =>
+            e.status === "activo" &&
+            e.tickets.some((t) => t.active) &&
+            !esProximamente(e.revealAt, ahora)
+        )
         .slice()
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((e) => ({
@@ -111,7 +119,7 @@ const PromosSection = () => {
           promos: e.promos,
           currency: e.currency,
         })),
-    [events]
+    [events, ahora]
   );
 
   // Estado del modal compartido entre la card 03 y el modal real

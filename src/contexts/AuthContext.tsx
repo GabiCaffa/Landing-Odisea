@@ -146,6 +146,12 @@ export interface AdminEvent {
    */
   badge?: string;
   /**
+   * v49: cuándo se revela el evento y se abre la venta (ISO). Mientras sea futuro,
+   * la web lo muestra como teaser: flyer borroso, contador y sin compra. Vacío =
+   * evento normal.
+   */
+  revealAt?: string;
+  /**
    * v48: moneda en la que se vende el evento ENTERO (entradas, promos, total y
    * ventas). Nunca falta: sin la migración corrida es pesos.
    */
@@ -266,6 +272,7 @@ function eventFromDb(row: any): AdminEvent {
     groupName: row.group_name ?? undefined,
     homeOrder: row.home_order ?? undefined,
     badge: row.badge ?? undefined,
+    revealAt: row.reveal_at ?? undefined,
     currency: monedaDe(row.currency),
     createdAt: row.created_at,
   };
@@ -297,6 +304,8 @@ function eventToDb(e: Partial<NewEventInput>) {
   // Vacío = sin etiqueta. El formulario sólo manda este campo si cambió (ver
   // `handleSubmit`), así guardar un evento antes de correr v34 sigue andando.
   if (e.badge !== undefined) out.badge = e.badge.trim() || null;
+  // Sólo viaja si el formulario la mandó (v49): vacío = sin teaser (se guarda null).
+  if (e.revealAt !== undefined) out.reveal_at = e.revealAt || null;
   // Igual que la etiqueta: sólo viaja si el formulario la mandó (v48).
   if (e.currency !== undefined) out.currency = e.currency;
   return out;

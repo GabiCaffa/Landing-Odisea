@@ -27,6 +27,8 @@ export interface EventoPagina {
   instagram_url?: string;
   /** v48: UYU o USD. Falta si la migración no se corrió: se toma como pesos. */
   currency?: string;
+  /** v49: si es futuro, el evento todavía es un teaser y no se hornea su página. */
+  reveal_at?: string | null;
   event_ticket_types?: Array<{ price: number; active: boolean }>;
 }
 
@@ -311,7 +313,10 @@ export function paginasDeEventos(url?: string, key?: string): Plugin {
         // terminó, y una página que dice "esa fecha ya pasó" es mejor que un
         // 404 — sobre todo si quedó pegado en un anuncio o en un chat. Lo que
         // sí se deja afuera del sitemap es lo viejo (más abajo).
-        const conSlug = filas.filter((e) => e.slug);
+        // Un teaser (v49) no se publica: su página y su preview mostrarían el flyer real.
+        const conSlug = filas.filter(
+          (e) => e.slug && !(e.reveal_at && Date.parse(e.reveal_at) > Date.now())
+        );
         if (conSlug.length === 0) {
           console.warn("[eventos] ningún evento tiene slug: ¿falta correr v25_event_slug.sql?");
           return;

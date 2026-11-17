@@ -1636,6 +1636,7 @@ const EventFormModal = ({
     groupKey: initial?.groupKey ?? "",
     groupName: initial?.groupName ?? "",
     badge: initial?.badge ?? "",
+    revealAt: isoToLocalInput(initial?.revealAt),
   });
   // Aparte de `form`: sólo se manda si es dólares o si cambió (ver handleSubmit).
   const [moneda, setMoneda] = useState<Moneda>(initial?.currency ?? "UYU");
@@ -1757,7 +1758,7 @@ const EventFormModal = ({
     try {
       // La etiqueta (v34) sólo viaja si hay algo que guardar o borrar. Si no, se
       // omite: así un evento se puede guardar aunque la migración no esté corrida.
-      const { badge, ...sinEtiqueta } = form;
+      const { badge, revealAt, ...sinEtiqueta } = form;
       const hayEtiqueta = (badge ?? "").trim() !== "" || !!initial?.badge;
       // La moneda (v48), igual: viaja si es dólares o si se le cambió a un evento
       // que ya existe. Un evento en pesos se guarda aunque falte la migración.
@@ -1765,6 +1766,11 @@ const EventFormModal = ({
       await onSave({
         ...(hayEtiqueta ? { ...sinEtiqueta, badge: badge ?? "" } : sinEtiqueta),
         ...(mandarMoneda ? { currency: moneda } : {}),
+        // El teaser (v49) sólo viaja si hay fecha o si había una que se borra: así
+        // un evento normal se guarda aunque la migración no esté corrida.
+        ...(revealAt || initial?.revealAt
+          ? { revealAt: revealAt ? new Date(revealAt).toISOString() : "" }
+          : {}),
         // datetime-local (hora local) → ISO UTC; vacío → "" (se guarda null)
         saleEndsAt: form.saleEndsAt ? new Date(form.saleEndsAt).toISOString() : "",
       }, promosSel);
@@ -1961,6 +1967,21 @@ const EventFormModal = ({
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Pasada esta fecha y hora, el card se muestra “Agotado” y se deshabilita la compra automáticamente.
+              </p>
+            </FormField>
+
+            <FormField label="Revelar el evento el… (opcional)">
+              <input
+                type="datetime-local"
+                value={form.revealAt ?? ""}
+                onChange={(e) => setForm({ ...form, revealAt: e.target.value })}
+                className="input-techno"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Para anunciar una fecha antes de venderla: hasta ese momento el evento se ve
+                <strong> borroso, con candado y un contador</strong>, sin link ni compra. Llegada
+                la hora se desbloquea solo, con el flyer y la venta abierta. Dejalo vacío para un
+                evento normal. El nombre, la fecha y el lugar sí se ven; la descripción no.
               </p>
             </FormField>
 

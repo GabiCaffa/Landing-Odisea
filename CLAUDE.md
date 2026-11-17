@@ -102,7 +102,7 @@ bajo), se configura **Resend** como SMTP propio (dominio `odiseaoficial.com`, re
 `v29_ticket_stock.sql` → `v30_operador_banners_etiquetas.sql` →
 `v32_orden_eventos_home.sql` → `v33_galeria_eventos_anteriores.sql` → `v34_evento_etiqueta.sql` → `v35_votacion_disfraces.sql` → `v36_votacion_slug.sql` → `v37_galeria_albumes.sql` → `v38_album_link_externo.sql` →
 `v39_comprobantes_ventas.sql` → `v40_ventas_por_estado.sql` → `v41_pedidos_sin_vencimiento.sql` →
-`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql` → `v46_cumples_con_evento.sql` → `v47_historia_odisea.sql` → `v48_moneda_evento.sql`.
+`v42_votacion_ganadores.sql` → `v43_mi_pedido_y_cupo_lote.sql` → `v44_mis_pedidos.sql` → `v45_varios_comprobantes.sql` → `v46_cumples_con_evento.sql` → `v47_historia_odisea.sql` → `v48_moneda_evento.sql` → `v49_evento_proximamente.sql`.
 > **v39 y v40 nacieron como v35 y v36** en otra rama, al mismo tiempo que las votaciones
 > de Franco usaban esos números. Se renumeraron antes de correrlas: si alguna vez aparece
 > un `v35_comprobantes_ventas.sql` o `v36_ventas_por_estado.sql`, es la versión vieja.
@@ -2001,6 +2001,39 @@ pruebas y Supabase simulado (celular y escritorio: pegar varios, comprobante por
 Ctrl+V, guardar, responder, cierre con pendientes). **No probado contra la base real**
 ni con el panel logueado. Pendiente para después: cuánto hace que espera cada venta en
 "Por enviar" y exportar a `.xlsx`.
+
+### Eventos "próximamente": flyer borroso + contador (v49)
+
+Un evento con **`events.reveal_at`** en el futuro se muestra como teaser hasta esa hora: en la
+home, una tarjeta con el flyer borroso, un candado y "Próximamente", el nombre, la fecha y el
+lugar a la vista, y un contador ("Se revela en: días / hs / min / seg"). Sin link, sin compra.
+Al llegar a cero **se desbloquea sola** (flyer, descripción y venta), sin recargar.
+
+- **Se carga en el formulario del evento**: "Revelar el evento el…" (fecha y hora). Vacío =
+  evento normal. El evento tiene que estar `activo` y con su cuenta de cobro como siempre; las
+  entradas se pueden cargar antes o después. Sin v49 corrida, un evento normal se guarda igual
+  (el campo sólo viaja si hay fecha o se borra una).
+- **`src/lib/proximamente.ts`**: `esProximamente(revealAt, ahora)` y `useAhora(fechas)`, que se
+  refresca **justo en el momento del desbloqueo** con un `setTimeout` al próximo `revealAt` (no
+  hay un reloj latiendo). `ContadorReveal` es el reloj visible (late cada segundo).
+- **Qué NO se muestra de un teaser**: descripción (suele traer el line-up), etiqueta destacada,
+  promos, stock, Instagram, botón de compra, ni se cuenta como "agotado" aunque aún no tenga
+  entradas (`eventoAgotado` lo excluye). Tampoco entra al selector de "Compra directa" ni a las
+  promos activas/destacadas de la home (`ofertasDe`).
+- **Borroso de verdad**: la tarjeta pide el flyer a 48 px de ancho (`imagenRedimensionada`) y lo
+  desenfoca por CSS, así el navegador **no descarga el flyer real** y no se puede "des-borronear".
+  Límite: la URL del flyer sigue viajando en los datos del evento (API pública), así que alguien
+  técnico puede encontrarla. Es un teaser, no un secreto.
+- **Páginas horneadas**: `vite/paginasEvento.ts` y el JSON-LD de la home (`bakeEventos`) **saltean**
+  los teasers; si no, el preview de WhatsApp y Google mostrarían el flyer real. Consecuencia: tras
+  el desbloqueo hay que tocar **"Actualizar páginas"** (Deploy Hook) para que el preview de
+  WhatsApp aparezca; la página de React funciona al instante.
+- **`/evento/<slug>` de un teaser** muestra la versión teaser (flyer borroso, contador, "Ver todas
+  las fechas") y no dispara `ViewContent` al píxel.
+- **Fiestas de varios días**: la tarjeta es teaser sólo si TODOS los días siguen sin revelar; el día
+  destino prefiere uno ya revelado. No se cargan desde `FiestaFormModal` (se edita cada día).
+- Verificado en navegador con datos de prueba: tarjeta, desbloqueo automático a la hora (cierre a
+  25 s) y la página directa. **No se vio el panel con sesión real.**
 
 ### Ganadores destacados al cerrar la votación (v42)
 
