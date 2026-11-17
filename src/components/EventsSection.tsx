@@ -8,6 +8,7 @@ import { RUTA_APARTE, esFiestaAparte } from "@/lib/fiestasAparte";
 import { useStockHoja } from "@/lib/stockHoja";
 import { useTheme } from "@/contexts/ThemeContext";
 import SpookySpiders from "./SpookySpiders";
+import { useAhora } from "@/lib/proximamente";
 
 /**
  * Las próximas fechas, como un carrusel con la elegida grande al centro y las
@@ -24,6 +25,8 @@ const EventsSection = () => {
   const { theme } = useTheme();
   // Las entradas que quedan según las ventas anotadas en el Google Sheets.
   const stockHoja = useStockHoja();
+  // Se refresca al llegar la hora de revelar un evento: la tarjeta se desbloquea sola.
+  const ahora = useAhora(events.map((e) => e.revealAt));
   const { ref: headerRef, isVisible: headerVisible } = useScrollReveal({ threshold: 0.3 });
   const { ref: gridContainerRef, isVisible: gridVisible } = useScrollReveal({ threshold: 0.1 });
 
@@ -48,7 +51,9 @@ const EventsSection = () => {
     () =>
       // El orden lo elige el staff desde el panel (v32); sin elegir, por fecha.
       agruparEventos(events.filter((e) => e.status !== "finalizado")).sort(compararParaHome),
-    [events]
+    // `ahora` fuerza el recálculo en el momento del desbloqueo (v49).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [events, ahora]
   );
 
   /** A dónde lleva la tarjeta. Una fiesta aparte va a su página sin tema. */
@@ -122,6 +127,7 @@ const EventsSection = () => {
                     promos={entrada.dias.flatMap((d) => d.promos)}
                     dias={entrada.dias.length}
                     etiqueta={entrada.destino.badge}
+                    revealAt={entrada.revealAt}
                     vertical
                   />
                 </div>

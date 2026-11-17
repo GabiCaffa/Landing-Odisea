@@ -156,6 +156,7 @@ interface EventoDb {
   date: string;
   location: string;
   description: string;
+  reveal_at?: string | null;
   image_url: string;
   status: string;
   /** v48: UYU o USD. Falta si la migración no se corrió: se toma como pesos. */
@@ -215,8 +216,12 @@ function bakeEventos(url?: string, key?: string): Plugin {
           // "finalizado" en los datos estructurados es peor que no tener nada:
           // Google muestra una fecha vieja como si fuera la próxima.
           const hoy = new Date().toISOString().slice(0, 10);
+          // Los teasers (v49, `reveal_at` futuro) tampoco: llevarían el flyer real.
           const vigentes = filas.filter(
-            (e) => e.date >= hoy && e.status !== "finalizado"
+            (e) =>
+              e.date >= hoy &&
+              e.status !== "finalizado" &&
+              !(e.reveal_at && Date.parse(e.reveal_at) > Date.now())
           );
           if (vigentes.length === 0) {
             console.log("[seo] sin eventos vigentes: no se inyecta nada");

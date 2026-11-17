@@ -1,3 +1,4 @@
+import { esProximamente } from "@/lib/proximamente";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth, AdminEvent } from "@/contexts/AuthContext";
 import { EventPromo, HORAS_CONTADOR, promoVigente } from "@/lib/ticketPromos";
@@ -50,6 +51,8 @@ export const ofertasDe = (events: AdminEvent[], ahora: number): Oferta[] => {
       event.status !== "activo" ||
       (event.saleEndsAt ? ahora >= Date.parse(event.saleEndsAt) : false);
     if (ventaCerrada) continue;
+    // Un evento sin revelar (v49) no vende todavía: sus promos no se anuncian.
+    if (esProximamente(event.revealAt, ahora)) continue;
 
     const activos = event.tickets.filter((t) => t.active);
     const porPromo = new Map<string, EventPromo[]>();

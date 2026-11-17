@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Flame, Instagram } from "lucide-react";
+import { ArrowRight, Flame, Instagram, Lock } from "lucide-react";
+import ContadorReveal from "@/components/ContadorReveal";
+import { esProximamente } from "@/lib/proximamente";
 import { playHover, playThud } from "@/lib/spookySound";
 import { imagenRedimensionada, srcSetRedimensionado, PROPORCION_EVENTO } from "@/lib/imagenes";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
@@ -67,6 +69,12 @@ interface EventCardProps {
    * tarjeta es la fila compacta de siempre (miniatura + datos).
    */
   vertical?: boolean;
+  /**
+   * v49: cuándo se revela. Mientras sea futuro la tarjeta es un teaser: flyer
+   * borroso con candado, sin link ni compra, y un contador. Al llegar la hora,
+   * quien la renderiza deja de pasarlo y la tarjeta queda normal.
+   */
+  revealAt?: string;
 }
 
 const EventCard = ({
@@ -87,28 +95,32 @@ const EventCard = ({
   dias = 1,
   vertical = false,
   etiqueta,
+  revealAt,
 }: EventCardProps) => {
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
-  const destino = destinoPropio ?? (slug ? urlDeEvento(slug) : null);
+  // Teaser (v49): sin link, sin compra, sin nada que el flyer o la descripción regalen.
+  const proximo = esProximamente(revealAt);
+  const destino = proximo ? null : (destinoPropio ?? (slug ? urlDeEvento(slug) : null));
   const cartel = useCartelEventos();
 
   // Agotado si el admin lo marcó así, si ya pasó la fecha/hora de cierre de
   // venta, o si el evento no tiene ningún tipo de entrada a la venta (o todos
   // son lotes con cupo ya vendidos enteros, v43).
   const isSoldOut =
-    soldOut ||
+    !proximo &&
+    (soldOut ||
     tickets.length === 0 ||
     tickets.every(loteAgotado) ||
-    (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false);
+    (saleEndsAt ? new Date() >= new Date(saleEndsAt) : false));
 
-  const stock = isSoldOut
+  const stock = isSoldOut || proximo
     ? undefined
     : stockAMostrar(stockHoja, stockDelLote(tickets), stockEsAutomatico(tickets));
 
   // Los carteles de promo (2x1, etc.), sin repetir y de a tres como mucho. En
   // escritorio van sobre el flyer; en celular, donde el flyer es una miniatura,
   // pasan a una pastilla bajo el título.
-  const etiquetas = isSoldOut
+  const etiquetas = isSoldOut || proximo
     ? []
     : [...new Set(promos.filter((p) => promoVigente(p)).map((p) => p.name))].slice(0, 3);
 
@@ -142,13 +154,17 @@ const EventCard = ({
         <img
           // El original pesa hasta 533 KB para mostrarse a 318 px: se pide
           // redimensionado a Supabase, que además devuelve WebP.
-          src={imagenRedimensionada(image, 640)}
-          srcSet={srcSetRedimensionado(image) || undefined}
+          // Teaser: se pide una versión diminuta (48 px) y se desenfoca. El
+          // desenfoque es CSS, pero así el navegador ni siquiera baja el flyer
+          // real y lo que se ve no se puede "des-borronear".
+          src={imagenRedimensionada(image, proximo ? 48 : 640)}
+          srcSet={proximo ? undefined : srcSetRedimensionado(image) || undefined}
           // En celular el flyer es una miniatura de 104 px; desde `sm:` la
           // tarjeta mide 320. Con esto el navegador baja la variante que
           // corresponde en vez de la más grande.
           sizes={vertical ? "(min-width: 640px) 300px, 70vw" : "(min-width: 640px) 320px, 104px"}
-          alt={name}
+          alt={proximo ? "" : name}
+          draggable={proximo ? false : undefined}
           // width/height NO fijan el tamaño —de eso se encarga el CSS— sino
           // la proporción, para que el navegador reserve el espacio antes de
           // que llegue la foto. Sin esto la tarjeta salta al cargar.
@@ -162,6 +178,8 @@ const EventCard = ({
           // el resto vale desde `sm:`. Va por variables CSS porque un `style`
           // inline no puede depender del tamaño de pantalla.
           className={`h-full w-full object-cover [object-position:var(--pos)] ${
+            proximo ? "pointer-events-none scale-110 select-none blur-md " : ""
+          }${
             vertical
               ? ""
               : "sm:[object-fit:var(--fit)] sm:[transform-origin:var(--pos)] sm:[transform:scale(var(--scale))]"
@@ -203,7 +221,7 @@ const EventCard = ({
             fecha ni con las promos (arriba a la derecha) y el degradé del flyer
             le da fondo. En negro y no en naranja para distinguirla de una promo:
             no descuenta nada, sólo avisa. Con el evento agotado no va. */}
-        {etiqueta && !isSoldOut && (
+        {etiqueta && !isSoldOut && !proximo && (
           <div
             className={`evento-promo absolute bottom-3 left-3 z-[2] max-w-[calc(100%-1.5rem)] rounded-full bg-black/80 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/25 backdrop-blur ${
               vertical ? "block" : "hidden sm:block"
@@ -223,6 +241,17 @@ const EventCard = ({
             {nombre}
           </div>
         ))}
+
+        {proximo && (
+          <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-2 bg-black/40">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/70 text-white ring-1 ring-white/30">
+              <Lock className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="rounded-full bg-black/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-white ring-1 ring-white/30">
+              Próximamente
+            </span>
+          </div>
+        )}
 
         {isSoldOut && (
           <div // --velo y no --tinta: el velo tiene que oscurecer la foto SIEMPRE, y
@@ -280,7 +309,8 @@ const EventCard = ({
             vertical ? "line-clamp-2" : "hidden sm:line-clamp-3 sm:block"
           }`}
         >
-          {description}
+          {/* En un teaser no se adelanta la descripción (suele traer el line-up). */}
+          {proximo ? "" : description}
         </p>
 
         {/* Promos (2x1, etc.): pastilla bajo el título en celular. */}
@@ -329,6 +359,14 @@ const EventCard = ({
 
         </div>
 
+        {proximo && revealAt ? (
+          <div className={`mt-auto ${vertical ? "" : "col-span-2 sm:col-auto"}`}>
+            <p className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-tinta/70">
+              Se revela en
+            </p>
+            <ContadorReveal revealAt={revealAt} />
+          </div>
+        ) : (
         <div className={`mt-auto flex items-stretch gap-2 ${vertical ? "" : "col-span-2 sm:col-auto"}`}>
           <span
             className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-bold uppercase tracking-wide transition-all ${
@@ -359,6 +397,7 @@ const EventCard = ({
             </a>
           )}
         </div>
+        )}
       </div>
     </article>
   );

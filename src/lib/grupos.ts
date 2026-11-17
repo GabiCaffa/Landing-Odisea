@@ -1,4 +1,5 @@
 import { AdminEvent, formatEventDate } from "@/contexts/AuthContext";
+import { esProximamente } from "@/lib/proximamente";
 
 /**
  * Fiestas de varios días (v26).
@@ -76,9 +77,11 @@ export const diasDelGrupo = (events: AdminEvent[], evento: AdminEvent): AdminEve
 /** Un evento está agotado si lo marcaron, si no le quedan tipos a la venta o
  *  si ya venció su cierre. Mismo criterio que la tarjeta y que la página. */
 export const eventoAgotado = (e: AdminEvent): boolean =>
-  e.status === "agotado" ||
+  // Un teaser (v49) todavía no tiene entradas a la venta, y no por eso está agotado.
+  !esProximamente(e.revealAt) &&
+  (e.status === "agotado" ||
   e.tickets.filter((t) => t.active).length === 0 ||
-  (e.saleEndsAt ? new Date() >= new Date(e.saleEndsAt) : false);
+  (e.saleEndsAt ? new Date() >= new Date(e.saleEndsAt) : false));
 
 /**
  * Lo que el carrusel dibuja: un evento suelto o un grupo colapsado en una
@@ -107,6 +110,11 @@ export interface EntradaCarrusel {
    * `undefined` si ninguno tiene número. Ver `compararParaHome`.
    */
   orden?: number;
+  /**
+   * v49: si TODOS los días siguen sin revelarse, cuándo se revela el primero. La
+   * tarjeta se muestra como teaser (flyer borroso + contador). Vacío = normal.
+   */
+  revealAt?: string;
 }
 
 const unicos = (valores: string[]) => [...new Set(valores.filter(Boolean))];
@@ -161,6 +169,7 @@ export const agruparEventos = (events: AdminEvent[]): EntradaCarrusel[] => {
         dias: [e],
         agotado: eventoAgotado(e),
         orden: e.homeOrder,
+        revealAt: esProximamente(e.revealAt) ? e.revealAt : undefined,
       });
       continue;
     }
@@ -177,7 +186,11 @@ export const agruparEventos = (events: AdminEvent[]): EntradaCarrusel[] => {
       // Se entra por el primer día que todavía venda: mandar a alguien a un
       // día agotado cuando los otros dos tienen entradas es perder la venta.
       // Si están todos agotados da igual, va el primero.
-      destino: dias.find((d) => !eventoAgotado(d)) ?? dias[0],
+      // El primer día que se pueda comprar ya: ni agotado ni todavía sin revelar.
+      destino:
+        dias.find((d) => !eventoAgotado(d) && !esProximamente(d.revealAt)) ??
+        dias.find((d) => !eventoAgotado(d)) ??
+        dias[0],
       // El nombre del grupo está repetido en sus días (v26). Gana el del día
       // más temprano; si ninguno lo tiene, el nombre de ese día.
       nombre: dias.find((d) => d.groupName)?.groupName ?? dias[0].name,
@@ -188,6 +201,9 @@ export const agruparEventos = (events: AdminEvent[]): EntradaCarrusel[] => {
       dias,
       agotado: dias.every(eventoAgotado),
       orden: menorOrden(dias),
+      revealAt: dias.every((d) => esProximamente(d.revealAt))
+        ? dias.map((d) => d.revealAt as string).sort()[0]
+        : undefined,
     });
   }
 
