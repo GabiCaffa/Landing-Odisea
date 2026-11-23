@@ -1,7 +1,13 @@
 import { supabase } from "@/lib/supabase";
 import type { AdminEvent } from "@/contexts/AuthContext";
 import type { Moneda } from "@/lib/moneda";
-import { EventTicket, TicketType, saveEventTickets, sortEventTickets } from "@/lib/ticketTypes";
+import {
+  EventTicket,
+  TicketType,
+  fetchTicketTypes,
+  saveEventTickets,
+  sortEventTickets,
+} from "@/lib/ticketTypes";
 
 /**
  * Cambio de tanda (lote) de un evento: se saca de la venta el lote actual y se
@@ -88,9 +94,13 @@ export async function aplicarCambioTanda(args: {
   }
 
   // 1) Catálogo: se reutiliza el tipo si ya existe con ese nombre; si no, se crea.
+  // Se lee de nuevo acá: el que tiene la pantalla puede estar viejo (otro cambio de
+  // tanda, o un tipo creado en otra pestaña) y crear un nombre repetido fallaría.
+  const fresco = await fetchTicketTypes();
+  const vigente = fresco.length ? fresco : catalogo;
   const idNuevo = new Map<string, string>(); // ticketTypeId viejo → id del tipo nuevo
-  const tipoDe = new Map<string, TicketType>(catalogo.map((t) => [normaliza(t.name), t]));
-  let ordenCatalogo = Math.max(0, ...catalogo.map((t) => t.sortOrder)) + 1;
+  const tipoDe = new Map<string, TicketType>(vigente.map((t) => [normaliza(t.name), t]));
+  let ordenCatalogo = Math.max(0, ...vigente.map((t) => t.sortOrder)) + 1;
   for (const f of incluidas) {
     const existente = tipoDe.get(normaliza(f.nombreNuevo));
     if (existente) {

@@ -110,10 +110,27 @@ export const TicketsEditor = ({
 
   // Se ofrecen los tipos activos; los inactivos sólo si el evento ya los vendía
   // (si no, al editar un evento viejo se le borraría una entrada sin avisar).
-  const options = useMemo(
-    () => catalog.filter((t) => t.active || selected.has(t.id)),
-    [catalog, selected]
-  );
+  //
+  // **Y toda entrada del evento se muestra aunque falte en el catálogo cargado.**
+  // El catálogo se lee al abrir la pestaña; si después se creó un tipo (el cambio
+  // de tanda crea "2do lote"), la fila quedaba invisible y su precio no se podía
+  // editar, aunque el evento la siguiera vendiendo.
+  const options = useMemo(() => {
+    const delCatalogo = catalog.filter((t) => t.active || selected.has(t.id));
+    const conocidos = new Set(catalog.map((t) => t.id));
+    const faltantes: TicketType[] = value
+      .filter((t) => !conocidos.has(t.ticketTypeId))
+      .map((t) => ({
+        id: t.ticketTypeId,
+        name: t.name,
+        description: t.description,
+        sortOrder: t.sortOrder,
+        active: true,
+        isAbono: !!t.isAbono,
+        createdAt: "",
+      }));
+    return [...delCatalogo, ...faltantes];
+  }, [catalog, selected, value]);
 
   const toggle = (type: TicketType) => {
     if (selected.has(type.id)) {

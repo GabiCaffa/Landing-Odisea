@@ -899,7 +899,12 @@ const EventsAdmin = ({ irA }: { irA?: IrA | null }) => {
           evento={cambiandoTanda}
           catalogo={ticketTypes}
           onClose={() => setCambiandoTanda(null)}
-          onHecho={refreshEvents}
+          // El cambio puede crear tipos nuevos en el catálogo ("2do lote"): sin
+          // recargarlo, "Editar" no mostraba esa fila y no se podía tocar su precio.
+          onHecho={async () => {
+            await refreshEvents();
+            setTicketTypes(await fetchTicketTypes());
+          }}
         />
       )}
 

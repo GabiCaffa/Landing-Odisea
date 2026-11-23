@@ -2026,6 +2026,13 @@ precio. Sirve para cualquier evento, actual o futuro, y **no necesita migración
   daño si algo falla a medias, y el error dice qué quedó hecho. Lógica en `src/lib/cambioTanda.ts`, UI en
   `src/components/admin/CambioTandaModal.tsx`.
 - Para fiestas de varios días hay que hacerlo en cada día (son eventos separados).
+- **Bug corregido: después del cambio no se podía editar el precio del lote nuevo.** La pestaña
+  Eventos lee el catálogo de tipos UNA vez al abrirse; el cambio crea "2do lote" después, y
+  `TicketsEditor` sólo dibujaba filas de tipos del catálogo cargado, así que la del lote nuevo
+  quedaba invisible en "Editar". Ahora (1) el modal recarga el catálogo al terminar, (2)
+  `TicketsEditor` muestra **toda entrada del evento aunque falte en el catálogo**, y (3)
+  `aplicarCambioTanda` lee el catálogo fresco antes de crear tipos (si no, un nombre repetido
+  fallaba por el índice único).
 - Probado: los helpers de nombre y precio y el modal en navegador (con un evento de prueba). **No se
   probó el guardado contra una base real.**
 
