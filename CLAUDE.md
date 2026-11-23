@@ -2002,39 +2002,29 @@ Ctrl+V, guardar, responder, cierre con pendientes). **No probado contra la base 
 ni con el panel logueado. Pendiente para después: cuánto hace que espera cada venta en
 "Por enviar" y exportar a `.xlsx`.
 
-### Cambio de tanda (lote) desde el panel
+### Lotes (tandas) adentro de cada entrada
 
-Botón **"Cambiar tanda"** en cada evento de Eventos (en la tarjeta de celular y como ícono de
-flecha ascendente en la tabla). Saca de la venta el lote actual y abre el siguiente con otro
-precio. Sirve para cualquier evento, actual o futuro, y **no necesita migración**.
+En el formulario del evento, la tarjeta de cada entrada tildada ("General") tiene un botón
+**"+ Agregar lote"**: suma "General – 2do lote", "3er lote"…, cada uno con su precio, su "A la
+venta" y su cupo, **adentro de la tarjeta de su entrada**. No necesita migración.
 
-- **Un lote es un tipo de entrada del catálogo** ("General – 1er lote"); no hay un concepto de
-  lote aparte. El cambio **crea (o reutiliza por nombre) el tipo del lote nuevo** y deja el viejo en
-  el evento con `active = false`: **no se borra**, así las ventas ya hechas (que apuntan al tipo,
-  v18) conservan su historia y Entregas muestra en qué tanda compró cada uno.
-- **El modal propone todo** y se puede pisar: +20% por defecto (editable, recalcula los precios),
-  redondeo a los 10 pesos (al dólar en USD), nombre "1er lote" → "2do lote" (`nombreDeLaSiguienteTanda`:
-  entiende "1er lote", "Lote 1"; sin número agrega " – 2do lote"), cupo opcional del lote nuevo
-  (v43) y qué entradas pasan (se puede dejar una afuera). Pide confirmación con el resumen
-  "antes → después" porque el cambio se ve en la web al instante.
-- **El nuevo ocupa el mismo lugar (`sortOrder`) que el viejo**, que queda oculto. El "quedan N" manual
-  del lote anterior NO se hereda.
-- **Promos**: opcionalmente se copian al lote nuevo las de **descuento** vigentes (con su ventana y cupo
-  tal cual). Las de **precio especial** NO se copian (tienen un precio fijo del lote viejo) y el aviso
-  dice cuántas quedaron. Sin copiarlas, quedan sólo en el lote viejo y dejan de aplicarse.
-- **No es transaccional** (toca catálogo, entradas y promos): se hace en ese orden, de menor a mayor
-  daño si algo falla a medias, y el error dice qué quedó hecho. Lógica en `src/lib/cambioTanda.ts`, UI en
-  `src/components/admin/CambioTandaModal.tsx`.
-- Para fiestas de varios días hay que hacerlo en cada día (son eventos separados).
-- **Bug corregido: después del cambio no se podía editar el precio del lote nuevo.** La pestaña
-  Eventos lee el catálogo de tipos UNA vez al abrirse; el cambio crea "2do lote" después, y
-  `TicketsEditor` sólo dibujaba filas de tipos del catálogo cargado, así que la del lote nuevo
-  quedaba invisible en "Editar". Ahora (1) el modal recarga el catálogo al terminar, (2)
-  `TicketsEditor` muestra **toda entrada del evento aunque falte en el catálogo**, y (3)
-  `aplicarCambioTanda` lee el catálogo fresco antes de crear tipos (si no, un nombre repetido
-  fallaba por el índice único).
-- Probado: los helpers de nombre y precio y el modal en navegador (con un evento de prueba). **No se
-  probó el guardado contra una base real.**
+- **Un lote es un tipo de entrada del catálogo** con el nombre de su entrada base y el número
+  (`src/lib/lotes.ts`: `parteDeLote`, `nombreDeLote`). "General" es el 1er lote. Así la compra, el
+  stock y las ventas no cambian: las ventas ya hechas siguen apuntando al lote en que se compraron.
+- **Agregar lote** reutiliza el tipo si ya existe con ese nombre (el "2do lote" de otra fecha sirve:
+  el precio es de cada evento) o lo crea, leyendo el catálogo fresco (el nombre es único). Lo suma
+  **a la venta** con el precio del último lote para ajustarlo y **saca de la venta los anteriores**
+  (no los borra). Nada se guarda hasta "Guardar". La ✕ de un lote lo quita del evento.
+- **Los lotes que el evento no vende no se listan** como tarjetas sueltas (si no, el catálogo se
+  llena de "2do lote" de otras fechas); se vuelven a sumar con el botón.
+- **Las entradas del evento van primero** en el formulario, y toda entrada del evento se muestra
+  aunque falte en el catálogo cargado (el catálogo se lee al abrir la pestaña).
+- **Reemplaza al botón "Cambiar tanda"** (un modal aparte que creaba el lote y subía un %), que se
+  sacó a pedido del autor: después del cambio el lote nuevo no aparecía en "Editar" (catálogo viejo
+  y ordenado al final) y no se le podía cambiar el precio. Las promos ahora se asignan al lote desde
+  la sección de promos del mismo formulario, como cualquier entrada.
+- Probado en navegador con un catálogo de prueba: reutiliza un "2do lote" existente, crea el "3er
+  lote", apaga los anteriores y los muestra adentro de "General". **No se probó contra la base real.**
 
 ### Eventos "próximamente": flyer borroso + contador (v49)
 

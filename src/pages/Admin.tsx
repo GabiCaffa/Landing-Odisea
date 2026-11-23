@@ -47,7 +47,6 @@ import {
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { useConfirm } from "@/components/ConfirmDialog";
-import CambioTandaModal from "@/components/admin/CambioTandaModal";
 import LoadingScreen from "@/components/LoadingScreen";
 import {
   useAuth,
@@ -502,8 +501,6 @@ const EventsAdmin = ({ irA }: { irA?: IrA | null }) => {
   const confirm = useConfirm();
   const [editing, setEditing] = useState<AdminEvent | null>(null);
   const [showForm, setShowForm] = useState(false);
-  // Evento al que se le está cambiando la tanda (lote).
-  const [cambiandoTanda, setCambiandoTanda] = useState<AdminEvent | null>(null);
   /**
    * `true` = crear una fiesta nueva. Un array = editar esa fiesta (sus días).
    *
@@ -739,12 +736,6 @@ const EventsAdmin = ({ irA }: { irA?: IrA | null }) => {
                       >
                         <Pencil className="h-3.5 w-3.5" /> Editar
                       </button>
-                      <button
-                        onClick={() => setCambiandoTanda(e)}
-                        className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 border border-celeste px-3 text-xs uppercase tracking-wide text-celeste-deep transition-colors hover:bg-celeste hover:text-accent-foreground"
-                      >
-                        <TrendingUp className="h-3.5 w-3.5" /> Cambiar tanda
-                      </button>
                       {puedeBorrar && (
                         <button
                           onClick={() => handleDelete(e)}
@@ -845,14 +836,6 @@ const EventsAdmin = ({ irA }: { irA?: IrA | null }) => {
                               </button>
                             )}
                             <button
-                              onClick={() => setCambiandoTanda(e)}
-                              className="p-2 text-celeste-deep transition-colors hover:bg-celeste hover:text-accent-foreground"
-                              aria-label="Cambiar de tanda"
-                              title="Cambiar de tanda (sube el precio y abre el próximo lote)"
-                            >
-                              <TrendingUp className="h-3.5 w-3.5" />
-                            </button>
-                            <button
                               onClick={() => {
                                 setEditing(e);
                                 setShowForm(true);
@@ -891,20 +874,6 @@ const EventsAdmin = ({ irA }: { irA?: IrA | null }) => {
           grupo={fiesta === true ? undefined : fiesta}
           onClose={() => setFiesta(null)}
           onSaved={refreshEvents}
-        />
-      )}
-
-      {cambiandoTanda && (
-        <CambioTandaModal
-          evento={cambiandoTanda}
-          catalogo={ticketTypes}
-          onClose={() => setCambiandoTanda(null)}
-          // El cambio puede crear tipos nuevos en el catálogo ("2do lote"): sin
-          // recargarlo, "Editar" no mostraba esa fila y no se podía tocar su precio.
-          onHecho={async () => {
-            await refreshEvents();
-            setTicketTypes(await fetchTicketTypes());
-          }}
         />
       )}
 
