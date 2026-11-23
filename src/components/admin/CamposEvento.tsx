@@ -5,7 +5,10 @@ import {
   Maximize2,
   Move,
   RotateCcw,
+  Loader2,
+  Plus,
   Upload,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -15,6 +18,8 @@ import {
   ImageTransform,
 } from "@/contexts/AuthContext";
 import { EventTicket, TicketType, sortEventTickets } from "@/lib/ticketTypes";
+import { nombreDeLote, parteDeLote, tipoParaLote } from "@/lib/lotes";
+import { toast } from "sonner";
 import { MONEDAS, MONEDA_NOMBRE, Moneda, simbolo } from "@/lib/moneda";
 
 // Vivía suelto en Admin.tsx, al lado de los componentes que se movieron.
@@ -107,14 +112,15 @@ export const TicketsEditor = ({
     () => new Map(value.map((t) => [t.ticketTypeId, t])),
     [value]
   );
+  // Base del lote que se está agregando (mientras se crea el tipo en el catálogo).
+  const [agregando, setAgregando] = useState<string | null>(null);
 
   // Se ofrecen los tipos activos; los inactivos sólo si el evento ya los vendía
   // (si no, al editar un evento viejo se le borraría una entrada sin avisar).
   //
-  // **Y toda entrada del evento se muestra aunque falte en el catálogo cargado.**
-  // El catálogo se lee al abrir la pestaña; si después se creó un tipo (el cambio
-  // de tanda crea "2do lote"), la fila quedaba invisible y su precio no se podía
-  // editar, aunque el evento la siguiera vendiendo.
+  // **Y toda entrada del evento se muestra aunque falte en el catálogo cargado**:
+  // el catálogo se lee al abrir la pestaña, y un lote creado después quedaba
+  // invisible y sin forma de editar su precio.
   const options = useMemo(() => {
     const delCatalogo = catalog.filter((t) => t.active || selected.has(t.id));
     const conocidos = new Set(catalog.map((t) => t.id));
@@ -131,6 +137,41 @@ export const TicketsEditor = ({
       }));
     return [...delCatalogo, ...faltantes];
   }, [catalog, selected, value]);
+
+  /**
+   * Las tarjetas de arriba: una por entrada. Los lotes 2, 3… van ADENTRO de la
+   * tarjeta de su entrada base, no sueltos. Un lote que este evento no vende no se
+   * lista (se vuelve a sumar con "+ Agregar lote"): si no, el catálogo se llena de
+   * "General – 2do lote" de otras fechas.
+   *
+   * Las que el evento ya tiene van primero, en su orden; después el resto.
+   */
+  const { principales, lotesDe } = useMemo(() => {
+    const bases = new Set(
+      options
+        .filter((t) => parteDeLote(t.name).numero === 1)
+        .map((t) => parteDeLote(t.name).base.toLowerCase())
+    );
+    const esLoteDeOtra = (t: { name: string }) => {
+      const p = parteDeLote(t.name);
+      return p.numero >= 2 && bases.has(p.base.toLowerCase());
+    };
+    const visibles = options.filter(
+      (t) => !esLoteDeOtra(t) && !(parteDeLote(t.name).numero >= 2 && !selected.has(t.id))
+    );
+    const orden = new Map(value.map((t, i) => [t.ticketTypeId, i]));
+    const principales = [
+      ...visibles.filter((t) => orden.has(t.id)).sort((a, b) => orden.get(a.id)! - orden.get(b.id)!),
+      ...visibles.filter((t) => !orden.has(t.id)),
+    ];
+    const lotesDe = (base: TicketType): EventTicket[] => {
+      const b = parteDeLote(base.name).base.toLowerCase();
+      return value
+        .filter((t) => t.ticketTypeId !== base.id && esLoteDeOtra(t) && parteDeLote(t.name).base.toLowerCase() === b)
+        .sort((x, y) => parteDeLote(x.name).numero - parteDeLote(y.name).numero);
+    };
+    return { principales, lotesDe };
+  }, [options, selected, value]);
 
   const toggle = (type: TicketType) => {
     if (selected.has(type.id)) {
@@ -154,6 +195,8 @@ export const TicketsEditor = ({
       ])
     );
   };
+
+  const quitar = (typeId: string) => onChange(value.filter((t) => t.ticketTypeId !== typeId));
 
   const setPrice = (typeId: string, price: number) =>
     onChange(value.map((t) => (t.ticketTypeId === typeId ? { ...t, price } : t)));
@@ -181,6 +224,132 @@ export const TicketsEditor = ({
       )
     );
 
+  /**
+   * Suma el próximo lote de una entrada ("General" → "General – 2do lote"), con el
+   * precio del último para ajustarlo, **a la venta**, y saca de la venta los
+   * anteriores (que no se borran: las ventas hechas siguen apuntando a ellos). Nada
+   * se guarda hasta tocar "Guardar".
+   */
+  const agregarLote = async (base: TicketType) => {
+    const fila = selected.get(base.id);
+    if (!fila) return;
+    const grupo = [fila, ...lotesDe(base)];
+    const { base: nombreBase } = parteDeLote(base.name);
+    const siguiente = Math.max(...grupo.map((t) => parteDeLote(t.name).numero)) + 1;
+    const ultimo = grupo[grupo.length - 1];
+    setAgregando(base.id);
+    try {
+      const tipo = await tipoParaLote(nombreDeLote(nombreBase, siguiente), {
+        description: base.description,
+        isAbono: base.isAbono,
+      });
+      const idsGrupo = new Set(grupo.map((t) => t.ticketTypeId));
+      const resto = value
+        .filter((t) => t.ticketTypeId !== tipo.id)
+        .map((t) => (idsGrupo.has(t.ticketTypeId) ? { ...t, active: false } : t));
+      onChange(
+        sortEventTickets([
+          ...resto,
+          {
+            ticketTypeId: tipo.id,
+            name: tipo.name,
+            description: base.description,
+            price: ultimo.price,
+            active: true,
+            // Mismo lugar que su entrada: los lotes apagados no se ven en la web.
+            sortOrder: fila.sortOrder,
+            isAbono: base.isAbono,
+          },
+        ])
+      );
+    } catch (err) {
+      toast.error(`No se pudo agregar el lote: ${(err as Error).message}`);
+    } finally {
+      setAgregando(null);
+    }
+  };
+
+  /** "A la venta" + cupo o stock a mano. Igual para la entrada y para cada lote. */
+  const controles = (row: EventTicket, typeId: string, nombre: string) => (
+    <>
+      <label className="flex items-center gap-2 text-[11px] text-muted-foreground mt-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={row.active}
+          onChange={(e) => setActive(typeId, e.target.checked)}
+          className="accent-foreground"
+        />
+        A la venta (destildá para ocultarla sin perder el precio)
+      </label>
+
+      <div className="mt-2 space-y-2">
+        {/* Cupo automático (v43): lo que queda se cuenta solo con las
+            ventas confirmadas. Si está, el número manual no se usa. */}
+        <label className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          Este lote tiene
+          <input
+            type="number"
+            min={0}
+            value={row.loteCupo ?? ""}
+            onChange={(e) => setCupo(typeId, e.target.value)}
+            className="input-techno w-20 text-right"
+            placeholder="—"
+            aria-label={`Cupo del lote de ${nombre}`}
+          />
+          entradas en total
+        </label>
+        {row.loteCupo !== undefined && row.loteCupo !== null ? (
+          <p className="text-[11px] text-muted-foreground/80">
+            {row.quedan !== undefined ? (
+              <>
+                Quedan <strong className="text-foreground">{row.quedan}</strong> (vendidas{" "}
+                {Math.max(0, row.loteCupo - row.quedan)}).{" "}
+              </>
+            ) : null}
+            Se descuenta solo con cada venta confirmada que tenga este tipo de entrada.
+            Al llegar a 0 la web lo muestra <strong>Agotado</strong>: dejá el siguiente
+            lote a la venta para que quede ése.
+          </p>
+        ) : (
+          <>
+            <label className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              O a mano: quedan
+              <input
+                type="number"
+                min={0}
+                value={row.stockRemaining ?? ""}
+                onChange={(e) => setStock(typeId, e.target.value)}
+                className="input-techno w-20 text-right"
+                placeholder="—"
+                aria-label={`Entradas que quedan de ${nombre} antes del cambio de lote`}
+              />
+              antes del cambio de lote
+            </label>
+            <p className="text-[11px] text-muted-foreground/80">
+              Opcional. El cupo de arriba se cuenta solo; el número a mano se muestra tal
+              cual y hay que <strong>mantenerlo al día</strong>. Vacíos, no se muestra nada.
+            </p>
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  const precio = (row: EventTicket, typeId: string, nombre: string) => (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      <span className="text-sm text-muted-foreground">{simbolo(moneda)}</span>
+      <input
+        type="number"
+        min={0}
+        value={row.price || ""}
+        onChange={(e) => setPrice(typeId, Number(e.target.value))}
+        className="input-techno w-24 text-right"
+        placeholder="0"
+        aria-label={`Precio de ${nombre}`}
+      />
+    </div>
+  );
+
   if (options.length === 0) {
     return (
       <p className="text-xs text-muted-foreground border border-dashed border-border p-4">
@@ -192,8 +361,9 @@ export const TicketsEditor = ({
 
   return (
     <div className="space-y-2">
-      {options.map((type) => {
+      {principales.map((type) => {
         const row = selected.get(type.id);
+        const lotes = row ? lotesDe(type) : [];
         return (
           <div
             key={type.id}
@@ -210,6 +380,11 @@ export const TicketsEditor = ({
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">
                   {type.name}
+                  {lotes.length > 0 && parteDeLote(type.name).numero === 1 && (
+                    <span className="ml-2 text-[10px] tracking-wider uppercase text-muted-foreground">
+                      1er lote
+                    </span>
+                  )}
                   {!type.active && (
                     <span className="ml-2 text-[10px] tracking-wider uppercase text-muted-foreground">
                       (tipo inactivo)
@@ -222,86 +397,46 @@ export const TicketsEditor = ({
                   </p>
                 )}
               </div>
-              {row && (
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <span className="text-sm text-muted-foreground">
-                    {simbolo(moneda)}
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={row.price || ""}
-                    onChange={(e) => setPrice(type.id, Number(e.target.value))}
-                    className="input-techno w-24 text-right"
-                    placeholder="0"
-                    aria-label={`Precio de ${type.name}`}
-                  />
-                </div>
-              )}
+              {row && precio(row, type.id, type.name)}
             </div>
 
-            {row && (
-              <label className="flex items-center gap-2 text-[11px] text-muted-foreground mt-2 ml-7 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={row.active}
-                  onChange={(e) => setActive(type.id, e.target.checked)}
-                  className="accent-foreground"
-                />
-                A la venta (destildá para ocultarla sin perder el precio)
-              </label>
-            )}
+            {row && <div className="ml-7">{controles(row, type.id, type.name)}</div>}
 
+            {/* Los lotes de esta entrada: 2do, 3er… cada uno con su precio y su venta. */}
             {row && (
-              <div className="mt-2 ml-7 space-y-2">
-                {/* Cupo automático (v43): lo que queda se cuenta solo con las
-                    ventas confirmadas. Si está, el número manual no se usa. */}
-                <label className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                  Este lote tiene
-                  <input
-                    type="number"
-                    min={0}
-                    value={row.loteCupo ?? ""}
-                    onChange={(e) => setCupo(type.id, e.target.value)}
-                    className="input-techno w-20 text-right"
-                    placeholder="—"
-                    aria-label={`Cupo del lote de ${type.name}`}
-                  />
-                  entradas en total
-                </label>
-                {row.loteCupo !== undefined && row.loteCupo !== null ? (
-                  <p className="text-[11px] text-muted-foreground/80">
-                    {row.quedan !== undefined ? (
-                      <>
-                        Quedan <strong className="text-foreground">{row.quedan}</strong> (vendidas{" "}
-                        {Math.max(0, row.loteCupo - row.quedan)}).{" "}
-                      </>
-                    ) : null}
-                    Se descuenta solo con cada venta confirmada que tenga este tipo de entrada.
-                    Al llegar a 0 la web lo muestra <strong>Agotado</strong>: dejá el siguiente
-                    lote a la venta para que quede ése.
-                  </p>
-                ) : (
-                  <>
-                    <label className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                      O a mano: quedan
-                      <input
-                        type="number"
-                        min={0}
-                        value={row.stockRemaining ?? ""}
-                        onChange={(e) => setStock(type.id, e.target.value)}
-                        className="input-techno w-20 text-right"
-                        placeholder="—"
-                        aria-label={`Entradas que quedan de ${type.name} antes del cambio de lote`}
-                      />
-                      antes del cambio de lote
-                    </label>
-                    <p className="text-[11px] text-muted-foreground/80">
-                      Opcional. El cupo de arriba se cuenta solo; el número a mano se muestra tal
-                      cual y hay que <strong>mantenerlo al día</strong>. Vacíos, no se muestra nada.
-                    </p>
-                  </>
-                )}
+              <div className="ml-7 mt-3 space-y-2 border-t border-border pt-3">
+                {lotes.map((l) => (
+                  <div key={l.ticketTypeId} className="border border-border p-2.5">
+                    <div className="flex items-center gap-2">
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium">{l.name}</p>
+                      {precio(l, l.ticketTypeId, l.name)}
+                      <button
+                        type="button"
+                        onClick={() => quitar(l.ticketTypeId)}
+                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-border text-muted-foreground hover:bg-muted"
+                        aria-label={`Quitar ${l.name}`}
+                        title="Quitar este lote del evento"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {controles(l, l.ticketTypeId, l.name)}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => void agregarLote(type)}
+                  disabled={agregando !== null}
+                  className="inline-flex min-h-[40px] items-center gap-2 border border-dashed border-foreground/40 px-3 text-xs font-semibold uppercase tracking-wide hover:bg-muted disabled:opacity-50"
+                >
+                  {agregando === type.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  Agregar lote
+                </button>
+                <p className="text-[11px] text-muted-foreground/80">
+                  Suma el próximo lote con el mismo precio para que lo ajustes, y saca de la venta
+                  los anteriores (no se borran: las ventas hechas quedan como están). Se aplica al
+                  tocar <strong>Guardar</strong>.
+                </p>
               </div>
             )}
           </div>
