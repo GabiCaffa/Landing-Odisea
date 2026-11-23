@@ -2002,6 +2002,33 @@ Ctrl+V, guardar, responder, cierre con pendientes). **No probado contra la base 
 ni con el panel logueado. Pendiente para después: cuánto hace que espera cada venta en
 "Por enviar" y exportar a `.xlsx`.
 
+### Cambio de tanda (lote) desde el panel
+
+Botón **"Cambiar tanda"** en cada evento de Eventos (en la tarjeta de celular y como ícono de
+flecha ascendente en la tabla). Saca de la venta el lote actual y abre el siguiente con otro
+precio. Sirve para cualquier evento, actual o futuro, y **no necesita migración**.
+
+- **Un lote es un tipo de entrada del catálogo** ("General – 1er lote"); no hay un concepto de
+  lote aparte. El cambio **crea (o reutiliza por nombre) el tipo del lote nuevo** y deja el viejo en
+  el evento con `active = false`: **no se borra**, así las ventas ya hechas (que apuntan al tipo,
+  v18) conservan su historia y Entregas muestra en qué tanda compró cada uno.
+- **El modal propone todo** y se puede pisar: +20% por defecto (editable, recalcula los precios),
+  redondeo a los 10 pesos (al dólar en USD), nombre "1er lote" → "2do lote" (`nombreDeLaSiguienteTanda`:
+  entiende "1er lote", "Lote 1"; sin número agrega " – 2do lote"), cupo opcional del lote nuevo
+  (v43) y qué entradas pasan (se puede dejar una afuera). Pide confirmación con el resumen
+  "antes → después" porque el cambio se ve en la web al instante.
+- **El nuevo ocupa el mismo lugar (`sortOrder`) que el viejo**, que queda oculto. El "quedan N" manual
+  del lote anterior NO se hereda.
+- **Promos**: opcionalmente se copian al lote nuevo las de **descuento** vigentes (con su ventana y cupo
+  tal cual). Las de **precio especial** NO se copian (tienen un precio fijo del lote viejo) y el aviso
+  dice cuántas quedaron. Sin copiarlas, quedan sólo en el lote viejo y dejan de aplicarse.
+- **No es transaccional** (toca catálogo, entradas y promos): se hace en ese orden, de menor a mayor
+  daño si algo falla a medias, y el error dice qué quedó hecho. Lógica en `src/lib/cambioTanda.ts`, UI en
+  `src/components/admin/CambioTandaModal.tsx`.
+- Para fiestas de varios días hay que hacerlo en cada día (son eventos separados).
+- Probado: los helpers de nombre y precio y el modal en navegador (con un evento de prueba). **No se
+  probó el guardado contra una base real.**
+
 ### Eventos "próximamente": flyer borroso + contador (v49)
 
 Un evento con **`events.reveal_at`** en el futuro se muestra como teaser hasta esa hora: en la
