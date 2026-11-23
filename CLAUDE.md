@@ -2033,6 +2033,8 @@ precio. Sirve para cualquier evento, actual o futuro, y **no necesita migración
   `TicketsEditor` muestra **toda entrada del evento aunque falte en el catálogo**, y (3)
   `aplicarCambioTanda` lee el catálogo fresco antes de crear tipos (si no, un nombre repetido
   fallaba por el índice único).
+- **Y las entradas del evento van primero en "Editar"**: el formulario ordenaba las filas por el
+  catálogo, y el "2do lote" (último del catálogo) quedaba abajo de todo; parecía que no estaba.
 - Probado: los helpers de nombre y precio y el modal en navegador (con un evento de prueba). **No se
   probó el guardado contra una base real.**
 

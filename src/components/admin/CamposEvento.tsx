@@ -129,7 +129,16 @@ export const TicketsEditor = ({
         isAbono: !!t.isAbono,
         createdAt: "",
       }));
-    return [...delCatalogo, ...faltantes];
+    // Las que el evento ya tiene van PRIMERO (en su orden) y después el resto del
+    // catálogo. Ordenadas sólo por catálogo, un tipo nuevo (el "2do lote" que crea
+    // el cambio de tanda queda último en el catálogo) aparecía debajo de todos y
+    // parecía que no estaba.
+    const todas = [...delCatalogo, ...faltantes];
+    const orden = new Map(value.map((t, i) => [t.ticketTypeId, i]));
+    return [
+      ...todas.filter((t) => orden.has(t.id)).sort((a, b) => orden.get(a.id)! - orden.get(b.id)!),
+      ...todas.filter((t) => !orden.has(t.id)),
+    ];
   }, [catalog, selected, value]);
 
   const toggle = (type: TicketType) => {
