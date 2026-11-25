@@ -1,4 +1,5 @@
-import type { TicketDelivery } from "@/lib/deliveries";
+import type { DeliveryTicketLine, TicketDelivery } from "@/lib/deliveries";
+import { foldText } from "@/lib/utils";
 
 /**
  * Filtros de la pestaña Entregas.
@@ -33,6 +34,11 @@ export interface FiltrosEntregas {
   promo: typeof TODOS | "con" | "sin";
   /** Cuándo se cargó la venta (o entró el pedido de la web). */
   fecha: typeof TODOS | "hoy" | "ayer" | "semana";
+  /**
+   * Ventas con un comentario escrito por el staff, o sin. Lo que "Cargar
+   * ventas" escribe solo en Notas no cuenta (ver `comentarioDe`).
+   */
+  comentario: typeof TODOS | "con" | "sin";
   /** Orden de la lista. No es un filtro: "Limpiar filtros" no lo toca. */
   orden: OrdenEntregas;
 }
@@ -47,6 +53,7 @@ export const FILTROS_INICIALES: FiltrosEntregas = {
   precio: TODOS,
   promo: TODOS,
   fecha: TODOS,
+  comentario: TODOS,
   orden: "nuevas",
 };
 
@@ -119,7 +126,48 @@ export function pasaFiltros(
   if (f.origen !== TODOS && d.origin !== f.origen) return false;
   if (f.promo !== TODOS && d.tickets.some((t) => Boolean(t.promoId)) !== (f.promo === "con")) return false;
   if (!pasaFecha(d.createdAt, f.fecha, ahora)) return false;
+  if (f.comentario !== TODOS && Boolean(comentarioDe(d.notes, d.tickets)) !== (f.comentario === "con")) return false;
   return true;
+}
+
+/**
+ * Lo que escribió una PERSONA en las notas de la venta, sin lo que el panel
+ * escribe solo.
+ *
+ * "Cargar ventas" llena Notas con lo que no tiene columna propia —el documento
+ * ("Doc: 4.111.222-3"), las promos del mensaje ("2x1 en General (-$700)"),
+ * "PROMO CUMPLEAÑOS", los tipos que no pudo cruzar— y el importador viejo
+ * dejaba además el desglose ("2 General · 1 VIP"). Si eso contara, casi todas
+ * las ventas tendrían "comentario" y el filtro no serviría para encontrar las
+ * que el staff anotó a mano (por ejemplo, a qué cuenta transfirió alguien que
+ * compró el evento equivocado).
+ *
+ * Se corta por " · " y por renglones —lo que usa el panel para juntar— y se
+ * descartan sólo los pedazos que son EXACTAMENTE uno de esos textos
+ * automáticos: si alguien escribió algo pegado a uno de ellos, se conserva.
+ */
+export function comentarioDe(notas: string | null | undefined, tickets: DeliveryTicketLine[] = []): string {
+  if (!notas) return "";
+  const tipos = new Set(tickets.map((t) => foldText(t.name).trim()));
+  return notas
+    .split(/\s+·\s+|\r?\n/)
+    .map((x) => x.trim())
+    .filter((x) => x && !esNotaAutomatica(x, tipos))
+    .join(" · ");
+}
+
+const NOTA_PROMO = /^.+\s+en\s+.+\(\s*-\s*(?:US\$|U\$S|USD|\$)?\s*[\d.,]+\s*\)$/i;
+
+function esNotaAutomatica(pedazo: string, tipos: Set<string>): boolean {
+  if (/^promo cumplea(ñ|n)os( aplicada)?$/i.test(pedazo)) return true;
+  if (/^doc(umento)?:\s*\S+$/i.test(pedazo)) return true;
+  if (/^sin cruzar:/i.test(pedazo)) return true;
+  if (NOTA_PROMO.test(pedazo)) return true;
+  // "2 General": el desglose que dejaba el importador viejo. Sólo si el nombre
+  // es un tipo de entrada de la venta, para no comerse "2 transferencias".
+  const desglose = /^\d+\s+(.+)$/.exec(pedazo);
+  if (desglose && tipos.has(foldText(desglose[1]).trim())) return true;
+  return false;
 }
 
 /** Hay algún filtro puesto además del evento (el orden no es un filtro). */
@@ -129,11 +177,12 @@ export const hayFiltrosExtra = (f: FiltrosEntregas) =>
   f.origen !== TODOS ||
   f.precio !== TODOS ||
   f.promo !== TODOS ||
-  f.fecha !== TODOS;
+  f.fecha !== TODOS ||
+  f.comentario !== TODOS;
 
 /** Cuántos de los filtros de los desplegables están puestos (el número del botón en celular). */
 export const filtrosEnDesplegables = (f: FiltrosEntregas) =>
-  [f.comprobante, f.origen, f.promo, f.fecha].filter((v) => v !== TODOS).length + (f.orden !== "nuevas" ? 1 : 0);
+  [f.comprobante, f.origen, f.promo, f.fecha, f.comentario].filter((v) => v !== TODOS).length + (f.orden !== "nuevas" ? 1 : 0);
 
 /**
  * Cuántas entradas de una entrega cuentan con el tipo y el precio elegidos.

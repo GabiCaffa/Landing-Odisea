@@ -21,7 +21,7 @@ import { Moneda, fmtPrecio } from "@/lib/moneda";
  *   entra).
  * - **Tipo y precio**: botones, porque son pocos por evento y son lo que más
  *   se toca ("ahora mando las VIP", "las del lote de $800").
- * - **Comprobante, origen, promo, fecha y orden**: cinco desplegables. En
+ * - **Comprobante, origen, promo, fecha, comentario y orden**: seis desplegables. En
  *   celular van plegados detrás de "Más filtros", con el número de los que
  *   están puestos: abiertos siempre eran tres filas antes de ver una venta.
  */
@@ -108,7 +108,7 @@ const FiltrosEntregas = ({ filtros, onChange, eventos, tipos, precios, moneda = 
         </button>
       </div>
 
-      <div id="mas-filtros-entregas" className={`grid-cols-2 gap-2 md:grid md:grid-cols-3 xl:grid-cols-5 ${abierto ? "grid" : "hidden"}`}>
+      <div id="mas-filtros-entregas" className={`grid-cols-2 gap-2 md:grid md:grid-cols-3 xl:grid-cols-6 ${abierto ? "grid" : "hidden"}`}>
         <select
           value={filtros.comprobante}
           onChange={(e) => set("comprobante", e.target.value as Filtros["comprobante"])}
@@ -151,9 +151,19 @@ const FiltrosEntregas = ({ filtros, onChange, eventos, tipos, precios, moneda = 
           <option value="semana">Últimos 7 días</option>
         </select>
         <select
+          value={filtros.comentario}
+          onChange={(e) => set("comentario", e.target.value as Filtros["comentario"])}
+          className="input-techno"
+          aria-label="Comentario"
+        >
+          <option value={TODOS}>Comentario</option>
+          <option value="con">Con comentario</option>
+          <option value="sin">Sin comentario</option>
+        </select>
+        <select
           value={filtros.orden}
           onChange={(e) => set("orden", e.target.value as Filtros["orden"])}
-          className="input-techno col-span-2 md:col-span-1"
+          className="input-techno"
           aria-label="Orden"
         >
           <option value="nuevas">Más nuevas primero</option>

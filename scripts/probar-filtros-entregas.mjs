@@ -21,6 +21,7 @@ import {
   opcionesEventos,
   opcionesTipos,
   pasaFiltros,
+  comentarioDe,
 } from "./filtrosEntregas.bundle.mjs";
 
 let fallas = 0;
@@ -147,6 +148,30 @@ const limpio = limpiarFiltros(puesto);
 check("limpiar saca los filtros y deja evento y orden", limpio.evento === "colonia" && limpio.orden === "monto" && !hayFiltrosExtra(limpio), limpio);
 check("el orden solo no cuenta como filtro puesto", !hayFiltrosExtra({ ...FILTROS_INICIALES, orden: "nombre" }));
 check("número del botón de celular: desplegables puestos", filtrosEnDesplegables(puesto) === 3, filtrosEnDesplegables(puesto));
+
+// ─── Comentarios del staff ───
+{
+  const gen = [linea('g', 'General', 2), linea('v', 'VIP', 1)];
+  check('sin notas → sin comentario', comentarioDe(undefined) === '' && comentarioDe('') === '');
+  check('lo que escribe Cargar ventas solo no es comentario',
+    comentarioDe('PROMO CUMPLEAÑOS · 2x1 en General (-$700) · Doc: 4.111.222-3 · Sin cruzar: BACKSTAGE', gen) === '');
+  check('la promo en dólares tampoco', comentarioDe('2da al 50% en VIP (-US$ 10)', gen) === '');
+  check('el desglose del importador viejo tampoco', comentarioDe('2 General · 1 VIP', gen) === '');
+  check('lo escrito a mano sí, sin lo automático',
+    comentarioDe('Doc: 4.111.222-3 · Compró Colonia, era Paysandú. Transfirió a Gabriel', gen) === 'Compró Colonia, era Paysandú. Transfirió a Gabriel',
+    comentarioDe('Doc: 4.111.222-3 · Compró Colonia, era Paysandú. Transfirió a Gabriel', gen));
+  check('en otro renglón también', comentarioDe('Doc: 123\nla diferencia fue a Salvador', gen) === 'la diferencia fue a Salvador');
+  check('un número que no es un tipo de entrada se conserva', comentarioDe('2 transferencias, una a Salvador', gen) === '2 transferencias, una a Salvador');
+  check('texto pegado a lo automático se conserva', comentarioDe('Doc: 123 pagó en la cuenta de Salvador', gen) !== '');
+  const conNota = venta('n1', 'colonia', gen, { notes: 'Doc: 1 · pagó a Salvador' });
+  const soloAuto = venta('n2', 'colonia', gen, { notes: 'Doc: 1 · 2x1 en General (-$100)' });
+  const sinNota = venta('n3', 'colonia', gen);
+  const f = (comentario) => ({ ...FILTROS_INICIALES, comentario });
+  check('filtro con comentario', pasaFiltros(conNota, f('con')) && !pasaFiltros(soloAuto, f('con')) && !pasaFiltros(sinNota, f('con')));
+  check('filtro sin comentario', !pasaFiltros(conNota, f('sin')) && pasaFiltros(soloAuto, f('sin')) && pasaFiltros(sinNota, f('sin')));
+  check('cuenta como filtro puesto y en el número del botón', hayFiltrosExtra(f('con')) && filtrosEnDesplegables(f('con')) === 1);
+  check('limpiar lo saca', limpiarFiltros(f('con')).comentario === TODOS);
+}
 
 console.log(fallas ? `\n${fallas} falla(s)` : "\nTodo bien");
 process.exit(fallas ? 1 : 0);

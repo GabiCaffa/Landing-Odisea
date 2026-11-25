@@ -43,6 +43,7 @@ import {
   Clock,
   AlertTriangle,
   Palette,
+  MessageSquare,
 } from "lucide-react";
 import odiseaLogo from "@/assets/odisea-logo-black.png";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
@@ -119,7 +120,9 @@ import {
   opcionesEventos,
   opcionesTipos,
   pasaFiltros,
+  comentarioDe,
 } from "@/lib/filtrosEntregas";
+import { foldText } from "@/lib/utils";
 import {
   BirthdaySignup,
   BirthdayInput,
@@ -2163,8 +2166,26 @@ const fmtMoney = (n: number, moneda: Moneda = "UYU") => fmtPrecio(n, moneda);
 // ¿La entrega matchea el término de búsqueda? (nombre, email, documento, teléfono)
 const deliveryMatches = (d: TicketDelivery, term: string) => {
   if (!term) return true;
-  const hay = `${d.firstName} ${d.lastName} ${d.email} ${d.documentId ?? ""} ${d.phone ?? ""}`.toLowerCase();
-  return hay.includes(term);
+  // Las notas también: así "salvador" o "paysandu" encuentran las ventas donde
+  // el staff anotó a qué cuenta transfirió alguien. Sin tildes de los dos lados.
+  const hay = `${d.firstName} ${d.lastName} ${d.email} ${d.documentId ?? ""} ${d.phone ?? ""} ${d.notes ?? ""}`;
+  return foldText(hay).includes(foldText(term));
+};
+
+/**
+ * El comentario que escribió el staff en la venta, a la vista en la lista.
+ * Antes sólo se leía entrando a editar, y es justo lo que hay que ver de
+ * pasada ("transfirió a la cuenta de Paysandú"). Lo automático no se muestra.
+ */
+const ComentarioVenta = ({ d }: { d: TicketDelivery }) => {
+  const texto = comentarioDe(d.notes, d.tickets);
+  if (!texto) return null;
+  return (
+    <p className="mt-1 flex items-start gap-1.5 text-xs text-foreground" title={texto}>
+      <MessageSquare className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-celeste" aria-hidden />
+      <span className="line-clamp-3 whitespace-pre-line">{texto}</span>
+    </p>
+  );
 };
 
 // Tarjeta compacta de estadística para el resumen de Entregas.
@@ -2892,6 +2913,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
                       <p className="text-foreground">{ticketsSummary(d.tickets)}</p>
                     )}
                     {d.phone && <p className="font-mono">{formatPhoneDisplay(d.phone)}</p>}
+                    <ComentarioVenta d={d} />
                     {statusFilter === "sent" && d.sentAt && (
                       <p>Enviada el {formatEventDate(d.sentAt.slice(0, 10))}</p>
                     )}
@@ -2953,6 +2975,7 @@ const DeliveriesAdmin = ({ irA }: { irA?: IrA | null }) => {
                         <div className="text-xs text-muted-foreground">
                           <PedidoInfo d={d} />
                         </div>
+                        <ComentarioVenta d={d} />
                       </Td>
                       <Td>
                         <p className="text-xs font-mono">{d.email}</p>

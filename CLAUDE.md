@@ -1924,9 +1924,19 @@ anteriores a v18), **comprobante** (con / sin) y **origen** (web / a mano). Lóg
   de la web, no cuándo se confirmó el pago.
 - **Orden**: más nuevas primero (el de siempre), las que más esperan, mayor monto o por
   nombre. No es un filtro: "Limpiar filtros" (`limpiarFiltros`) deja el evento y el orden.
-- **En celular los cinco desplegables van plegados** detrás del botón "Filtros", con el
+- **Comentario** (con / sin): las ventas donde el staff escribió algo en Notas. Nace de
+  la gente que compra el evento equivocado (Colonia en vez de Paysandú) y transfiere a
+  otra cuenta: el staff lo anota en el comentario y después no había cómo juntarlas.
+  **Lo que "Cargar ventas" escribe solo en Notas no cuenta** (`comentarioDe`): el
+  documento ("Doc: …"), las promos del mensaje ("2x1 en General (-$700)"), "PROMO
+  CUMPLEAÑOS", "Sin cruzar: …" y el desglose del importador viejo ("2 General", sólo si
+  es un tipo de la venta). Se corta por " · " y por renglones y sólo se descarta un
+  pedazo que sea EXACTAMENTE uno de esos textos: lo escrito pegado se conserva. El
+  comentario ahora **se ve en la lista** (ícono de globo, hasta 3 líneas; antes había que
+  entrar a editar) y **el buscador busca en las notas**, sin tildes ("paysandu", "salvador").
+- **En celular los seis desplegables van plegados** detrás del botón "Filtros", con el
   número de los que están puestos; abiertos siempre eran tres filas antes de ver una
-  venta. Desde `md:` van siempre a la vista (3 columnas, 5 desde `xl:`).
+  venta. Desde `md:` van siempre a la vista (3 columnas, 6 desde `xl:`).
 - Probado: el script pasó a 39 chequeos (precio, tipo+precio, promo, fecha con un "ahora"
   fijo, los cuatro órdenes, limpiar) y la barra en navegador (375 px y escritorio).
   **No probado con el panel logueado.**
