@@ -20,6 +20,12 @@ export const RUTA_EVENTO = "/evento";
 /** `"halloween-colonia"` → `"/evento/halloween-colonia"`. */
 export const urlDeEvento = (slug: string): string => `${RUTA_EVENTO}/${slug}`;
 
+/**
+ * El mapa 3D de un evento, con dirección propia para marketing.
+ * `"navidad-en-el-golf-paysandu"` → `"/evento/navidad-en-el-golf-paysandu/mapa"`.
+ */
+export const urlDeMapa = (slug: string): string => `${urlDeEvento(slug)}/mapa`;
+
 /** El sitio en producción, para URLs absolutas (canonical, Open Graph, sitemap). */
 export const SITIO = "https://www.odiseaoficial.com";
 

@@ -1,25 +1,21 @@
 import type { Predio } from "./tipos";
+import { PREDIO_DE_EVENTO, tieneCroquis } from "./eventos";
+
+export { tieneCroquis };
 
 /**
- * Qué eventos tienen croquis 3D, por el `slug` de su página (v25).
+ * Los predios con croquis 3D. Cada uno se baja recién al abrir el mapa.
  *
- * Este archivo NO importa Three.js ni los datos de los predios: lo usa la
- * página del evento para decidir si muestra el botón, y tiene que pesar nada.
- * El predio y el motor se bajan recién al abrir el mapa.
- *
- * Para sumar un predio: un archivo de datos en esta carpeta (molde: `golf.ts`)
- * y una línea acá por cada evento que lo usa. El mismo predio puede servir a
- * varias fechas.
+ * Qué evento usa qué predio vive en `eventos.ts` (sin dependencias, porque lo
+ * lee también el build). El mismo predio puede servir a varias fechas.
  */
 const PREDIOS: Record<string, () => Promise<{ default: Predio }>> = {
-  "navidad-en-el-golf-paysandu": () => import("./golf"),
+  golf: () => import("./golf"),
 };
 
-export const tieneCroquis = (slug: string | undefined | null): boolean =>
-  !!slug && Object.prototype.hasOwnProperty.call(PREDIOS, slug);
-
 export async function cargarPredio(slug: string): Promise<Predio | null> {
-  const cargar = PREDIOS[slug];
+  const id = PREDIO_DE_EVENTO[slug];
+  const cargar = id ? PREDIOS[id] : undefined;
   if (!cargar) return null;
   return (await cargar()).default;
 }

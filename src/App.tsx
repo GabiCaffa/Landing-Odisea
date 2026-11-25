@@ -19,6 +19,7 @@ import Index from "./pages/Index";
 // de la home. Así la landing (y sus eventos) arranca con mucho menos JS.
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Evento = lazy(() => import("./pages/Evento"));
+const MapaEvento = lazy(() => import("./pages/MapaEvento"));
 const Register = lazy(() => import("./pages/Register"));
 const Login = lazy(() => import("./pages/Login"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -58,6 +59,9 @@ const App = () => (
                   RUTA_EVENTO (src/lib/rutas.ts), que es de donde lo saca el
                   plugin que hornea el HTML de cada evento. */}
               <Route path="/evento/:slug" element={<Evento />} />
+              {/* El mapa 3D con dirección propia, para anuncios e historias.
+                  Ver src/pages/MapaEvento.tsx. */}
+              <Route path="/evento/:slug/mapa" element={<MapaEvento />} />
               {/* La fiesta aparte (Expo Fiesta): misma página, sin tema. Ver
                   src/lib/fiestasAparte.ts. */}
               <Route path="/expofiesta" element={<Evento />} />
