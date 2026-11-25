@@ -4,6 +4,7 @@ import type { Plugin } from "vite";
 import { RUTA_EVENTO, SITIO } from "../src/lib/rutas";
 import { imagenRedimensionada } from "../src/lib/imagenes";
 import { fmtPrecio, monedaDe } from "../src/lib/moneda";
+import { tieneCroquis } from "../src/croquis/eventos";
 
 /**
  * Páginas por evento (v25). Vive fuera de `vite.config.ts` por dos motivos:
@@ -276,6 +277,35 @@ export function htmlDeEvento(base: string, e: EventoPagina): string {
  * > genérico hasta el próximo build. Por eso el panel tiene el botón
  * > "Actualizar páginas", que dispara un Deploy Hook de Vercel.
  */
+/**
+ * La página del mapa 3D (`/evento/<slug>/mapa`): la del evento con otro título,
+ * otra descripción y su propia URL. Es lo que se ve al compartir el link del
+ * mapa por WhatsApp o Instagram, que no ejecutan JavaScript. La imagen sigue
+ * siendo el flyer: no hay una foto del mapa que mostrar.
+ */
+export function htmlDeMapa(base: string, e: EventoPagina): string {
+  const avisos: string[] = [];
+  const urlMapa = `${SITIO}${RUTA_EVENTO}/${e.slug}/mapa`;
+  // Los nombres pueden venir con espacios de más desde el panel.
+  const nombre = e.name.replace(/\s+/g, " ").trim();
+  const lugar = (e.location ?? "").replace(/\s+/g, " ").trim();
+  const titulo = `Mapa 3D · ${nombre} | ODÍSEA`;
+  const descripcion =
+    `Recorré en 3D el predio de ${nombre}: sectores, barras, baños, accesos y la pista. ` +
+    `${fechaCorta(e.date)}${lugar ? ` en ${lugar}` : ""}.`;
+  let html = htmlDeEvento(base, e);
+  html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${texto(titulo)}</title>`);
+  html = cambiarMeta(html, "name", "description", descripcion, avisos);
+  html = html.replace(/<link(?=[^>]*\brel="canonical")[^>]*>/i, `<link rel="canonical" href="${attr(urlMapa)}" />`);
+  html = cambiarMeta(html, "property", "og:title", titulo, avisos);
+  html = cambiarMeta(html, "property", "og:description", descripcion, avisos);
+  html = cambiarMeta(html, "property", "og:url", urlMapa, avisos);
+  html = cambiarMeta(html, "name", "twitter:title", titulo, avisos);
+  html = cambiarMeta(html, "name", "twitter:description", descripcion, avisos);
+  if (avisos.length) console.warn(`[eventos] mapa de ${e.slug}: ${avisos.join(", ")}`);
+  return html;
+}
+
 export function paginasDeEventos(url?: string, key?: string): Plugin {
   // Lo completa `configResolved` antes de que corra `closeBundle`.
   let salida = "";
@@ -331,6 +361,12 @@ export function paginasDeEventos(url?: string, key?: string): Plugin {
           fs.mkdirSync(carpeta, { recursive: true });
           fs.writeFileSync(path.join(carpeta, "index.html"), html);
           escritas++;
+          if (tieneCroquis(e.slug)) {
+            const carpetaMapa = path.join(carpeta, "mapa");
+            fs.mkdirSync(carpetaMapa, { recursive: true });
+            fs.writeFileSync(path.join(carpetaMapa, "index.html"), htmlDeMapa(base, e));
+            escritas++;
+          }
         }
 
         // El sitemap se REESCRIBE acá, encima del que ya emitió `seoEstatico`.
@@ -342,6 +378,9 @@ export function paginasDeEventos(url?: string, key?: string): Plugin {
         const rutas = [
           { loc: "/", priority: "1.0" },
           ...vigentes.map((e) => ({ loc: `${RUTA_EVENTO}/${e.slug}`, priority: "0.8" })),
+          ...vigentes
+            .filter((e) => tieneCroquis(e.slug))
+            .map((e) => ({ loc: `${RUTA_EVENTO}/${e.slug}/mapa`, priority: "0.6" })),
           { loc: "/terminos", priority: "0.3" },
           { loc: "/privacidad", priority: "0.3" },
         ];

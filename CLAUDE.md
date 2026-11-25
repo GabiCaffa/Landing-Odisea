@@ -2054,9 +2054,21 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
   `arbolNavidad`, `banderaGolf`) y vistas. El motor (`src/croquis/motor.ts`) sabe dibujar cada
   pieza. **Un predio nuevo es un archivo nuevo, no código nuevo.** Los tipos, en
   `src/croquis/tipos.ts`.
-- **Qué evento lo muestra: `src/croquis/registro.ts`**, por `slug` (v25), sin migración. El
-  mismo predio puede servir a varias fechas (una línea por slug). Hoy: sólo
-  `navidad-en-el-golf-paysandu`.
+- **Qué evento lo muestra: `src/croquis/eventos.ts`**, por `slug` (v25) → id de predio, sin
+  migración. Archivo sin dependencias porque lo leen también el build y la página del evento;
+  `registro.ts` carga el predio por su id. El mismo predio puede servir a varias fechas (una
+  línea por slug). Hoy: sólo `navidad-en-el-golf-paysandu`.
+- **Dirección propia para marketing: `/evento/<slug>/mapa`** (`src/pages/MapaEvento.tsx`,
+  `urlDeMapa` en `rutas.ts`). Abre el mapa directo, con **"Comprar entradas"** (o "Ver la
+  fecha" si no está a la venta) debajo del nombre y un botón de **compartir** (menú del
+  celular o copia el link). Cerrar lleva a la página del evento. El botón "Ver el mapa 3D" de
+  la página del evento es un link a esa ruta con `desdeEvento`: ahí no se muestra la compra
+  (ya está abajo) y cerrar —o el botón de atrás— vuelve a la página. El píxel cuenta el
+  `PageView` de la ruta como cualquier otra.
+- **La vista previa del link** se hornea en el build (`htmlDeMapa` en
+  `vite/paginasEvento.ts`, `dist/evento/<slug>/mapa/index.html`): "Mapa 3D · <evento>",
+  una descripción propia y el flyer como imagen (no hay foto del mapa). También entra al
+  sitemap. Igual que las páginas de evento, **se pone al día con "Actualizar páginas"**.
 - **Navidad en el Golf sale del mapa que publicó la organización**: las posiciones se tomaron en
   píxeles de esa imagen y se pasan a metros con `p()` (0,25 m por píxel). **No está a escala**
   y el visor lo dice. **Suposición:** los íconos redondos con una cara en los bordes se tomaron

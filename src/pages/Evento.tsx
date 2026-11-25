@@ -16,13 +16,11 @@ import { loteAgotado, stockDelLote, stockEsAutomatico, textoStockLote } from "@/
 import { rastrear } from "@/lib/pixel";
 import VisorFlyer from "@/components/VisorFlyer";
 import { stockAMostrar, useStockHoja } from "@/lib/stockHoja";
-import { urlDeEvento } from "@/lib/rutas";
+import { urlDeEvento, urlDeMapa } from "@/lib/rutas";
 import { fmtPrecio } from "@/lib/moneda";
-import { tieneCroquis } from "@/croquis/registro";
+import { tieneCroquis } from "@/croquis/eventos";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
-// El croquis 3D: su componente y Three.js se bajan recién al tocar el botón.
-const CroquisVisor = lazy(() => import("@/components/CroquisVisor"));
 
 /**
  * Página de un evento: `/evento/<slug>` (v25).
@@ -67,7 +65,6 @@ const Evento = () => {
   const stockHoja = useStockHoja();
   // El flyer a tamaño grande, en la misma página (no en otra pestaña).
   const [flyerAbierto, setFlyerAbierto] = useState(false);
-  const [mapaAbierto, setMapaAbierto] = useState(false);
 
   // `/expofiesta` es la misma página sin el tramo del evento: la fiesta aparte
   // vigente. Se resuelve acá y no con un redirect para que la URL de los
@@ -319,14 +316,16 @@ const Evento = () => {
                   // pantalla (v25) y un renglón más ya la hace scrollear.
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     {tieneCroquis(evento.slug) && (
-                      <button
-                        type="button"
-                        onClick={() => setMapaAbierto(true)}
+                      // Un link a su propia página (/evento/<slug>/mapa): así
+                      // el mapa se puede compartir y el botón de atrás lo cierra.
+                      <Link
+                        to={urlDeMapa(evento.slug)}
+                        state={{ desdeEvento: true }}
                         className="inline-flex items-center gap-2 text-xs font-semibold text-celeste-deep transition-colors hover:text-foreground sm:text-sm"
                       >
                         <Box className="h-4 w-4 flex-shrink-0" aria-hidden />
                         <span className="underline underline-offset-2">Ver el mapa 3D</span>
-                      </button>
+                      </Link>
                     )}
                     {evento.instagramUrl && (
                       <a
@@ -340,11 +339,6 @@ const Evento = () => {
                       </a>
                     )}
                   </div>
-                )}
-                {mapaAbierto && (
-                  <Suspense fallback={<div className="fixed inset-0 z-[70] bg-[#060912]" />}>
-                    <CroquisVisor slug={evento.slug} onClose={() => setMapaAbierto(false)} />
-                  </Suspense>
                 )}
               </div>
 

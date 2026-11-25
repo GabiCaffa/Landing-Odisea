@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Moon, Sun, Sunset, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Moon, Share2, Sun, Sunset, X } from "lucide-react";
+import { toast } from "sonner";
+import { SITIO, urlDeMapa } from "@/lib/rutas";
 import type { Hora, Predio } from "@/croquis/tipos";
 import type { ControlCroquis } from "@/croquis/motor";
 import { cargarPredio } from "@/croquis/registro";
@@ -8,6 +11,11 @@ import { cargarPredio } from "@/croquis/registro";
 interface Props {
   slug: string;
   onClose: () => void;
+  /**
+   * Botón de compra arriba. Lo pasa la página propia del mapa: quien llega desde
+   * un anuncio tiene que poder comprar sin buscar dónde.
+   */
+  compra?: { href: string; texto: string };
 }
 
 const HORAS: { id: Hora; nombre: string; icono: typeof Sun }[] = [
@@ -27,7 +35,7 @@ const HORAS: { id: Hora; nombre: string; icono: typeof Sun }[] = [
  * rompería el `position: fixed`. Siempre oscuro, con colores propios: es un
  * visor, no una pantalla del tema.
  */
-const CroquisVisor = ({ slug, onClose }: Props) => {
+const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const control = useRef<ControlCroquis | null>(null);
   const cerrarRef = useRef(onClose);
@@ -89,6 +97,23 @@ const CroquisVisor = ({ slug, onClose }: Props) => {
 
   const actual = predio?.vistas.find((v) => v.id === vista);
 
+  /** El link del mapa: en el celular abre el menú de compartir; si no, se copia. */
+  const compartir = async () => {
+    const url = `${SITIO}${urlDeMapa(slug)}`;
+    const titulo = predio ? `Mapa 3D · ${predio.nombre}` : "Mapa 3D";
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: titulo, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Link del mapa copiado");
+    } catch (e) {
+      // Cerrar el menú de compartir no es un error.
+      if ((e as Error)?.name !== "AbortError") toast.error("No se pudo copiar el link");
+    }
+  };
+
   return createPortal(
     <div
       className="fixed inset-0 z-[70] bg-[#060912] text-white"
@@ -117,15 +142,35 @@ const CroquisVisor = ({ slug, onClose }: Props) => {
         <div className="min-w-0">
           <h2 className="truncate text-xl font-black tracking-tight sm:text-2xl">{predio?.nombre ?? "Mapa del predio"}</h2>
           {predio && <p className="mt-0.5 line-clamp-2 text-xs text-white/70 sm:text-sm">{predio.subtitulo}</p>}
+          {/* Debajo del nombre y no al lado de los botones: en un celular le
+              comía el título entero. */}
+          {compra && (
+            <Link
+              to={compra.href}
+              className="pointer-events-auto mt-2 inline-flex h-10 items-center rounded-full bg-[#F25C26] px-4 text-xs font-bold uppercase tracking-wide text-white transition-opacity hover:opacity-90 sm:text-sm"
+            >
+              {compra.texto}
+            </Link>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="pointer-events-auto -mr-1 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur transition-colors hover:bg-white/20"
-          aria-label="Cerrar el mapa"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <div className="pointer-events-auto -mr-1 flex flex-shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void compartir()}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 backdrop-blur transition-colors hover:bg-white/20"
+            aria-label="Compartir el mapa"
+          >
+            <Share2 className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 backdrop-blur transition-colors hover:bg-white/20"
+            aria-label="Cerrar el mapa"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {/* Vistas, descripción y hora */}
