@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { Footprints, MapPin, Moon, Share2, Sun, Sunset, X } from "lucide-react";
+import { Footprints, MapPin, Moon, Share2, Sun, Sunset, Ticket, X } from "lucide-react";
 import { toast } from "sonner";
 import { SITIO, urlDeMapa } from "@/lib/rutas";
-import type { Hora, Predio } from "@/croquis/tipos";
+import { formatEventDate, useAuth } from "@/contexts/AuthContext";
+import { foldText } from "@/lib/utils";
+import { fmtSimple } from "@/lib/moneda";
+import type { EventTicket } from "@/lib/ticketTypes";
+import type { Hora, Predio, ZonaPredio } from "@/croquis/tipos";
 import type { ControlCroquis } from "@/croquis/motor";
 import { cargarPredio } from "@/croquis/registro";
 
@@ -86,6 +90,23 @@ const Joystick = ({ onMover }: { onMover: (x: number, y: number) => void }) => {
   );
 };
 
+const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
+
+/** Las entradas a la venta del evento que son de esta zona (por palabras en el nombre). */
+function entradasDeZona(zona: ZonaPredio | undefined, tickets: EventTicket[]): EventTicket[] {
+  const cfg = zona?.entradas;
+  if (!cfg) return [];
+  const incluye = cfg.incluye.map(foldText);
+  const excluye = (cfg.excluye ?? []).map(foldText);
+  return tickets
+    .filter((t) => t.active)
+    .filter((t) => {
+      const n = foldText(t.name);
+      return incluye.some((w) => n.includes(w)) && !excluye.some((w) => n.includes(w));
+    })
+    .sort((a, b) => a.price - b.price);
+}
+
 const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const control = useRef<ControlCroquis | null>(null);
@@ -97,7 +118,14 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const [vista, setVista] = useState("");
   const [hora, setHora] = useState<Hora>("noche");
   const [caminando, setCaminando] = useState(false);
-  const [zona, setZona] = useState<string | null>(null);
+  const [zona, setZona] = useState<{ id: string; nombre: string } | null>(null);
+  // La compra abierta encima del mapa, con la entrada de la zona ya elegida.
+  const [comprando, setComprando] = useState<{ preseleccion?: string } | null>(null);
+  const comprandoRef = useRef(false);
+  comprandoRef.current = comprando !== null;
+  const { events } = useAuth();
+  const evento = events.find((e) => e.slug === slug);
+  const vende = evento?.status === "activo";
   const [tactil] = useState(() => window.matchMedia("(pointer: coarse)").matches);
   const [vertical, setVertical] = useState(() => window.matchMedia("(orientation: portrait)").matches);
   const caminandoRef = useRef(false);
@@ -112,7 +140,7 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || comprandoRef.current) return;
       if (caminandoRef.current) {
         caminandoRef.current = false;
         setCaminando(false);
@@ -171,6 +199,38 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
     setCaminando(activo);
     control.current?.caminar(activo);
   };
+
+  // Las entradas de la zona donde se está parado.
+  const zonaDatos = predio?.zonas.find((z) => z.id === zona?.id);
+  const entradasZona = useMemo(
+    () => (vende && evento ? entradasDeZona(zonaDatos, evento.tickets) : []),
+    [vende, evento, zonaDatos]
+  );
+
+  const abrirCompra = (preseleccion?: string) => {
+    control.current?.pausar(true);
+    setComprando({ preseleccion });
+  };
+  const cerrarCompra = () => {
+    setComprando(null);
+    control.current?.pausar(false);
+  };
+
+  // Al entrar caminando a una zona especial (VIP, backstage) se abre la compra
+  // sola, con su entrada puesta. Una vez por zona: si la cierra y vuelve a
+  // entrar, no se la vuelve a poner adelante; queda el botón de abajo.
+  const yaOfrecidas = useRef(new Set<string>());
+  useEffect(() => {
+    if (!caminando || !zona || !zonaDatos?.especial || !entradasZona.length) return;
+    if (yaOfrecidas.current.has(zona.id)) return;
+    // Un respiro para que se vea dónde se entró antes de que aparezca el modal.
+    const id = window.setTimeout(() => {
+      yaOfrecidas.current.add(zona.id);
+      abrirCompra(entradasZona[0].name);
+    }, 700);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caminando, zona?.id, entradasZona.length]);
 
   const actual = predio?.vistas.find((v) => v.id === vista);
 
@@ -257,7 +317,7 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             <div className="pointer-events-none absolute left-1/2 top-[max(6.5rem,calc(env(safe-area-inset-top)+6rem))] -translate-x-1/2 sm:top-24 [@media(max-height:500px)]:top-4">
               <p className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-black/60 px-4 py-2 text-xs font-bold uppercase tracking-wide backdrop-blur sm:text-sm">
                 <MapPin className="h-4 w-4 text-[#F25C26]" aria-hidden />
-                {zona}
+                {zona.nombre}
               </p>
             </div>
           )}
@@ -284,9 +344,20 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             </>
           )}
           <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+            {entradasZona.length > 0 && evento && (
+              // La compra de la zona donde se está, siempre a un toque.
+              <button
+                type="button"
+                onClick={() => abrirCompra(entradasZona[0].name)}
+                className="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-full bg-[#F25C26] px-5 text-xs font-bold text-white shadow-lg sm:text-sm"
+              >
+                <Ticket className="h-4 w-4" aria-hidden />
+                Comprar {entradasZona[0].name} · {fmtSimple(entradasZona[0].price, evento.currency)}
+              </button>
+            )}
             {!tactil && (
               <p className="whitespace-nowrap rounded-full bg-black/55 px-4 py-2 text-[11px] text-white/85 backdrop-blur sm:text-xs">
-                <b>WASD</b> o <b>flechas</b> para caminar · <b>Shift</b> para correr · arrastrá para mirar
+                <b>WASD</b> para caminar · <b>← →</b> para girar · <b>Shift</b> para correr · arrastrá para mirar
               </p>
             )}
             <button
@@ -352,6 +423,22 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             Croquis ilustrativo, no está a escala. Arrastrá para girar y pellizcá o usá la rueda para acercar.
           </p>
         </div>
+      )}
+      {comprando && evento && (
+        <Suspense fallback={null}>
+          <CompraEntradas
+            isOpen
+            encima
+            onClose={cerrarCompra}
+            eventId={evento.id}
+            eventName={evento.name}
+            eventDate={formatEventDate(evento.date)}
+            eventLocation={evento.location}
+            tickets={evento.tickets.filter((t) => t.active)}
+            promos={evento.promos}
+            preseleccion={comprando.preseleccion}
+          />
+        </Suspense>
       )}
     </div>,
     document.body

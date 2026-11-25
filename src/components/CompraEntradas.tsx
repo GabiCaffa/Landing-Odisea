@@ -71,6 +71,14 @@ interface CompraEntradasProps {
    * ni cantidades: el abono se cobra como cualquier otra entrada.
    */
   diasDeLaFiesta?: number;
+  /**
+   * Nombre de una entrada que arranca con 1 elegida. La usa el mapa 3D: al
+   * entrar caminando al VIP, la compra se abre con el VIP puesto. Es sólo el
+   * valor inicial del contador: precio, descuentos y mensaje no cambian.
+   */
+  preseleccion?: string;
+  /** Abrir el modal por encima del mapa 3D, que va a pantalla completa. */
+  encima?: boolean;
 }
 
 type Step = "auth-prompt" | "purchase";
@@ -86,6 +94,8 @@ const CompraEntradas = ({
   tickets,
   promos = [],
   diasDeLaFiesta = 1,
+  preseleccion,
+  encima = false,
 }: CompraEntradasProps) => {
   const { currentUser, events, register } = useAuth();
   // Moneda del evento (v48). Todo precio de esta pantalla, el total y el
@@ -110,7 +120,7 @@ const CompraEntradas = ({
   const [step, setStep] = useState<Step>(modo === "pagina" ? "purchase" : "auth-prompt");
 
   const [quantities, setQuantities] = useState<{ [key: string]: number }>(
-    tickets.reduce((acc, t) => ({ ...acc, [t.name]: 0 }), {})
+    tickets.reduce((acc, t) => ({ ...acc, [t.name]: t.name === preseleccion ? 1 : 0 }), {})
   );
 
   const [country, setCountry] = useState(currentUser?.country ?? DEFAULT_COUNTRY_CODE);
@@ -1074,7 +1084,7 @@ const CompraEntradas = ({
   if (modo === "pagina") return contenido;
 
   return (
-    <ModalShell onClose={cerrar} etiqueta={`Comprar entradas para ${eventName}`}>
+    <ModalShell onClose={cerrar} etiqueta={`Comprar entradas para ${eventName}`} capa={encima ? "z-[90]" : undefined}>
       {contenido}
     </ModalShell>
   );

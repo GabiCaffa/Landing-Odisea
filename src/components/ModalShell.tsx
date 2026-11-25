@@ -40,6 +40,11 @@ interface Props {
   ancho?: Ancho;
   /** Para lectores de pantalla: qué es este diálogo. */
   etiqueta: string;
+  /**
+   * Capa (z-index). Por defecto la de siempre; el mapa 3D, que va a pantalla
+   * completa por encima del sitio, pide una más alta para abrir la compra encima.
+   */
+  capa?: string;
 }
 
 /**
@@ -57,7 +62,7 @@ const ANCHOS: Record<Ancho, string> = {
   "5xl": "sm:max-w-5xl",
 };
 
-const ModalShell = ({ onClose, children, ancho = "2xl", etiqueta }: Props) => {
+const ModalShell = ({ onClose, children, ancho = "2xl", etiqueta, capa = "z-50" }: Props) => {
   // En un ref para que cambiar el handler no re-arme los listeners.
   const cerrarRef = useRef(onClose);
   cerrarRef.current = onClose;
@@ -82,7 +87,7 @@ const ModalShell = ({ onClose, children, ancho = "2xl", etiqueta }: Props) => {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-velo/70 backdrop-blur-sm sm:items-center sm:p-4"
+      className={`fixed inset-0 ${capa} flex items-stretch justify-center bg-velo/70 backdrop-blur-sm sm:items-center sm:p-4`}
       // Sólo el velo cierra: un click que EMPIEZA adentro y termina afuera
       // (seleccionar texto y soltar de más) no tiene que cerrar el modal.
       onMouseDown={(e) => {
