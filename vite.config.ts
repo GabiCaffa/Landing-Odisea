@@ -477,6 +477,9 @@ export default defineConfig(({ mode }) => {
             // cmdk (el buscador del panel, Ctrl+K): sólo lo usa el panel, que es un
             // chunk lazy. En "vendor" lo bajaría cualquiera que entre a ver una fiesta.
             if (id.includes('cmdk')) return;
+            // Three.js (el croquis 3D, ~150 KB gzip): sólo se baja al abrir el
+            // mapa de un evento. En "vendor" lo bajaría todo visitante.
+            if (/[\/]node_modules[\/]three[\/]/.test(id)) return;
             if (id.includes('libphonenumber')) return 'telefono';
             if (id.includes('recharts') || id.includes('d3-')) return 'graficos';
             if (id.includes('@radix-ui')) return 'radix';

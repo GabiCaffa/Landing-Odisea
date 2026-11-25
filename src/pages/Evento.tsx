@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { CalendarDays, Flame, Instagram, Lock, MapPin, Ticket } from "lucide-react";
+import { Box, CalendarDays, Flame, Instagram, Lock, MapPin, Ticket } from "lucide-react";
 import ContadorReveal from "@/components/ContadorReveal";
 import { esProximamente, useAhora } from "@/lib/proximamente";
 import Header from "@/components/Header";
@@ -18,8 +18,11 @@ import VisorFlyer from "@/components/VisorFlyer";
 import { stockAMostrar, useStockHoja } from "@/lib/stockHoja";
 import { urlDeEvento } from "@/lib/rutas";
 import { fmtPrecio } from "@/lib/moneda";
+import { tieneCroquis } from "@/croquis/registro";
 
 const CompraEntradas = lazy(() => import("@/components/CompraEntradas"));
+// El croquis 3D: su componente y Three.js se bajan recién al tocar el botón.
+const CroquisVisor = lazy(() => import("@/components/CroquisVisor"));
 
 /**
  * Página de un evento: `/evento/<slug>` (v25).
@@ -64,6 +67,7 @@ const Evento = () => {
   const stockHoja = useStockHoja();
   // El flyer a tamaño grande, en la misma página (no en otra pestaña).
   const [flyerAbierto, setFlyerAbierto] = useState(false);
+  const [mapaAbierto, setMapaAbierto] = useState(false);
 
   // `/expofiesta` es la misma página sin el tramo del evento: la fiesta aparte
   // vigente. Se resuelve acá y no con un redirect para que la URL de los
@@ -310,16 +314,37 @@ const Evento = () => {
                     {textoStockLote(stockLote)}
                   </p>
                 )}
-                {evento.instagramUrl && (
-                  <a
-                    href={evento.instagramUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground sm:text-sm"
-                  >
-                    <Instagram className="h-4 w-4 flex-shrink-0" />
-                    <span className="underline underline-offset-2">Ver en Instagram</span>
-                  </a>
+                {(evento.instagramUrl || tieneCroquis(evento.slug)) && (
+                  // En la misma línea que Instagram: la página entra en una
+                  // pantalla (v25) y un renglón más ya la hace scrollear.
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    {tieneCroquis(evento.slug) && (
+                      <button
+                        type="button"
+                        onClick={() => setMapaAbierto(true)}
+                        className="inline-flex items-center gap-2 text-xs font-semibold text-celeste-deep transition-colors hover:text-foreground sm:text-sm"
+                      >
+                        <Box className="h-4 w-4 flex-shrink-0" aria-hidden />
+                        <span className="underline underline-offset-2">Ver el mapa 3D</span>
+                      </button>
+                    )}
+                    {evento.instagramUrl && (
+                      <a
+                        href={evento.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground sm:text-sm"
+                      >
+                        <Instagram className="h-4 w-4 flex-shrink-0" />
+                        <span className="underline underline-offset-2">Ver en Instagram</span>
+                      </a>
+                    )}
+                  </div>
+                )}
+                {mapaAbierto && (
+                  <Suspense fallback={<div className="fixed inset-0 z-[70] bg-[#060912]" />}>
+                    <CroquisVisor slug={evento.slug} onClose={() => setMapaAbierto(false)} />
+                  </Suspense>
                 )}
               </div>
 
