@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { Moon, Share2, Sun, Sunset, X } from "lucide-react";
+import { Footprints, MapPin, Moon, Share2, Sun, Sunset, X } from "lucide-react";
 import { toast } from "sonner";
 import { SITIO, urlDeMapa } from "@/lib/rutas";
 import type { Hora, Predio } from "@/croquis/tipos";
@@ -35,6 +35,57 @@ const HORAS: { id: Hora; nombre: string; icono: typeof Sun }[] = [
  * rompería el `position: fixed`. Siempre oscuro, con colores propios: es un
  * visor, no una pantalla del tema.
  */
+/**
+ * Palanca táctil para caminar en el celular. Se maneja con el pulgar izquierdo;
+ * el derecho queda para girar la cámara arrastrando sobre el mapa.
+ */
+const Joystick = ({ onMover }: { onMover: (x: number, y: number) => void }) => {
+  const base = useRef<HTMLDivElement>(null);
+  const [perilla, setPerilla] = useState({ x: 0, y: 0 });
+  const apretado = useRef(false);
+  const RADIO = 46;
+
+  const mover = (e: React.PointerEvent) => {
+    const r = base.current!.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(dx, dy);
+    if (d > RADIO) {
+      dx = (dx * RADIO) / d;
+      dy = (dy * RADIO) / d;
+    }
+    setPerilla({ x: dx, y: dy });
+    onMover(dx / RADIO, -dy / RADIO);
+  };
+  const soltar = () => {
+    apretado.current = false;
+    setPerilla({ x: 0, y: 0 });
+    onMover(0, 0);
+  };
+
+  return (
+    <div
+      ref={base}
+      className="relative h-32 w-32 touch-none select-none rounded-full border border-white/25 bg-white/10 backdrop-blur"
+      onPointerDown={(e) => {
+        apretado.current = true;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        mover(e);
+      }}
+      onPointerMove={(e) => apretado.current && mover(e)}
+      onPointerUp={soltar}
+      onPointerCancel={soltar}
+      aria-label="Palanca para caminar"
+      role="application"
+    >
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/2 h-14 w-14 rounded-full bg-white/85 shadow-lg"
+        style={{ transform: `translate(calc(-50% + ${perilla.x}px), calc(-50% + ${perilla.y}px))` }}
+      />
+    </div>
+  );
+};
+
 const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const control = useRef<ControlCroquis | null>(null);
@@ -45,10 +96,28 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const [estado, setEstado] = useState<"cargando" | "listo" | "error">("cargando");
   const [vista, setVista] = useState("");
   const [hora, setHora] = useState<Hora>("noche");
+  const [caminando, setCaminando] = useState(false);
+  const [zona, setZona] = useState<string | null>(null);
+  const [tactil] = useState(() => window.matchMedia("(pointer: coarse)").matches);
+  const [vertical, setVertical] = useState(() => window.matchMedia("(orientation: portrait)").matches);
+  const caminandoRef = useRef(false);
+  caminandoRef.current = caminando;
+
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: portrait)");
+    const cambio = () => setVertical(mq.matches);
+    mq.addEventListener("change", cambio);
+    return () => mq.removeEventListener("change", cambio);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") cerrarRef.current();
+      if (e.key !== "Escape") return;
+      if (caminandoRef.current) {
+        caminandoRef.current = false;
+        setCaminando(false);
+        control.current?.caminar(false);
+      } else cerrarRef.current();
     };
     document.addEventListener("keydown", onKey);
     const previo = document.body.style.overflow;
@@ -69,7 +138,11 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
         }
         const movil = window.matchMedia("(max-width: 767px), (pointer: coarse)").matches;
         const reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        control.current = motor.crearCroquis(canvasRef.current, p, { movil, reducirMovimiento });
+        control.current = motor.crearCroquis(canvasRef.current, p, {
+          movil,
+          reducirMovimiento,
+          onZona: (z) => setZona(z),
+        });
         setPredio(p);
         setVista(p.vistas[0]?.id ?? "");
         setEstado("listo");
@@ -93,6 +166,10 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const elegirHora = (h: Hora) => {
     setHora(h);
     control.current?.ponerHora(h);
+  };
+  const ponerCaminata = (activo: boolean) => {
+    setCaminando(activo);
+    control.current?.caminar(activo);
   };
 
   const actual = predio?.vistas.find((v) => v.id === vista);
@@ -173,8 +250,58 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
         </div>
       </div>
 
+      {/* Caminata: sector actual, palanca, correr y salir */}
+      {predio && estado === "listo" && caminando && (
+        <>
+          {zona && (
+            <div className="pointer-events-none absolute left-1/2 top-[max(6.5rem,calc(env(safe-area-inset-top)+6rem))] -translate-x-1/2 sm:top-24 [@media(max-height:500px)]:top-4">
+              <p className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-black/60 px-4 py-2 text-xs font-bold uppercase tracking-wide backdrop-blur sm:text-sm">
+                <MapPin className="h-4 w-4 text-[#F25C26]" aria-hidden />
+                {zona}
+              </p>
+            </div>
+          )}
+          {tactil && vertical && (
+            <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-2xl bg-black/65 p-3 text-center text-xs text-white/90 backdrop-blur">
+              Poné el teléfono horizontal para caminar más cómodo.
+            </p>
+          )}
+          {tactil && (
+            <>
+              <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-[max(1.25rem,env(safe-area-inset-left))]">
+                <Joystick onMover={(x, y) => control.current?.mover(x, y)} />
+              </div>
+              <button
+                type="button"
+                className="absolute bottom-[max(2.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))] h-20 w-20 touch-none select-none rounded-full border border-white/25 bg-[#F25C26]/85 text-xs font-black uppercase tracking-wide shadow-lg active:bg-[#F25C26]"
+                onPointerDown={() => control.current?.correr(true)}
+                onPointerUp={() => control.current?.correr(false)}
+                onPointerCancel={() => control.current?.correr(false)}
+                onPointerLeave={() => control.current?.correr(false)}
+              >
+                Correr
+              </button>
+            </>
+          )}
+          <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+            {!tactil && (
+              <p className="whitespace-nowrap rounded-full bg-black/55 px-4 py-2 text-[11px] text-white/85 backdrop-blur sm:text-xs">
+                <b>WASD</b> o <b>flechas</b> para caminar · <b>Shift</b> para correr · arrastrá para mirar
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => ponerCaminata(false)}
+              className="min-h-[40px] rounded-full bg-white px-5 text-xs font-bold text-black"
+            >
+              Salir de la caminata
+            </button>
+          </div>
+        </>
+      )}
+
       {/* Vistas, descripción y hora */}
-      {predio && estado === "listo" && (
+      {predio && estado === "listo" && !caminando && (
         <div className="absolute inset-x-0 bottom-0 space-y-2 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-10 sm:px-6">
           {actual && (
             <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-black/55 p-3 backdrop-blur sm:p-4">
@@ -197,7 +324,15 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
               </button>
             ))}
           </div>
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => ponerCaminata(true)}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-[#F25C26] bg-[#F25C26]/15 px-4 text-xs font-bold text-white transition-colors hover:bg-[#F25C26]/30"
+            >
+              <Footprints className="h-4 w-4" aria-hidden />
+              Caminar por el predio
+            </button>
             {HORAS.map(({ id, nombre, icono: Icono }) => (
               <button
                 key={id}

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Hora, Pieza, Predio, Punto, TipoPieza, Vista } from "./tipos";
+import { crearPersonaje } from "./personaje";
 
 /**
  * El motor del croquis 3D: arma la escena de un `Predio` (datos) con piezas
@@ -24,12 +25,29 @@ import type { Hora, Pieza, Predio, Punto, TipoPieza, Vista } from "./tipos";
 export interface ControlCroquis {
   verVista(id: string, inmediato?: boolean): void;
   ponerHora(hora: Hora): void;
+  /** Modo caminata: aparece el personaje y la cámara lo sigue. */
+  caminar(activo: boolean): void;
+  /** Joystick: x a la derecha, y hacia adelante, de -1 a 1. */
+  mover(x: number, y: number): void;
+  correr(activo: boolean): void;
   liberar(): void;
 }
 
 interface Opciones {
   movil: boolean;
   reducirMovimiento: boolean;
+  /** Avisa el sector en el que está parado el personaje (null = afuera). */
+  onZona?: (nombre: string | null) => void;
+}
+
+/** ¿Se cruzan los segmentos ab y cd? */
+function cruzan(a: Punto, b: Punto, c: Punto, d: Punto): boolean {
+  const lado = (p: Punto, q: Punto, r: Punto) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const d1 = lado(c, d, a);
+  const d2 = lado(c, d, b);
+  const d3 = lado(a, b, c);
+  const d4 = lado(a, b, d);
+  return d1 * d2 < 0 && d3 * d4 < 0;
 }
 
 // ─── Utilidades ─────────────────────────────────────────────────────────────
@@ -253,14 +271,15 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   escena.add(lamparitas);
 
   // ── Piezas ──
-  const cartelesPieza: { tipo: TipoPieza; sprite: THREE.Sprite }[] = [];
+  // x, z: dónde está la pieza en el predio (se completa al ubicarla).
+  const cartelesPieza: { tipo: TipoPieza; sprite: THREE.Sprite; x: number; z: number }[] = [];
   const rayos: THREE.Object3D[] = [];
   const conCartel = (tipo: TipoPieza, texto: string, fondo: string, g: THREE.Group, alto: number) => {
     const s = cartel(texto, 1.9, fondo);
     s.position.set(0, alto, 0);
     s.visible = false;
     g.add(s);
-    cartelesPieza.push({ tipo, sprite: s });
+    cartelesPieza.push({ tipo, sprite: s, x: 0, z: 0 });
   };
 
   const constructores: Record<TipoPieza, (p: Pieza) => THREE.Group> = {
@@ -457,7 +476,12 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   };
 
   for (const p of predio.piezas) {
+    const previos = cartelesPieza.length;
     const g = constructores[p.tipo](p);
+    for (const c of cartelesPieza.slice(previos)) {
+      c.x = p.x;
+      c.z = p.z;
+    }
     g.position.set(p.x, 0, p.z);
     g.rotation.y = ((p.rot ?? 0) * Math.PI) / 180;
     g.traverse((o) => {
@@ -562,6 +586,162 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     cabezas.instanceMatrix.needsUpdate = true;
   };
 
+  // Estado de la cámara (lo usan las vistas y la caminata).
+  let vistaActual: Vista | undefined;
+  const desde = { pos: new THREE.Vector3(), mira: new THREE.Vector3() };
+  const hacia = { pos: new THREE.Vector3(), mira: new THREE.Vector3() };
+  let viaje = 1; // 0..1; 1 = quieto
+  const DURACION = 1.4;
+  let t = 0;
+
+  // ── El personaje y la caminata ──
+  const personaje = crearPersonaje();
+  personaje.grupo.visible = false;
+  escena.add(personaje.grupo);
+
+  // Las vallas son lo único que frena: el personaje atraviesa a la gente y
+  // las barras (un juego no, un mapa). Así no queda trabado en ningún rincón.
+  const tramos: [Punto, Punto][] = predio.vallas.flatMap((v) =>
+    v.puntos.slice(1).map((q, i) => [v.puntos[i], q] as [Punto, Punto])
+  );
+  const choca = (x0: number, z0: number, x1: number, z1: number) => {
+    const dx = x1 - x0;
+    const dz = z1 - z0;
+    const largo = Math.hypot(dx, dz) || 1;
+    // Medio metro de margen, para no meter la nariz en la valla.
+    const fin: Punto = [x1 + (dx / largo) * 0.45, z1 + (dz / largo) * 0.45];
+    return tramos.some(([c, d]) => cruzan([x0, z0], fin, c, d));
+  };
+
+  let caminando = false;
+  let corriendo = false;
+  const palanca = { x: 0, y: 0 };
+  const teclas = new Set<string>();
+  let rumbo = Math.PI; // mirando al norte
+  let zonaActual: string | null | undefined;
+  const inicio = predio.inicio ?? { x: (minX + maxX) / 2, z: maxZ + 6 };
+  personaje.grupo.position.set(inicio.x, 0, inicio.z);
+  personaje.grupo.rotation.y = rumbo;
+
+  const zonaDe = (x: number, z: number): string | null => {
+    let nombre: string | null = null;
+    for (const zona of predio.zonas) if (dentro([x, z], zona.poligono)) nombre = zona.nombre;
+    return nombre;
+  };
+
+  const TECLAS_JUEGO = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
+  const alApretar = (e: KeyboardEvent) => {
+    if (!caminando || !TECLAS_JUEGO.has(e.code)) return;
+    const destino = e.target as HTMLElement | null;
+    if (destino && /input|textarea|select/i.test(destino.tagName)) return;
+    e.preventDefault();
+    teclas.add(e.code);
+  };
+  const alSoltar = (e: KeyboardEvent) => teclas.delete(e.code);
+  const alPerderFoco = () => teclas.clear();
+  window.addEventListener("keydown", alApretar);
+  window.addEventListener("keyup", alSoltar);
+  window.addEventListener("blur", alPerderFoco);
+
+  const adelante = new THREE.Vector3();
+  const derecha = new THREE.Vector3();
+  const caminar = (dt: number) => {
+    let ix = palanca.x;
+    let iy = palanca.y;
+    if (teclas.has("KeyW") || teclas.has("ArrowUp")) iy += 1;
+    if (teclas.has("KeyS") || teclas.has("ArrowDown")) iy -= 1;
+    if (teclas.has("KeyD") || teclas.has("ArrowRight")) ix += 1;
+    if (teclas.has("KeyA") || teclas.has("ArrowLeft")) ix -= 1;
+    const fuerza = Math.min(1, Math.hypot(ix, iy));
+    const rapido = corriendo || teclas.has("ShiftLeft") || teclas.has("ShiftRight");
+    const pos = personaje.grupo.position;
+    let paso = 0;
+
+    if (fuerza > 0.08 && viaje >= 1) {
+      // Relativo a la cámara: "adelante" es hacia donde mira quien juega.
+      adelante.subVectors(controles.target, camara.position).setY(0).normalize();
+      derecha.set(-adelante.z, 0, adelante.x);
+      const dir = adelante.multiplyScalar(iy).addScaledVector(derecha, ix).normalize();
+      const velocidad = (rapido ? 8 : 4.2) * fuerza;
+      const dx = dir.x * velocidad * dt;
+      const dz = dir.z * velocidad * dt;
+      const x0 = pos.x;
+      const z0 = pos.z;
+      // Si choca de frente, se desliza por la valla en vez de quedar clavado.
+      let [nx, nz] = [x0 + dx, z0 + dz];
+      if (choca(x0, z0, nx, nz)) {
+        if (!choca(x0, z0, x0 + dx, z0)) nz = z0;
+        else if (!choca(x0, z0, x0, z0 + dz)) nx = x0;
+        else [nx, nz] = [x0, z0];
+      }
+      nx = THREE.MathUtils.clamp(nx, minX - 30, maxX + 30);
+      nz = THREE.MathUtils.clamp(nz, minZ - 30, maxZ + 30);
+      pos.set(nx, 0, nz);
+      // La cámara viaja con el personaje, sin perder el ángulo que eligió quien juega.
+      camara.position.x += nx - x0;
+      camara.position.z += nz - z0;
+      const andado = Math.hypot(nx - x0, nz - z0);
+      paso = dt > 0 ? (andado / dt) / 4.2 : 0;
+      // Gira hacia donde camina, suave.
+      const objetivo = Math.atan2(dir.x, dir.z);
+      let giro = objetivo - rumbo;
+      giro = Math.atan2(Math.sin(giro), Math.cos(giro));
+      rumbo += giro * Math.min(1, dt * 12);
+      personaje.grupo.rotation.y = rumbo;
+    }
+    if (viaje >= 1) controles.target.set(pos.x, 1.4, pos.z);
+    personaje.animar(t, op.reducirMovimiento ? 0 : paso);
+
+    // Caminando se ven sólo los carteles de lo que está cerca: con todos
+    // prendidos (atraviesan todo) se amontonaban arriba de la pantalla.
+    for (const c of cartelesPieza) {
+      const dx = c.x - pos.x;
+      const dz = c.z - pos.z;
+      c.sprite.visible = dx * dx + dz * dz < 22 * 22;
+    }
+
+    const zona = zonaDe(pos.x, pos.z);
+    if (zona !== zonaActual) {
+      zonaActual = zona;
+      op.onZona?.(zona);
+    }
+  };
+
+  const ponerCaminata = (activo: boolean) => {
+    if (activo === caminando) return;
+    caminando = activo;
+    teclas.clear();
+    palanca.x = palanca.y = 0;
+    if (activo) {
+      personaje.grupo.visible = true;
+      const pos = personaje.grupo.position;
+      // Cerca y por detrás: así se juega. El paneo se apaga para que el centro
+      // de la cámara sea siempre el personaje.
+      controles.minDistance = 2.5;
+      controles.maxDistance = 22;
+      controles.maxPolarAngle = 1.5;
+      controles.enablePan = false;
+      hacia.mira.set(pos.x, 1.4, pos.z);
+      hacia.pos.set(pos.x - Math.sin(rumbo) * 8, 4.6, pos.z - Math.cos(rumbo) * 8);
+      if (op.reducirMovimiento) {
+        camara.position.copy(hacia.pos);
+        controles.target.copy(hacia.mira);
+        viaje = 1;
+      } else {
+        desde.pos.copy(camara.position);
+        desde.mira.copy(controles.target);
+        viaje = 0;
+      }
+      zonaActual = undefined;
+    } else {
+      controles.minDistance = 10;
+      controles.maxDistance = 280;
+      controles.maxPolarAngle = 1.38;
+      controles.enablePan = true;
+      verVista(vistaActual?.id ?? predio.vistas[0]?.id ?? "");
+    }
+  };
+
   // ── Hora del día ──
   let horaActual: Hora = "noche";
   const ponerHora = (hora: Hora) => {
@@ -589,11 +769,6 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   };
 
   // ── Cámara y vistas ──
-  let vistaActual: Vista | undefined;
-  const desde = { pos: new THREE.Vector3(), mira: new THREE.Vector3() };
-  const hacia = { pos: new THREE.Vector3(), mira: new THREE.Vector3() };
-  let viaje = 1; // 0..1; 1 = quieto
-  const DURACION = 1.4;
 
   const verVista = (id: string, inmediato = false) => {
     const v = predio.vistas.find((x) => x.id === id) ?? predio.vistas[0];
@@ -604,7 +779,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     // Las vistas se piensan para una pantalla apaisada. En un celular parado el
     // predio no entra a lo ancho: la cámara se aleja sobre la misma línea.
     if (camara.aspect < 0.8) hacia.pos.sub(hacia.mira).multiplyScalar(1.7).add(hacia.mira);
-    for (const c of cartelesPieza) c.sprite.visible = !!v.muestra?.includes(c.tipo);
+    for (const c of cartelesPieza) c.sprite.visible = caminando || !!v.muestra?.includes(c.tipo);
     if (inmediato || op.reducirMovimiento) {
       camara.position.copy(hacia.pos);
       controles.target.copy(hacia.mira);
@@ -622,7 +797,6 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
   const suave = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-  let t = 0;
   const actualizar = (dt: number) => {
     t += dt;
     if (viaje < 1) {
@@ -631,10 +805,14 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       camara.position.lerpVectors(desde.pos, hacia.pos, k);
       controles.target.lerpVectors(desde.mira, hacia.mira, k);
     }
-    // Que el centro de la vista no se vaya del predio arrastrando.
-    controles.target.x = THREE.MathUtils.clamp(controles.target.x, minX - 20, maxX + 20);
-    controles.target.z = THREE.MathUtils.clamp(controles.target.z, minZ - 20, maxZ + 20);
-    controles.target.y = THREE.MathUtils.clamp(controles.target.y, 0, 10);
+    if (caminando) caminar(dt);
+    else {
+      // Que el centro de la vista no se vaya del predio arrastrando.
+      controles.target.x = THREE.MathUtils.clamp(controles.target.x, minX - 20, maxX + 20);
+      controles.target.z = THREE.MathUtils.clamp(controles.target.z, minZ - 20, maxZ + 20);
+      controles.target.y = THREE.MathUtils.clamp(controles.target.y, 0, 10);
+      if (personaje.grupo.visible) personaje.animar(t, 0);
+    }
     controles.update();
 
     ubicarGente(t);
@@ -645,7 +823,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         r.rotation.x = 0.35 + Math.sin(t * 0.5 + f * 2) * 0.3;
       }
     }
-    if (vistaActual?.zona) {
+    if (vistaActual?.zona && !caminando) {
       const mat = zonasMat[vistaActual.zona];
       const base = horaActual === "noche" ? 0.12 : 0.04;
       for (const m of Object.values(zonasMat)) if (m !== mat) m.emissiveIntensity = base;
@@ -701,6 +879,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         renderer.render(escena, camara);
       },
       gente: gente.length,
+      personaje: () => ({ x: personaje.grupo.position.x, z: personaje.grupo.position.z, caminando }),
     };
   }
 
@@ -716,8 +895,19 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       ponerHora(h);
       renderer.render(escena, camara);
     },
+    caminar: (activo) => ponerCaminata(activo),
+    mover: (x, y) => {
+      palanca.x = THREE.MathUtils.clamp(x, -1, 1);
+      palanca.y = THREE.MathUtils.clamp(y, -1, 1);
+    },
+    correr: (activo) => {
+      corriendo = activo;
+    },
     liberar: () => {
       cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", alApretar);
+      window.removeEventListener("keyup", alSoltar);
+      window.removeEventListener("blur", alPerderFoco);
       observador.disconnect();
       controles.dispose();
       escena.traverse((o) => {

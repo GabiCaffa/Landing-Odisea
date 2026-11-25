@@ -2065,6 +2065,23 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
   la página del evento es un link a esa ruta con `desdeEvento`: ahí no se muestra la compra
   (ya está abajo) y cerrar —o el botón de atrás— vuelve a la página. El píxel cuenta el
   `PageView` de la ruta como cualquier otra.
+- **"Caminar por el predio"**: un personaje propio (pibe de buzo negro, jean, zapatillas
+  naranjas) con un **vaso negro de ODÍSEA** en la mano —el logo sale de
+  `public/email-logo-white.png`, dibujado dos veces para verse adelante y atrás—, en
+  `src/croquis/personaje.ts`. La cámara lo sigue por detrás y se gira arrastrando.
+  - **PC**: WASD o flechas, Shift para correr. **Celular**: joystick abajo a la izquierda y
+    botón "Correr" a la derecha (sólo en pantallas táctiles, `pointer: coarse`); en vertical
+    sugiere ponerlo horizontal, pero anda igual.
+  - Se camina **relativo a la cámara** ("adelante" es hacia donde se mira). **Sólo las vallas
+    frenan** (se desliza contra ellas en vez de quedar clavado); la gente y las barras se
+    atraviesan, para no trabarse en ningún rincón.
+  - Arriba se ve **en qué sector estás** ("VIP +20", "Controles") y los carteles de barras,
+    baños y auxilios aparecen **sólo cerca** (22 m): todos prendidos se amontonaban.
+  - Lleva **una luz propia** que lo acompaña: de noche, con buzo negro, se perdía.
+  - Arranca en `predio.inicio` (Golf: afuera, frente al ingreso General). Escape sale de la
+    caminata antes de cerrar el mapa.
+  - Probado en navegador (PC con teclado y 740×360 táctil con el joystick). **No se probó en
+    un celular real.**
 - **La vista previa del link** se hornea en el build (`htmlDeMapa` en
   `vite/paginasEvento.ts`, `dist/evento/<slug>/mapa/index.html`): "Mapa 3D · <evento>",
   una descripción propia y el flyer como imagen (no hay foto del mapa). También entra al

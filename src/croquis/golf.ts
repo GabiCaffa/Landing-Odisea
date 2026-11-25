@@ -107,6 +107,7 @@ const golf: Predio = {
     { puntos: [p(268, 598), p(268, 722)] },
   ],
   piezas,
+  inicio: en(197, 742),
   focos: [
     { ...en(140, 300), color: "#ff2a4a" },
     { ...en(406, 360), color: "#a855f7" },

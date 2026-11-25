@@ -80,4 +80,6 @@ export interface Predio {
   vistas: Vista[];
   /** Focos de colores para la noche (escenario, pista). */
   focos?: { x: number; z: number; color: string }[];
+  /** Dónde aparece el personaje al empezar a caminar (mirando al norte). */
+  inicio?: { x: number; z: number };
 }
