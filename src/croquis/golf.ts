@@ -69,10 +69,10 @@ const golf: Predio = {
   subtitulo: "Paysandú · General +18 · VIP +20 · Backstage +23 · Sector +15",
   // El orden importa: cada zona se dibuja arriba de las anteriores.
   zonas: [
-    { id: "general", nombre: "General +18", poligono: rect(60, 236, 225, 480), color: "#8a1f2c", etiqueta: p(100, 345), gente: 12 },
-    { id: "backstage", nombre: "Backstage +23", poligono: rect(92, 238, 192, 288), color: "#4b1830", etiqueta: p(110, 262), gente: 5 },
-    { id: "vip", nombre: "VIP +20", poligono: rect(145, 290, 222, 382), color: "#d22b3c", etiqueta: p(184, 330), gente: 9 },
-    { id: "sector15", nombre: "Sector +15", poligono: rect(63, 410, 152, 478), color: "#b4471f", etiqueta: p(118, 440), gente: 12 },
+    { id: "general", nombre: "General +18", poligono: rect(60, 236, 225, 480), color: "#8a1f2c", etiqueta: p(100, 345), gente: 12, entradas: { incluye: ["general"], excluye: ["+15"] } },
+    { id: "backstage", nombre: "Backstage +23", poligono: rect(92, 238, 192, 288), color: "#4b1830", etiqueta: p(110, 262), gente: 5, entradas: { incluye: ["backstage"] }, especial: true },
+    { id: "vip", nombre: "VIP +20", poligono: rect(145, 290, 222, 382), color: "#d22b3c", etiqueta: p(184, 330), gente: 9, entradas: { incluye: ["vip"] }, especial: true },
+    { id: "sector15", nombre: "Sector +15", poligono: rect(63, 410, 152, 478), color: "#b4471f", etiqueta: p(118, 440), gente: 12, entradas: { incluye: ["+15"] } },
     { id: "pasillo", nombre: "Pasillo", poligono: rect(225, 314, 368, 332), color: "#55555c", gente: 2 },
     { id: "rampa", nombre: "Rampa", poligono: [p(225, 442), p(380, 405), p(445, 405), p(272, 490)], color: "#55555c", gente: 2 },
     { id: "pista", nombre: "Pista electrónica", poligono: rect(368, 314, 445, 405), color: "#3b1f6e", etiqueta: p(406, 340), gente: 14 },
@@ -107,6 +107,7 @@ const golf: Predio = {
     { puntos: [p(268, 598), p(268, 722)] },
   ],
   piezas,
+  inicio: en(197, 742),
   focos: [
     { ...en(140, 300), color: "#ff2a4a" },
     { ...en(406, 360), color: "#a855f7" },

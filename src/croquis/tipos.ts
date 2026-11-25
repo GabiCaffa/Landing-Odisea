@@ -24,6 +24,14 @@ export interface ZonaPredio {
   etiqueta?: Punto;
   /** Gente por cada 100 m². 0 o ausente = vacía. */
   gente?: number;
+  /**
+   * Qué entradas del evento son de esta zona, por palabras en su nombre (sin
+   * tildes ni mayúsculas): así "VIP – 2do lote" sigue siendo del VIP cuando
+   * cambia el lote. Al caminar por la zona se ofrece comprarla.
+   */
+  entradas?: { incluye: string[]; excluye?: string[] };
+  /** Al entrar caminando se abre la compra sola (una vez). Para VIP y backstage. */
+  especial?: boolean;
 }
 
 export type TipoPieza =
@@ -80,4 +88,6 @@ export interface Predio {
   vistas: Vista[];
   /** Focos de colores para la noche (escenario, pista). */
   focos?: { x: number; z: number; color: string }[];
+  /** Dónde aparece el personaje al empezar a caminar (mirando al norte). */
+  inicio?: { x: number; z: number };
 }

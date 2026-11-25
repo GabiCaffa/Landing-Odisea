@@ -2065,6 +2065,37 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
   la página del evento es un link a esa ruta con `desdeEvento`: ahí no se muestra la compra
   (ya está abajo) y cerrar —o el botón de atrás— vuelve a la página. El píxel cuenta el
   `PageView` de la ruta como cualquier otra.
+- **"Caminar por el predio", en primera persona**: los ojos a 1,65 m y lo único que se ve de
+  uno es **la mano con un vaso negro de ODÍSEA** (logo de `public/email-logo-white.png`,
+  hielo y sorbete naranja), abajo a la derecha, como en los juegos
+  (`src/croquis/personaje.ts`, `crearManoConVaso`). Diseño propio, hecho con geometría simple.
+  - **PC**: WASD para caminar, flechas ← → para girar, Shift para correr, arrastrar el mouse para
+    mirar. **Celular**: joystick abajo a la izquierda, "Correr" a la derecha y arrastrar el dedo
+    sobre el mapa para mirar (sólo táctil, `pointer: coarse`); en vertical sugiere girarlo.
+  - **La mano se dibuja en una pasada aparte** (`escenaMano` + `clearDepth` en `dibujar`):
+    pegado a una pared o a la pantalla del DJ, la pared tapaba la mano. Su posición se calcula
+    con el lente y el tamaño de pantalla (puesta a ojo quedaba fuera del cuadro), más al centro
+    en el celular por el botón de correr. Caminando el lente se abre (66°, 78° en vertical).
+  - **Frenan**: las vallas, las barras, baños, auxilios, DJ, pantalla y el árbol (cajas que se
+    sacan de sus mallas) y **la gente**. Si algo tapa, se esquiva probando el paso girado a un
+    lado y al otro. Los controles y arcos de ingreso se atraviesan.
+  - Arriba se ve **en qué sector estás**; los carteles de barras y baños aparecen sólo cerca.
+- **Comprar al entrar a un sector**: cada zona dice qué entradas son suyas por palabras en el
+  nombre (`entradas: { incluye, excluye }` en el predio, sin tildes ni mayúsculas, así
+  "VIP – 2do lote" sigue siendo del VIP al cambiar de lote). Parado en esa zona aparece abajo
+  **"Comprar VIP – 2do lote · $1200"**; en las zonas `especial` (VIP y Backstage) **el modal
+  de compra se abre solo** al entrar, una vez por zona. El modal es el mismo `CompraEntradas`
+  de siempre, encima del mapa (`encima` → `ModalShell` con `capa` `z-[90]`) y con esa
+  entrada ya en 1 (`preseleccion`, sólo el valor inicial del contador: precios, promos y
+  mensaje no cambian). Con el modal abierto la caminata se pausa y Escape cierra sólo el modal.
+  En el Golf: General (sin "+15"), VIP, Backstage y "+15" para el Sector +15.
+- **La gente** son seis mallas instanciadas: piernas con zapatillas, remera con brazos, piel
+  (cabeza, cuello y manos) y pelo, en dos posturas (brazos abajo y brazos arriba bailando, más
+  en la pista). Miran al DJ o al centro de la pista, con colores de ropa, piel y pelo variados.
+  800 en escritorio, 300 en celular.
+- Probado en navegador: recorrido desde la entrada hasta el VIP (el modal se abrió solo con 1
+  VIP), el Backstage (1 Backstage, total $2000), Escape con el modal abierto, y la vista en
+  1440 px y en 740×360 táctil. **No se probó en un celular real.**
 - **La vista previa del link** se hornea en el build (`htmlDeMapa` en
   `vite/paginasEvento.ts`, `dist/evento/<slug>/mapa/index.html`): "Mapa 3D · <evento>",
   una descripción propia y el flyer como imagen (no hay foto del mapa). También entra al
