@@ -2036,6 +2036,51 @@ venta" y su cupo, **adentro de la tarjeta de su entrada**. No necesita migració
 - Probado en navegador con un catálogo de prueba: reutiliza un "2do lote" existente, crea el "3er
   lote", apaga los anteriores y los muestra adentro de "General". **No se probó contra la base real.**
 
+### Croquis 3D del predio (sin migración)
+
+En la página del evento, al lado de "Ver en Instagram", aparece **"Ver el mapa 3D"** si el
+evento tiene croquis. Abre un visor a pantalla completa con el predio en 3D animado: sectores
+con su color, vallas con guirnaldas, barras, baños, primeros auxilios, DJ con pantalla y haces
+de luz, controles e ingresos, gente bailando y árboles alrededor. Abajo, un **recorrido por
+vistas** (Todo el predio, Llegada, cada sector, Barras, Baños y auxilios) con una línea que
+explica cada una, y **Día / Atardecer / Noche**. Se gira arrastrando y se acerca pellizcando.
+Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.app`).
+
+- **Es código, no modelos ni fotos**: todo está armado con cajas, conos y esferas de Three.js
+  (licencia MIT, sin costo ni servicio externo). Por eso se puede hacer para cualquier predio
+  a partir de un plano o del mapa que publica la organización.
+- **Un predio es un archivo de DATOS** (`src/croquis/golf.ts`): zonas (polígonos), vallas,
+  piezas (`barra`, `banos`, `auxilios`, `dj`, `pantalla`, `control`, `acceso`,
+  `arbolNavidad`, `banderaGolf`) y vistas. El motor (`src/croquis/motor.ts`) sabe dibujar cada
+  pieza. **Un predio nuevo es un archivo nuevo, no código nuevo.** Los tipos, en
+  `src/croquis/tipos.ts`.
+- **Qué evento lo muestra: `src/croquis/registro.ts`**, por `slug` (v25), sin migración. El
+  mismo predio puede servir a varias fechas (una línea por slug). Hoy: sólo
+  `navidad-en-el-golf-paysandu`.
+- **Navidad en el Golf sale del mapa que publicó la organización**: las posiciones se tomaron en
+  píxeles de esa imagen y se pasan a metros con `p()` (0,25 m por píxel). **No está a escala**
+  y el visor lo dice. **Suposición:** los íconos redondos con una cara en los bordes se tomaron
+  como baños; la gente, los árboles, el árbol de Navidad y la bandera de golf son ambientación.
+- **Peso: nada en la carga de la página.** El botón sólo importa `registro.ts`; el visor va con
+  `lazy` y el motor con `import()` al abrirse. Three.js va en su propio chunk (`motor`, ~140 KB
+  gzip) porque `manualChunks` lo excluye de `vendor` (misma trampa que `lottie-web`, §6.4).
+  Verificado: `vendor` sigue en 137,19 KB y en un evento sin croquis no se baja nada de Three.
+- **Liviano a propósito**: sin postproceso (bloom), gente en UNA malla instanciada, menos gente
+  y árboles en celular, sombras sólo en escritorio, resolución topeada. Con
+  `prefers-reduced-motion` la cámara salta en vez de viajar y la gente no baila.
+- **Se dibuja un cuadro apenas se arma**, sin esperar a `requestAnimationFrame` (que no corre
+  con la pestaña en segundo plano). En desarrollo, `window.__croquis.cuadro()` avanza la
+  animación a mano para probar con el panel oculto.
+- **El panel de abajo no tapa lo que se mira**: la cámara corre el centro de la imagen hacia
+  arriba (`setViewOffset`), y en un celular parado se aleja sola (×1,7) para que el predio
+  entre a lo ancho. La página del evento **sigue entrando en una pantalla** (el botón va en la
+  misma línea que Instagram).
+- Sin WebGL, el visor dice que no se puede mostrar en ese dispositivo.
+- Probado en navegador con el evento real (escritorio y 375×812): las vistas, día y noche,
+  cerrar (devuelve el scroll y libera el canvas) y que en otro evento no aparece el botón.
+  **No se probó en un celular real**: es lo que hay que mirar primero (fluidez en uno de gama
+  media).
+
 ### Eventos "próximamente": flyer borroso + contador (v49)
 
 Un evento con **`events.reveal_at`** en el futuro se muestra como teaser hasta esa hora: en la
