@@ -2320,6 +2320,14 @@ tiene un millón de caras.
     suena, `play()` solo no hace nada) y a los 3,5 s se fija si avanzó. Una pausa sólo cuenta
     si estaba sonando. No se pudo simular un navegador que bloquee: en el de pruebas el audio
     arranca solo.
+  - **Al salir del mapa la música se corta de verdad** (el autor reportó que seguía sonando).
+    `pause()` es un mensaje al iframe que puede no llegar antes de que React lo saque, y
+    Safari (iPhone) deja sonando el audio de un iframe quitado. Ahora, en la limpieza de un
+    `useLayoutEffect` —que corre con el nodo todavía en la página—, se pausa y se le pone
+    `src = "about:blank"`; también se pausa en `pagehide`. En Chrome de escritorio no se pudo
+    reproducir que siguiera sonando (al cerrar el iframe ya se borraba): **falta confirmarlo
+    en el celular del autor**. De paso, `MapaEvento` devuelve el título de la pestaña al salir
+    (quedaba "Mapa 3D · …" en la página del evento).
   - **Ojo**: al entrar al mapa se carga SoundCloud (tercero, con sus cookies) aunque nadie
     toque nada. Conviene mencionarlo en la Política de Privacidad. Los sets son de usuarios
     de SoundCloud: Plaza de Toros "bavikon" (reggaetón), Golf "roulien" (playlist de Nick
