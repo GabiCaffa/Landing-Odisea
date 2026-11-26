@@ -2057,7 +2057,7 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
 - **Qué evento lo muestra: `src/croquis/eventos.ts`**, por `slug` (v25) → id de predio, sin
   migración. Archivo sin dependencias porque lo leen también el build y la página del evento;
   `registro.ts` carga el predio por su id. El mismo predio puede servir a varias fechas (una
-  línea por slug). Hoy: sólo `navidad-en-el-golf-paysandu`.
+  línea por slug). Hoy: `navidad-en-el-golf-paysandu` (golf) y `navidad-colonia` (plazaToros).
 - **Dirección propia para marketing: `/evento/<slug>/mapa`** (`src/pages/MapaEvento.tsx`,
   `urlDeMapa` en `rutas.ts`). Abre el mapa directo, con **"Comprar entradas"** (o "Ver la
   fecha" si no está a la venta) debajo del nombre y un botón de **compartir** (menú del
@@ -2080,11 +2080,25 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
     sacan de sus mallas) y **la gente**. Si algo tapa, se esquiva probando el paso girado a un
     lado y al otro. Los controles y arcos de ingreso se atraviesan.
   - Arriba se ve **en qué sector estás**; los carteles de barras y baños aparecen sólo cerca.
+  - **Bailar y fumar** (botones redondos a la derecha, arriba de "Correr" en el celular;
+    teclas **B** y **F** en la PC). *Bailar* se prende y se apaga: la cámara rebota al ritmo
+    (~124 bpm) con un vaivén de cabeza y el vaso sube y baja; **caminar lo corta** (el motor
+    avisa con `onBaile` para apagar el botón). *Fumar* es una pitada de ~5,6 s: entra la otra
+    mano con el cigarro desde abajo a la izquierda (`mano.izquierda`), lo lleva a la boca, la
+    brasa se aviva, baja y sale el humo (9 sprites en `mano.humo`, delante de la cara). Todo
+    en `personaje.ts`, en la misma pasada de la mano. Con `prefers-reduced-motion` no hay
+    rebote de cámara. En desarrollo, `__croquis.congelar()` frena el bucle para sacar una
+    captura de un momento exacto (la animación sigue sola mientras la pestaña está a la vista).
+    > **Ojo legal**: Uruguay prohíbe la publicidad y promoción de productos de tabaco
+    > (Ley 18.256). Un botón de fumar en la web que vende entradas lo pidió el autor; si
+    > alguien lo objeta, se saca borrando el botón de `CroquisVisor` (y la tecla F del motor).
 - **Comprar al entrar a un sector**: cada zona dice qué entradas son suyas por palabras en el
   nombre (`entradas: { incluye, excluye }` en el predio, sin tildes ni mayúsculas, así
   "VIP – 2do lote" sigue siendo del VIP al cambiar de lote). Parado en esa zona aparece abajo
-  **"Comprar VIP – 2do lote · $1200"**; en las zonas `especial` (VIP y Backstage) **el modal
-  de compra se abre solo** al entrar, una vez por zona. El modal es el mismo `CompraEntradas`
+  **"Comprar VIP – 2do lote · $1200"**, que cambia con el sector. **El modal NO se abre solo**
+  (pedido del autor: abrirse cada vez que se pasa por un sector molestaba; existió una
+  versión con zonas `especial` y se sacó, también del VIP de la Plaza de Toros). Tocando el
+  botón se abre el mismo `CompraEntradas`
   de siempre, encima del mapa (`encima` → `ModalShell` con `capa` `z-[90]`) y con esa
   entrada ya en 1 (`preseleccion`, sólo el valor inicial del contador: precios, promos y
   mensaje no cambian). Con el modal abierto la caminata se pausa y Escape cierra sólo el modal.
@@ -2123,6 +2137,80 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
   cerrar (devuelve el scroll y libera el canvas) y que en otro evento no aparece el botón.
   **No se probó en un celular real**: es lo que hay que mirar primero (fluidez en uno de gama
   media).
+
+### El Golf como en las fotos, mano nueva y mirar con el mouse
+
+Con fotos del lugar (cancha de césped abierta, escenario de truss) el Golf dejó de ser un
+plano de colores:
+
+- **Césped de cancha** (`texturaPasto`: verde con hojitas y franjas de corte de 8 m) y
+  **cielo** en un domo con degradé por hora (`texturaCielo`; el atardecer, violeta arriba y
+  naranja en el horizonte, como en las fotos). La niebla toma el color del horizonte. Los
+  **sectores son un tinte** sobre el pasto (opacidad 0,16) con el borde marcado: todo es césped.
+- **Vallas con estilo** (`Valla.estilo`): `media` = media sombra negra de 2,1 m (el
+  perímetro), `reja` (por defecto) = valla de contención con textura de barrotes. Postes de
+  todas las vallas en una sola malla instanciada.
+- **El escenario (`dj`) es el de las fotos**: tarima, torres y techo de truss de aluminio
+  (textura con transparencia), techo negro, banderines negros colgando, alas con el sonido
+  colgado, subwoofers, cabina del DJ, luces y haces, y el **vallado azul** adelante. Para
+  chocar se usa su huella (`userData.solido`), no la caja de todas sus mallas.
+- Piezas nuevas: `torreLuz` (torre de cancha con reflectores), `palosRugby`, `contenedor`
+  (chapa acanalada) y `bandera` (vertical con el logo, flamea). Árboles: **pinos y
+  cipreses** altos y árboles de copa ancha, instanciados.
+- **Mano nueva**: dorso al costado del vaso, pulgar por adelante, los otros dedos atrás,
+  muñeca y manga con el puño naranja (`RoundedBoxGeometry` y cápsulas, sombreado suave).
+- **La gente no frena** al caminar (pedido del autor: complicaba recorrer). Sólo frenan
+  vallas y piezas sólidas.
+- **Mirar con el mouse sin mantener apretado** (Pointer Lock): un click en el mapa lo toma
+  (pide `unadjustedMovement` donde existe), aparece una mirilla, y **Esc lo suelta**. Ese
+  Escape no saca de la caminata (`soltadoEn`). Con el dedo se sigue arrastrando. **El andar
+  se suaviza** (la velocidad se acerca a la pedida, sin tirones).
+- **Carteles caminando**: los de piezas se ven entre 7 y 22 m; los de sector, a más de 20 m
+  (arriba ya dice dónde se está).
+- Al mezclar con el PR de Franco (Plaza de Toros, bailar y fumar) conviven todo: `onMira` y
+  `onBaile`, `estilo` e `invisible` en las vallas, y los pinos respetan `radioLibre`.
+- Probado en navegador (vista general y caminata, Golf y Plaza). **El Pointer Lock no se
+  pudo probar** (el navegador de pruebas no lo permite): hay que verlo en Chrome normal.
+
+### Croquis 3D de la Plaza de Toros (Navidad Colonia)
+
+Segundo predio del croquis (`src/croquis/plazaToros.ts`, para `navidad-colonia`). La plaza
+está hecha con código, como el Golf. **Se descartó el modelo de Sketchfab** que pasó el
+autor (Top Quad.uy): no se puede descargar, no tiene licencia, es la plaza vieja en ruinas y
+tiene un millón de caras.
+
+- **Lo que agregó al motor** (sirve para cualquier predio):
+  - `ZonaPredio.altura`: una zona en alto. Su piso se dibuja a esa altura, la gente se para
+    ahí y su cartel sube con ella.
+  - Pieza `escalera`: se dibuja y además se anota en `rampas`. Al caminar, la cámara sube
+    según `alturaEn(x, z)` (la altura de la zona o lo que se subió de la escalera), con
+    suavizado.
+  - `Valla.invisible`: frena pero no se dibuja. Se usa cuando lo que se ve ya es otra cosa:
+    el muro del ruedo, el borde del escenario, la baranda del VIP.
+  - Pieza `plazaToros`: muro del ruedo con el hueco del túnel al sur, 16 gradas
+    (RingGeometry + CylinderGeometry unidas), galería, fachada circular con textura de
+    arcos que de noche se prenden, almenas instanciadas, techo sobre la mitad del frente,
+    reflectores, torre del arco y dos torres, explanada y calle.
+  - Pieza `escenario`: tarima, parte de atrás más alta (`elevado`, el VIP) con baranda de
+    vidrio, DJ adelante, sonido, techo de estructura, pantalla y haces de luz.
+  - `Predio.radioLibre`: sin árboles adentro del edificio.
+  - La pantalla LED pasó a `texturaPantalla()`, compartida por `pantalla` y `escenario`.
+- **El armado del evento lo contó el autor**: la fiesta es **sólo en el ruedo**, con un
+  escenario grande en un borde, el **VIP +30 arriba del escenario, atrás del DJ**, y
+  **barras en los tres lados sin escenario**.
+  **Suposiciones**: el escenario está al norte (enfrente del arco de entrada), la barra del
+  sur va corrida al lado del ingreso, la escalera del VIP sube por el costado este, y el árbol
+  de Navidad es ambientación. **No hay baños ni auxilios dibujados** (están en el edificio y
+  no se sabe dónde).
+- **No está a escala** (ruedo de ~52 m). Las formas salen de una foto aérea de la plaza
+  remodelada y de cuadros de los videos de julio (en Drive, sólo miniaturas: los videos
+  pesan 130-740 MB).
+- **La gente frena al caminar**: con 28 por cada 100 m² no se podía cruzar el ruedo. Queda en
+  14, como en el Golf.
+- Probado en navegador con datos de prueba: vistas de día y de noche, escritorio y 375 px;
+  caminar del ingreso a la escalera; la altura medida al subir (a mitad 1,1 m, arriba 2,5 m,
+  en el VIP 2,6 m con la zona "vip"); la compra del VIP +30 (ya no se abre sola: ver arriba); y la
+  vista desde el VIP. **No se probó en un celular real.**
 
 ### Eventos "próximamente": flyer borroso + contador (v49)
 
