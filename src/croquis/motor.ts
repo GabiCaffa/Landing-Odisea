@@ -37,6 +37,11 @@ export interface ControlCroquis {
   bailar(activo: boolean): void;
   /** Una pitada de cigarro (unos 5 s): la otra mano, la brasa y el humo. */
   fumar(): void;
+  /**
+   * Volumen sugerido para la música (0 a 1): caminando, más fuerte cerca de
+   * `predio.musica.fuente` (el escenario); mirando desde las vistas, más bajo.
+   */
+  volumenMusica(): number;
   liberar(): void;
 }
 
@@ -761,6 +766,38 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       return g;
     },
     /**
+     * Lona con una imagen (un sponsor): un panel con marco, a `altura` del piso,
+     * mirando al sur con rot 0. De noche se ve iluminada.
+     */
+    lona: (p) => {
+      const g = new THREE.Group();
+      const W = p.largo ?? 4;
+      const H = p.alto ?? 1;
+      const y = (p.altura ?? 0) + H / 2;
+      // El marco bien separado atrás: caminando, el plano cercano de la cámara está
+      // pegado a los ojos (por la mano) y a 1 cm de distancia el marco tapaba el logo.
+      g.add(caja(W + 0.16, H + 0.16, 0.06, mate("#111114"), 0, y, -0.2));
+      const tex = new THREE.TextureLoader().load(p.imagen ?? "");
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      const mat = new THREE.MeshStandardMaterial({
+        map: tex,
+        emissive: "#ffffff",
+        emissiveMap: tex,
+        emissiveIntensity: 0.5,
+        roughness: 0.8,
+        // Que gane siempre contra lo que tiene detrás (el muro, el marco).
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      });
+      emisivos.push({ mat, base: 0.5 });
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
+      panel.position.set(0, y, 0);
+      g.add(panel);
+      return g;
+    },
+    /**
      * Escalera recta: sube `altura` metros a lo largo de `largo`, hacia el norte
      * (-z) con rot 0. Además de dibujarse, se anota en `rampas` para que al
      * caminar por ella la cámara suba.
@@ -1415,6 +1452,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       mano,
       // Frena el bucle para sacar una captura de un momento exacto.
       congelar: () => cancelAnimationFrame(raf),
+      escena,
     };
   }
 
@@ -1446,6 +1484,15 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     },
     bailar: (activo) => ponerBaile(activo),
     fumar: () => mano.fumar(),
+    volumenMusica: () => {
+      const f = predio.musica?.fuente ?? { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
+      if (caminando) {
+        const d = Math.hypot(yo.x - f.x, yo.z - f.z);
+        return THREE.MathUtils.clamp(1 - (d - 8) / 55, 0.25, 1);
+      }
+      const d = camara.position.distanceTo(new THREE.Vector3(f.x, 0, f.z));
+      return THREE.MathUtils.clamp(0.85 - (d - 20) / 200, 0.35, 0.8);
+    },
     liberar: () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", alApretar);
