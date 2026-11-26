@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader2, Music2, Pause } from "lucide-react";
 
 /**
@@ -172,8 +172,24 @@ const MusicaSoundcloud = ({
     return () => window.clearInterval(id);
   }, [estado]);
 
-  // Al cerrar el mapa, que no siga sonando.
-  useEffect(() => () => widget.current?.pause(), []);
+  // Al cerrar el mapa, que no siga sonando. No alcanza con `pause()`: es un mensaje
+  // al iframe que puede no llegar antes de que se lo saque, y Safari (iPhone) deja
+  // sonando el audio de un iframe quitado. Se lo vacía (`about:blank`) ANTES de
+  // sacarlo: el efecto de layout se limpia con el nodo todavía en la página.
+  useLayoutEffect(() => {
+    const el = iframe;
+    return () => {
+      widget.current?.pause();
+      widget.current = null;
+      if (el.current) el.current.src = "about:blank";
+    };
+  }, []);
+  // Si la persona se va del sitio o cierra la pestaña con el mapa abierto.
+  useEffect(() => {
+    const cortar = () => widget.current?.pause();
+    window.addEventListener("pagehide", cortar);
+    return () => window.removeEventListener("pagehide", cortar);
+  }, []);
 
   const visible = estado === "bloqueada" || estado === "error";
   const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false`;

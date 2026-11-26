@@ -27,7 +27,12 @@ const MapaEvento = () => {
   const desdeEvento = Boolean((location.state as { desdeEvento?: boolean } | null)?.desdeEvento);
 
   useEffect(() => {
+    const previo = document.title;
     document.title = evento ? `Mapa 3D · ${evento.name} · ODÍSEA` : "Mapa 3D · ODÍSEA";
+    // Al salir del mapa, la pestaña no tiene que seguir diciendo "Mapa 3D".
+    return () => {
+      document.title = previo;
+    };
   }, [evento]);
 
   if (!tieneCroquis(slug)) return <Navigate to={urlDeEvento(slug)} replace />;
