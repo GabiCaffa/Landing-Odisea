@@ -6,6 +6,7 @@ import { crearManoConVaso } from "./personaje";
 import { crearGenteReal, type Figurante } from "./gente";
 import { crearJugador, type Jugador } from "./jugador";
 import { CANT_PERSONAS, cargarRecursos } from "./modelos";
+import { crearPostproceso } from "./postproceso";
 
 /**
  * El motor del croquis 3D: arma la escena de un `Predio` (datos) con piezas
@@ -162,7 +163,9 @@ function texturaTexto(texto: string, o: { fondo?: string; color?: string; alto?:
 
 function cartel(texto: string, altoMundo: number, fondo: string, color = "#ffffff") {
   const { tex, aspecto } = texturaTexto(texto, { fondo, color });
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  // Un pelo por debajo del blanco: así el brillo de las luces (postproceso.ts) no
+  // agarra los carteles, que con blanco pleno se veían como manchas.
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, color: 0xe6e6e6 }));
   s.scale.set(altoMundo * aspecto, altoMundo, 1);
   s.renderOrder = 10;
   return s;
@@ -294,6 +297,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const escena = new THREE.Scene();
   escena.fog = new THREE.Fog(0x000000, 140, 560);
   const camara = new THREE.PerspectiveCamera(42, 1, 0.5, 1500);
+  // Luz de ambiente con reflejos y, en escritorio, el brillo de las luces.
+  const post = crearPostproceso(renderer, escena, camara, { movil: op.movil });
 
   const controles = new OrbitControls(camara, canvas);
   controles.enableDamping = true;
@@ -1880,6 +1885,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   // ── Hora del día ──
   let horaActual: Hora = "noche";
   const ponerHora = (hora: Hora) => {
+    post.ponerHora(hora);
     horaActual = hora;
     const H = {
       dia: { fondo: "#9cc9ef", cielo: ["#d6ecff", "#4a6b3a", 1.1], sol: ["#ffffff", 2.4, [70, 120, 50]], brillo: 0.12, focos: 0, lamp: "#8a8a8a" },
@@ -1981,7 +1987,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
   /** Un cuadro: el predio y, caminando, la mano con el vaso encima de todo. */
   function dibujar() {
-    renderer.render(escena, camara);
+    post.dibujar();
     // Con el personaje cargado no hace falta la mano: se ve el cuerpo.
     if (!caminando || jugador) return;
     soporte.matrix.copy(camara.matrixWorld);
@@ -1998,6 +2004,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     const w = padre?.clientWidth || canvas.clientWidth || 800;
     const h = padre?.clientHeight || canvas.clientHeight || 600;
     renderer.setSize(w, h, false);
+    post.ajustar(w, h, renderer.getPixelRatio());
     camara.aspect = w / h;
     // En un celular parado el predio no entra a lo ancho: se abre el lente.
     // Caminando, el lente se abre como en un juego (si no, todo se ve encima).
@@ -2145,6 +2152,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
           mat.dispose();
         }
       });
+      post.liberar();
       renderer.dispose();
     },
   };

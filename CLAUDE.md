@@ -2345,6 +2345,29 @@ tiene un millón de caras.
     aplanaron sobre blanco. (2) Caminando, el plano cercano de la cámara está a 5 cm (por la
     mano) y el marco a 1 cm detrás del logo lo tapaba: el marco va 20 cm atrás y el logo con
     `polygonOffset`.
+  - **Lisoft, intercalado con Ferant** (pedido del autor): en el muro y arriba de las gradas
+    una lona Ferant, una Lisoft; al costado del escenario, Ferant a la izquierda y Lisoft a la
+    derecha. `lisoft-horizontal.png` (1200×391, la misma medida que la de Ferant) y
+    `lisoft-cuadrado.png` (560×586, ícono con la palabra abajo, la proporción del panel),
+    armados del proyecto de logo que pasó el autor y **aplanados sobre blanco** por la
+    trampa de arriba. Sólo está en la Plaza, como Ferant; el Golf no tiene lonas.
+
+### El brillo de las luces y la luz de ambiente (`postproceso.ts`, sin archivos)
+
+Primer paso para que los predios se vean mejor, sin bajar nada:
+
+- **Luz de ambiente con reflejos** (`RoomEnvironment` de three → PMREM, una vez al abrir):
+  los materiales PBR —ropa, piel, truss, pantallas— dejaron de verse planos. Va también en
+  el celular (se arma una vez). Su intensidad sigue la hora (0,45 de día, 0,2 al atardecer,
+  0,05 de noche): con más, la noche se veía gris y las gradas de la Plaza casi blancas.
+- **Brillo de las luces (bloom)**, **sólo en escritorio**: `EffectComposer` + `UnrealBloomPass`
+  a media resolución + `OutputPass` (que aplica el ACES y el sRGB que antes aplicaba el
+  render directo). Fuerza y umbral por hora (de día casi nada; de noche 0,55 con umbral 0,9).
+  En el celular sería una pasada más por cuadro: no va.
+- **Los carteles van en gris 0xe6e6e6 y no en blanco pleno**: con el brillo, el texto blanco
+  pasaba el umbral y se veían manchas en vez de letras.
+- **Ojo al probar con Vite**: la recarga en caliente del motor deja dos copias y
+  `__croquis` apunta a la nueva; hay que recargar la página entera.
 - **No está a escala** (ruedo de ~52 m). Las formas salen de una foto aérea de la plaza
   remodelada y de cuadros de los videos de julio (en Drive, sólo miniaturas: los videos
   pesan 130-740 MB).
