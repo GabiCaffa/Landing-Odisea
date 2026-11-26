@@ -2301,8 +2301,14 @@ tiene un millón de caras.
     si estaba sonando. No se pudo simular un navegador que bloquee: en el de pruebas el audio
     arranca solo.
   - **Ojo**: al entrar al mapa se carga SoundCloud (tercero, con sus cookies) aunque nadie
-    toque nada. Conviene mencionarlo en la Política de Privacidad. El set actual es de un
-    usuario de SoundCloud ("bavikon"): si lo borra o lo hace privado, deja de sonar.
+    toque nada. Conviene mencionarlo en la Política de Privacidad. Los sets son de usuarios
+    de SoundCloud: Plaza de Toros "bavikon" (reggaetón), Golf "roulien" (playlist de Nick
+    Fanciulli, 5 temas). Si el dueño lo borra o lo hace privado, deja de sonar. Cambiar la
+    música de un predio es cambiar `musica.soundcloud` en su archivo.
+  - **El link tiene que dejar insertarse**: si el dueño lo marcó "embeddable by: me", el
+    reproductor no lo pasa fuera de soundcloud.com (pasó con un set de jezza155). Se
+    comprueba en SoundCloud → Compartir → que aparezca la pestaña "Insertar", o con
+    `https://soundcloud.com/oembed?format=json&url=<link>` (403 = no se puede).
   - Pieza nueva **`lona`** (imagen de `public/`, con marco): 9 lonas de Ferant sobre el muro
     del ruedo, 4 grandes colgadas arriba de las gradas y 2 paneles amarillos a los costados
     del escenario. Logos en `public/sponsors/`.
