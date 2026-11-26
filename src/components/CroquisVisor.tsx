@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { Footprints, MapPin, Moon, Share2, Sun, Sunset, Ticket, X } from "lucide-react";
+import { Cigarette, Footprints, MapPin, Moon, Music, Share2, Sun, Sunset, Ticket, X } from "lucide-react";
 import { toast } from "sonner";
 import { SITIO, urlDeMapa } from "@/lib/rutas";
 import { formatEventDate, useAuth } from "@/contexts/AuthContext";
@@ -119,6 +119,8 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const [hora, setHora] = useState<Hora>("noche");
   const [caminando, setCaminando] = useState(false);
   const [zona, setZona] = useState<{ id: string; nombre: string } | null>(null);
+  // Bailando en el lugar (lo apaga el motor solo al caminar).
+  const [bailando, setBailando] = useState(false);
   // La compra abierta encima del mapa, con la entrada de la zona ya elegida.
   const [comprando, setComprando] = useState<{ preseleccion?: string } | null>(null);
   const comprandoRef = useRef(false);
@@ -170,6 +172,7 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
           movil,
           reducirMovimiento,
           onZona: (z) => setZona(z),
+          onBaile: (activo) => setBailando(activo),
         });
         setPredio(p);
         setVista(p.vistas[0]?.id ?? "");
@@ -343,6 +346,34 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
               </button>
             </>
           )}
+          {/* Bailar y fumar: a la derecha, arriba de "Correr" en el celular. */}
+          <div
+            className={`absolute right-[max(1.25rem,env(safe-area-inset-right))] flex flex-col gap-2 ${
+              tactil ? "bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]" : "bottom-28"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => control.current?.bailar(!bailando)}
+              aria-pressed={bailando}
+              className={`flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border text-[10px] font-bold uppercase shadow-lg backdrop-blur transition-colors ${
+                bailando ? "border-[#F25C26] bg-[#F25C26] text-white" : "border-white/25 bg-black/60 text-white"
+              }`}
+              title={tactil ? undefined : "Bailar (B)"}
+            >
+              <Music className="h-5 w-5" aria-hidden />
+              Bailar
+            </button>
+            <button
+              type="button"
+              onClick={() => control.current?.fumar()}
+              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-white/25 bg-black/60 text-[10px] font-bold uppercase text-white shadow-lg backdrop-blur"
+              title={tactil ? undefined : "Fumar (F)"}
+            >
+              <Cigarette className="h-5 w-5" aria-hidden />
+              Fumar
+            </button>
+          </div>
           <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
             {entradasZona.length > 0 && evento && (
               // La compra de la zona donde se está, siempre a un toque.
@@ -357,7 +388,7 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             )}
             {!tactil && (
               <p className="whitespace-nowrap rounded-full bg-black/55 px-4 py-2 text-[11px] text-white/85 backdrop-blur sm:text-xs">
-                <b>WASD</b> para caminar · <b>← →</b> para girar · <b>Shift</b> para correr · arrastrá para mirar
+                <b>WASD</b> para caminar · <b>← →</b> para girar · <b>Shift</b> para correr · <b>B</b> bailar · <b>F</b> fumar · arrastrá para mirar
               </p>
             )}
             <button

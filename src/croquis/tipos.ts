@@ -32,6 +32,12 @@ export interface ZonaPredio {
   entradas?: { incluye: string[]; excluye?: string[] };
   /** Al entrar caminando se abre la compra sola (una vez). Para VIP y backstage. */
   especial?: boolean;
+  /**
+   * Metros sobre el piso: una zona en alto (el VIP arriba del escenario). El piso
+   * se dibuja a esa altura, la gente se para ahí y al caminar se sube. A una zona
+   * elevada se llega por una `escalera`; lo que la rodea se cierra con vallas.
+   */
+  altura?: number;
 }
 
 export type TipoPieza =
@@ -43,7 +49,10 @@ export type TipoPieza =
   | "control"
   | "acceso"
   | "arbolNavidad"
-  | "banderaGolf";
+  | "banderaGolf"
+  | "plazaToros"
+  | "escenario"
+  | "escalera";
 
 export interface Pieza {
   tipo: TipoPieza;
@@ -57,12 +66,25 @@ export interface Pieza {
   cantidad?: number;
   /** Texto del cartel (acceso, pantalla). */
   texto?: string;
+  /** Radio del ruedo (plaza de toros). */
+  radio?: number;
+  /** Profundidad (escenario) o ancho (escalera). */
+  fondo?: number;
+  /** Altura del piso del escenario, o hasta dónde sube la escalera. */
+  altura?: number;
+  /** Escenario: parte de atrás más alta (el VIP), con su profundidad y altura. */
+  elevado?: { fondo: number; altura: number };
 }
 
 export interface Valla {
   puntos: Punto[];
   /** Guirnalda de lamparitas arriba. */
   luces?: boolean;
+  /**
+   * Sólo frena, no se dibuja: cuando lo que se ve ya es otra cosa (el muro del
+   * ruedo, el borde del escenario, la baranda del VIP).
+   */
+  invisible?: boolean;
 }
 
 export interface Vista {
@@ -90,4 +112,9 @@ export interface Predio {
   focos?: { x: number; z: number; color: string }[];
   /** Dónde aparece el personaje al empezar a caminar (mirando al norte). */
   inicio?: { x: number; z: number };
+  /**
+   * Sin árboles a menos de esta distancia del centro: el predio ocupa más que sus
+   * zonas (las gradas y la fachada de la plaza de toros, alrededor del ruedo).
+   */
+  radioLibre?: number;
 }

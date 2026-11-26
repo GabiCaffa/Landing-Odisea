@@ -11,6 +11,7 @@ export { tieneCroquis };
  */
 const PREDIOS: Record<string, () => Promise<{ default: Predio }>> = {
   golf: () => import("./golf"),
+  plazaToros: () => import("./plazaToros"),
 };
 
 export async function cargarPredio(slug: string): Promise<Predio | null> {
