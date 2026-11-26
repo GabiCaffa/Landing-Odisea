@@ -226,12 +226,12 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     zonasMat[z.id] = mat;
     const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma), mat);
     piso.rotation.x = -Math.PI / 2;
-    piso.position.y = 0.03 + i * 0.012;
+    piso.position.y = (z.altura ?? 0) + 0.03 + i * 0.012;
     piso.receiveShadow = true;
     escena.add(piso);
     if (z.etiqueta) {
       const s = cartel(z.nombre.toUpperCase(), 3.2, z.color);
-      s.position.set(z.etiqueta[0], 6.5, z.etiqueta[1]);
+      s.position.set(z.etiqueta[0], 6.5 + (z.altura ?? 0), z.etiqueta[1]);
       escena.add(s);
     }
   });
@@ -240,6 +240,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const metal = mate("#9aa0a8", { metalness: 0.4, roughness: 0.5 });
   const posicionesLuz: THREE.Vector3[] = [];
   for (const v of predio.vallas) {
+    if (v.invisible) continue; // sólo frena (ver `tramos`)
     for (let i = 0; i < v.puntos.length - 1; i++) {
       const [x1, z1] = v.puntos[i];
       const [x2, z2] = v.puntos[i + 1];
@@ -284,6 +285,85 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     g.add(s);
     cartelesPieza.push({ tipo, sprite: s, x: 0, z: 0 });
   };
+
+  /** La imagen de una pantalla LED: degradé rojo con el texto (una línea por `\n`). */
+  function texturaPantalla(texto = "ODÍSEA") {
+    const c = document.createElement("canvas");
+    c.width = 1024;
+    c.height = 512;
+    const ctx = c.getContext("2d")!;
+    const grad = ctx.createLinearGradient(0, 0, 1024, 512);
+    grad.addColorStop(0, "#7a0d1a");
+    grad.addColorStop(0.5, "#d4202f");
+    grad.addColorStop(1, "#3a0610");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1024, 512);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = '900 110px "Inter Tight", system-ui, sans-serif';
+    const lineas = texto.split("\n");
+    lineas.forEach((l, i) => ctx.fillText(l, 512, 256 + (i - (lineas.length - 1) / 2) * 125));
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  /**
+   * La fachada de la plaza de toros, como textura que se repite alrededor: el
+   * arco de herradura abajo, dos ventanas arriba y la cornisa. Dos imágenes: el
+   * color y lo que se prende de noche (el adentro de los arcos y las ventanas).
+   */
+  function texturasFachada(repeticiones: number) {
+    const W = 256;
+    const H = 400;
+    const hacer = (noche: boolean) => {
+      const c = document.createElement("canvas");
+      c.width = W;
+      c.height = H;
+      const ctx = c.getContext("2d")!;
+      // De noche la pared también se prende un poco (está iluminada desde abajo).
+      ctx.fillStyle = noche ? "#3a2814" : "#c7aa78";
+      ctx.fillRect(0, 0, W, H);
+      if (!noche) {
+        // Hiladas de ladrillo claro y la cornisa.
+        ctx.fillStyle = "rgba(90,60,30,0.10)";
+        for (let y = 0; y < H; y += 14) ctx.fillRect(0, y, W, 2);
+        ctx.fillStyle = "#b39062";
+        ctx.fillRect(0, 34, W, 10);
+        ctx.fillRect(0, 196, W, 8);
+      }
+      const hueco = noche ? "#ffb35c" : "#2a1d14";
+      // Arco de herradura, abajo (de y=230 a 400).
+      ctx.fillStyle = hueco;
+      ctx.beginPath();
+      ctx.moveTo(78, H);
+      ctx.lineTo(78, 300);
+      ctx.arc(128, 300, 56, Math.PI * 0.92, Math.PI * 0.08);
+      ctx.lineTo(178, H);
+      ctx.closePath();
+      ctx.fill();
+      // Dos ventanas de medio punto, arriba.
+      for (const x of [86, 170]) {
+        ctx.beginPath();
+        ctx.moveTo(x - 17, 170);
+        ctx.lineTo(x - 17, 100);
+        ctx.arc(x, 100, 17, Math.PI, 0);
+        ctx.lineTo(x + 17, 170);
+        ctx.closePath();
+        ctx.fill();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.repeat.set(repeticiones, 1);
+      return tex;
+    };
+    return { color: hacer(false), noche: hacer(true) };
+  }
+
+  // Escaleras: por dónde se sube caminando (ver `alturaEn`).
+  const rampas: { x: number; z: number; rot: number; largo: number; ancho: number; altura: number }[] = [];
 
   const constructores: Record<TipoPieza, (p: Pieza) => THREE.Group> = {
     barra: (p) => {
@@ -371,24 +451,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       const g = new THREE.Group();
       g.add(caja(12.4, 7, 0.5, mate("#151518"), 0, 5, 0));
       for (const x of [-4, 4]) g.add(caja(0.4, 1.6, 0.4, mate("#151518"), x, 0.8, 0));
-      const c = document.createElement("canvas");
-      c.width = 1024;
-      c.height = 512;
-      const ctx = c.getContext("2d")!;
-      const grad = ctx.createLinearGradient(0, 0, 1024, 512);
-      grad.addColorStop(0, "#7a0d1a");
-      grad.addColorStop(0.5, "#d4202f");
-      grad.addColorStop(1, "#3a0610");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 1024, 512);
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = '900 110px "Inter Tight", system-ui, sans-serif';
-      const lineas = (p.texto ?? "ODÍSEA").split("\n");
-      lineas.forEach((l, i) => ctx.fillText(l, 512, 256 + (i - (lineas.length - 1) / 2) * 125));
-      const tex = new THREE.CanvasTexture(c);
-      tex.colorSpace = THREE.SRGBColorSpace;
+      const tex = texturaPantalla(p.texto);
       const pantalla = new THREE.Mesh(new THREE.PlaneGeometry(11.8, 5.9), brilla("#ffffff", 1, { map: tex, emissiveMap: tex }));
       pantalla.position.set(0, 5, 0.27);
       g.add(pantalla);
@@ -476,6 +539,247 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       g.add(bandera);
       return g;
     },
+    /**
+     * Una plaza de toros: el muro del ruedo (con el hueco del ingreso al sur), las
+     * gradas en escalones, la galería, la fachada circular con arcos y almenas, el
+     * techo de la mitad del frente, los reflectores y la torre de la entrada.
+     * Centrada en (x, z); el ruedo mide `radio`. Todo de geometría simple: no es
+     * un modelo escaneado, es un croquis.
+     */
+    plazaToros: (p) => {
+      const g = new THREE.Group();
+      const R = p.radio ?? 26;
+      const R0 = R + 1.6; // el callejón, entre el muro y la primera grada
+      const ESCALONES = 16;
+      const PASO = 1;
+      const SUBE = 0.55;
+      const BASE = 1.8;
+      const RT = R0 + ESCALONES * PASO; // donde terminan las gradas
+      const RF = RT + 3.5; // la fachada
+      const ALTO = 15;
+      const ARRIBA = BASE + ESCALONES * SUBE; // piso de la galería
+      const HUECO = 0.1; // medio ángulo del ingreso, al sur
+      const VUELTA = Math.PI * 2 - 2 * HUECO;
+      const doble = { side: THREE.DoubleSide };
+      // Propios: los de afuera (q, pos, esc, unir) se declaran más abajo.
+      const giro = new THREE.Quaternion();
+      const lugar = new THREE.Vector3();
+      const uno = new THREE.Vector3(1, 1, 1);
+      const juntar = (gs: THREE.BufferGeometry[]) => mergeGeometries(gs) ?? gs[0];
+
+      // Muro del ruedo, con el hueco del ingreso.
+      const muro = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 1.6, 96, 1, true, HUECO, VUELTA), mate("#7a2e1f", doble));
+      muro.position.y = 0.8;
+      g.add(muro);
+      const tapa = new THREE.RingGeometry(R, R + 0.3, 96, 1, 1.5 * Math.PI + HUECO, VUELTA);
+      tapa.rotateX(-Math.PI / 2);
+      tapa.translate(0, 1.61, 0);
+      g.add(new THREE.Mesh(tapa, mate("#5a2016")));
+
+      // Gradas: huellas (los asientos, gris claro) y contrahuellas.
+      const huellas: THREE.BufferGeometry[] = [];
+      const contras: THREE.BufferGeometry[] = [];
+      for (let i = 0; i < ESCALONES; i++) {
+        const r1 = R0 + i * PASO;
+        const y = BASE + i * SUBE;
+        // Un RingGeometry acostado: su ángulo 1,5π cae al sur (+z).
+        const h = new THREE.RingGeometry(r1, r1 + PASO, 96, 1, 1.5 * Math.PI + HUECO, VUELTA);
+        h.rotateX(-Math.PI / 2);
+        h.translate(0, y, 0);
+        huellas.push(h);
+        const altoC = i === 0 ? y : SUBE;
+        // Un CylinderGeometry arranca en +z (sur): el hueco queda centrado ahí.
+        const c = new THREE.CylinderGeometry(r1, r1, altoC, 96, 1, true, HUECO, VUELTA);
+        c.translate(0, y - altoC / 2, 0);
+        contras.push(c);
+      }
+      const asientos = new THREE.Mesh(juntar(huellas), mate("#c4c8cf", doble));
+      asientos.receiveShadow = true;
+      g.add(asientos, new THREE.Mesh(juntar(contras), mate("#8d9096", doble)));
+      // El túnel del ingreso, por debajo de las gradas.
+      g.add(caja(2 * R0 * Math.sin(HUECO) + 0.6, 4.2, RF - R + 1, mate("#17110d"), 0, 2.1, (R + RF) / 2));
+
+      // Galería: piso y la fachada (vista de los dos lados: de adentro se ven sus arcos arriba de las gradas).
+      const galeria = new THREE.RingGeometry(RT, RF, 96);
+      galeria.rotateX(-Math.PI / 2);
+      galeria.translate(0, ARRIBA, 0);
+      g.add(new THREE.Mesh(galeria, mate("#a89a86", doble)));
+      const { color, noche } = texturasFachada(Math.round((2 * Math.PI * RF) / 9.5));
+      const matFachada = new THREE.MeshStandardMaterial({
+        map: color,
+        emissive: "#ffffff",
+        emissiveMap: noche,
+        emissiveIntensity: 1,
+        roughness: 0.9,
+        side: THREE.DoubleSide,
+      });
+      emisivos.push({ mat: matFachada, base: 1 });
+      const fachada = new THREE.Mesh(new THREE.CylinderGeometry(RF, RF, ALTO, 128, 1, true), matFachada);
+      fachada.position.y = ALTO / 2;
+      g.add(fachada);
+
+      // Almenas arriba de la fachada.
+      const arena = mate("#c7aa78");
+      const nAlmenas = Math.floor((2 * Math.PI * RF) / 2.4);
+      const almenas = new THREE.InstancedMesh(new THREE.BoxGeometry(1.1, 1.2, 0.8), arena, nAlmenas);
+      for (let i = 0; i < nAlmenas; i++) {
+        const a = (i / nAlmenas) * Math.PI * 2;
+        giro.setFromAxisAngle(new THREE.Vector3(0, 1, 0), a);
+        almenas.setMatrixAt(i, m4.compose(lugar.set(Math.sin(a) * RF, ALTO + 0.6, Math.cos(a) * RF), giro, uno));
+      }
+      g.add(almenas);
+
+      // El techo oscuro sobre la mitad del frente (la que da a la entrada).
+      const techo = new THREE.RingGeometry(RT - 3, RF + 0.4, 64, 1, Math.PI, Math.PI);
+      techo.rotateX(-Math.PI / 2);
+      techo.translate(0, ALTO - 0.2, 0);
+      g.add(new THREE.Mesh(techo, mate("#1d2621", doble)));
+
+      // Reflectores alrededor, arriba de las gradas.
+      const nLuces = 44;
+      const reflectores = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.35, 0.5), brilla("#fff6dc", 2.6), nLuces);
+      for (let i = 0; i < nLuces; i++) {
+        const a = (i / nLuces) * Math.PI * 2;
+        reflectores.setMatrixAt(i, m4.makeTranslation(Math.sin(a) * (RT - 0.5), ALTO - 1.4, Math.cos(a) * (RT - 0.5)));
+      }
+      g.add(reflectores);
+
+      // La torre de la entrada (con su gran arco) y dos torres a los costados.
+      const torre = new THREE.Group();
+      torre.add(caja(16, 18, 8, arena, 0, 9, 0));
+      const arco = new THREE.Shape();
+      arco.moveTo(-3.2, 0);
+      arco.lineTo(-3.2, 8);
+      arco.absarc(0, 8, 3.2, Math.PI, 0, true);
+      arco.lineTo(3.2, 0);
+      arco.closePath();
+      const boca = new THREE.Mesh(new THREE.ShapeGeometry(arco), brilla("#ffb35c", 0.9, { side: THREE.DoubleSide }));
+      boca.position.set(0, 0.05, 4.03);
+      torre.add(boca);
+      for (let i = 0; i < 7; i++) torre.add(caja(1.1, 1.2, 0.8, arena, -6.6 + i * 2.2, 18.6, 3.6));
+      torre.position.set(0, 0, RF + 2.5);
+      g.add(torre);
+      for (const lado of [-1, 1]) {
+        const a = lado * 0.95;
+        const t = caja(7, 17, 7, arena, Math.sin(a) * (RF + 1.5), 8.5, Math.cos(a) * (RF + 1.5));
+        t.rotation.y = a;
+        g.add(t);
+      }
+
+      // La explanada de afuera (baldosas rojizas con sus líneas) y la calle.
+      const anillo = (r1: number, r2: number, colorPiso: string, y: number) => {
+        const m = new THREE.Mesh(new THREE.RingGeometry(r1, r2, 96), mate(colorPiso));
+        m.rotation.x = -Math.PI / 2;
+        m.position.y = y;
+        m.receiveShadow = true;
+        g.add(m);
+      };
+      anillo(RF, RF + 16, "#b37a5e", 0.015);
+      anillo(RF + 6, RF + 6.3, "#efe6d8", 0.02);
+      anillo(RF + 15.7, RF + 16, "#efe6d8", 0.02);
+      anillo(RF + 16, RF + 23, "#2a2a2d", 0.012);
+      return g;
+    },
+    /**
+     * Escenario grande: tarima con su borde de luz, cabina del DJ adelante al
+     * centro, columnas de sonido, techo con estructura, pantalla atrás y haces de
+     * luz. Con `elevado`, la parte de atrás es más alta (el VIP), con baranda de
+     * vidrio. Centrado en (x, z); su frente mira al sur con rot 0.
+     */
+    escenario: (p) => {
+      const g = new THREE.Group();
+      const W = p.largo ?? 20;
+      const D = p.fondo ?? 12;
+      const H = p.altura ?? 1.6;
+      const negro = mate("#141417");
+      g.add(caja(W, H, D, negro, 0, H / 2, 0));
+      g.add(caja(W, 0.1, 0.06, brilla("#ff2a4a", 1.6), 0, H - 0.12, D / 2 + 0.04));
+      let fondoLibre = D;
+      if (p.elevado) {
+        const e = p.elevado;
+        const zc = -D / 2 + e.fondo / 2;
+        const frente = -D / 2 + e.fondo;
+        g.add(caja(W, e.altura - H, e.fondo, mate("#1d1d22"), 0, H + (e.altura - H) / 2, zc));
+        const vidrio = new THREE.MeshStandardMaterial({ color: "#9fd3ff", transparent: true, opacity: 0.28, roughness: 0.1 });
+        g.add(caja(W, 1.1, 0.06, vidrio, 0, e.altura + 0.55, frente));
+        g.add(caja(0.06, 1.1, e.fondo, vidrio, -W / 2, e.altura + 0.55, zc));
+        g.add(caja(W, 0.06, 0.09, brilla("#ffd24a", 1.2), 0, e.altura + 1.1, frente));
+        fondoLibre = D - e.fondo;
+      }
+      // DJ, adelante al centro.
+      const zDj = D / 2 - Math.min(2.2, fondoLibre / 2);
+      g.add(caja(3.6, 1.1, 1.2, mate("#0f0f12"), 0, H + 0.55, zDj));
+      g.add(caja(3.6, 0.12, 0.05, brilla("#ff2a4a", 2), 0, H + 0.95, zDj + 0.62));
+      // Columnas de sonido en las puntas del frente.
+      for (const sx of [-1, 1]) g.add(caja(1.4, 3.4, 1.3, mate("#0b0b0d"), sx * (W / 2 - 0.9), H + 1.7, D / 2 - 0.9));
+      // Techo: cuatro torres de estructura, el marco y la cubierta.
+      const truss = mate("#3b3b42", { metalness: 0.6, roughness: 0.4 });
+      const TECHO = 12.5;
+      for (const sx of [-1, 1])
+        for (const sz of [-1, 1]) g.add(caja(0.5, TECHO, 0.5, truss, sx * (W / 2 + 0.4), TECHO / 2, sz * (D / 2 + 0.4)));
+      g.add(caja(W + 1.4, 0.45, 0.45, truss, 0, TECHO, D / 2 + 0.4));
+      g.add(caja(W + 1.4, 0.45, 0.45, truss, 0, TECHO, -D / 2 - 0.4));
+      g.add(caja(W + 1.8, 0.35, D + 1.8, mate("#18181c"), 0, TECHO + 0.45, 0));
+      // Pantalla al fondo, por encima de la gente del VIP.
+      const tex = texturaPantalla(p.texto);
+      const ancho = W - 3;
+      g.add(caja(ancho + 0.6, ancho / 2.6 + 0.6, 0.4, mate("#151518"), 0, TECHO - 1.4 - ancho / 5.2, -D / 2 - 0.3));
+      const pantalla = new THREE.Mesh(new THREE.PlaneGeometry(ancho, ancho / 2.6), brilla("#ffffff", 1, { map: tex, emissiveMap: tex }));
+      pantalla.position.set(0, TECHO - 1.4 - ancho / 5.2, -D / 2 - 0.08);
+      g.add(pantalla);
+      // Haces de luz desde el frente del techo.
+      ["#ff2a4a", "#ffd24a", "#38e8ff", "#a855f7", "#ff2a4a"].forEach((c, i) => {
+        g.add(caja(0.5, 0.4, 0.5, brilla(c, 2.2), -W / 2 + 2 + i * ((W - 4) / 4), TECHO - 0.5, D / 2 + 0.4));
+        const pivote = new THREE.Group();
+        pivote.position.set(-W / 2 + 2 + i * ((W - 4) / 4), TECHO - 0.6, D / 2 + 0.4);
+        const haz = new THREE.Mesh(
+          new THREE.ConeGeometry(3, 22, 16, 1, true),
+          new THREE.MeshBasicMaterial({
+            color: c,
+            transparent: true,
+            opacity: 0.12,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          })
+        );
+        haz.position.y = -11;
+        pivote.add(haz);
+        pivote.userData.fase = i * 1.3;
+        g.add(pivote);
+        rayos.push(pivote);
+      });
+      const s = cartel("ESCENARIO", 2.2, "#111114");
+      s.position.set(0, TECHO + 2.2, 0);
+      g.add(s);
+      return g;
+    },
+    /**
+     * Escalera recta: sube `altura` metros a lo largo de `largo`, hacia el norte
+     * (-z) con rot 0. Además de dibujarse, se anota en `rampas` para que al
+     * caminar por ella la cámara suba.
+     */
+    escalera: (p) => {
+      const g = new THREE.Group();
+      const L = p.largo ?? 8;
+      const A = p.fondo ?? 2.4;
+      const H = p.altura ?? 2;
+      const n = Math.max(4, Math.round(H / 0.18));
+      const huella = L / n;
+      const sube = H / n;
+      const gris = mate("#2c2c31");
+      for (let i = 0; i < n; i++) {
+        const alto = (i + 1) * sube;
+        g.add(caja(A, alto, huella, gris, 0, alto / 2, L / 2 - (i + 0.5) * huella));
+      }
+      // Baranda del lado de afuera, con luz.
+      const largoB = Math.hypot(L, H);
+      const baranda = caja(0.08, 0.08, largoB, brilla("#ffd24a", 1.2), A / 2, H / 2 + 1, 0);
+      baranda.rotation.x = Math.atan2(H, L);
+      g.add(baranda);
+      rampas.push({ x: p.x, z: p.z, rot: ((p.rot ?? 0) * Math.PI) / 180, largo: L, ancho: A, altura: H });
+      return g;
+    },
   };
 
   const gruposPieza: { tipo: TipoPieza; g: THREE.Group }[] = [];
@@ -508,6 +812,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     const x = minX - 90 + sorteo() * (maxX - minX + 180);
     const z = minZ - 90 + sorteo() * (maxZ - minZ + 180);
     if (x > minX - 14 && x < maxX + 14 && z > minZ - 14 && z < maxZ + 14) continue;
+    if (predio.radioLibre && Math.hypot(x - (minX + maxX) / 2, z - (minZ + maxZ) / 2) < predio.radioLibre) continue;
     const s = 0.8 + sorteo() * 0.9;
     esc.set(s, s, s);
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), sorteo() * Math.PI);
@@ -529,6 +834,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   // persona se las ve de cerca: por eso dejaron de ser un cilindro con una bola.
   interface Persona {
     x: number;
+    /** Altura del piso donde está parada (una zona elevada). */
+    y: number;
     z: number;
     fase: number;
     ritmo: number;
@@ -575,6 +882,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         : sorteo() * Math.PI * 2;
       gente.push({
         x: pt[0],
+        y: z.altura ?? 0,
         z: pt[1],
         fase: sorteo() * Math.PI * 2,
         ritmo: 5 + sorteo() * 3,
@@ -659,7 +967,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       const salto = pp.baila && !quietos ? Math.abs(Math.sin(fase)) * 0.1 : 0;
       const giro = pp.giro + (pp.baila && !quietos ? Math.sin(fase * 0.5) * 0.18 : 0);
       q.setFromAxisAngle(ejeY, giro);
-      m4.compose(pos.set(pp.x, salto, pp.z), q, esc.setScalar(pp.escala));
+      m4.compose(pos.set(pp.x, pp.y + salto, pp.z), q, esc.setScalar(pp.escala));
       mPiernas.setMatrixAt(i, m4);
       mPelo.setMatrixAt(i, m4);
       if (pp.arriba) {
@@ -755,6 +1063,27 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     return encontrada;
   };
 
+  /**
+   * Altura del piso en un punto: la de la zona (el VIP arriba del escenario) o,
+   * sobre una escalera, lo que haya subido hasta ahí. A una zona elevada sólo se
+   * llega por su escalera: lo demás lo cierran las vallas.
+   */
+  const alturaEn = (x: number, z: number): number => {
+    let h = zonaDe(x, z)?.altura ?? 0;
+    for (const r of rampas) {
+      const dx = x - r.x;
+      const dz = z - r.z;
+      // Al sistema de la escalera: lz crece hacia abajo (+z con rot 0).
+      const lx = dx * Math.cos(r.rot) - dz * Math.sin(r.rot);
+      const lz = dx * Math.sin(r.rot) + dz * Math.cos(r.rot);
+      // Un poco de rellano arriba, para pasar de la escalera al piso alto sin bajón.
+      if (Math.abs(lx) > r.ancho / 2 + 0.3 || lz > r.largo / 2 || lz < -r.largo / 2 - 2) continue;
+      h = Math.max(h, r.altura * THREE.MathUtils.clamp((r.largo / 2 - lz) / r.largo, 0, 1));
+    }
+    return h;
+  };
+  let piso = 0;
+
   const TECLAS_JUEGO = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
   const alApretar = (e: KeyboardEvent) => {
     if (!caminando || pausado || !TECLAS_JUEGO.has(e.code)) return;
@@ -846,10 +1175,13 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
     const quietos = op.reducirMovimiento;
     const bamboleo = !quietos && paso > 0.05 ? Math.sin(t * (9 + paso * 3)) * 0.035 * Math.min(paso, 1.5) : 0;
-    camara.position.set(yo.x, OJOS + bamboleo, yo.z);
+    // Subir o bajar (la escalera del VIP) se acompaña, no salta.
+    const objetivo = alturaEn(yo.x, yo.z);
+    piso = dt > 0 ? piso + (objetivo - piso) * Math.min(1, dt * 10) : objetivo;
+    camara.position.set(yo.x, piso + OJOS + bamboleo, yo.z);
     mirar.set(
       yo.x + Math.sin(yaw) * Math.cos(pitch),
-      OJOS + bamboleo + Math.sin(pitch),
+      piso + OJOS + bamboleo + Math.sin(pitch),
       yo.z + Math.cos(yaw) * Math.cos(pitch)
     );
     camara.lookAt(mirar);
@@ -1049,7 +1381,11 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         dibujar();
       },
       gente: gente.length,
-      personaje: () => ({ x: yo.x, z: yo.z, yaw, caminando, zona: zonaActual }),
+      personaje: () => ({ x: yo.x, z: yo.z, y: piso, yaw, caminando, zona: zonaActual }),
+      // Para entender por qué no se puede pasar por un lugar.
+      obstaculos,
+      ocupado,
+      choca,
     };
   }
 

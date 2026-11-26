@@ -12,6 +12,7 @@
  */
 export const PREDIO_DE_EVENTO: Record<string, string> = {
   "navidad-en-el-golf-paysandu": "golf",
+  "navidad-colonia": "plazaToros",
 };
 
 export const tieneCroquis = (slug: string | undefined | null): boolean =>
