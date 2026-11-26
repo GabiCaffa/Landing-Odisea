@@ -122,7 +122,6 @@ const plazaToros: Predio = {
       gente: 14,
       altura: VIP_ALTURA,
       entradas: { incluye: ["vip", "+30"] },
-      especial: true,
     },
   ],
   vallas,

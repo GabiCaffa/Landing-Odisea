@@ -30,8 +30,6 @@ export interface ZonaPredio {
    * cambia el lote. Al caminar por la zona se ofrece comprarla.
    */
   entradas?: { incluye: string[]; excluye?: string[] };
-  /** Al entrar caminando se abre la compra sola (una vez). Para VIP y backstage. */
-  especial?: boolean;
   /**
    * Metros sobre el piso: una zona en alto (el VIP arriba del escenario). El piso
    * se dibuja a esa altura, la gente se para ahí y al caminar se sube. A una zona
@@ -50,6 +48,10 @@ export type TipoPieza =
   | "acceso"
   | "arbolNavidad"
   | "banderaGolf"
+  | "torreLuz"
+  | "palosRugby"
+  | "contenedor"
+  | "bandera"
   | "plazaToros"
   | "escenario"
   | "escalera";
@@ -80,6 +82,11 @@ export interface Valla {
   puntos: Punto[];
   /** Guirnalda de lamparitas arriba. */
   luces?: boolean;
+  /**
+   * `reja` (por defecto): la valla de contención metálica, baja y que deja ver.
+   * `media`: media sombra negra de 2 m, como el cerco del perímetro en las fotos.
+   */
+  estilo?: "reja" | "media";
   /**
    * Sólo frena, no se dibuja: cuando lo que se ve ya es otra cosa (el muro del
    * ruedo, el borde del escenario, la baranda del VIP).

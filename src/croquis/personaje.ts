@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 /**
  * Lo que se ve de uno mismo al caminar por el croquis en primera persona: la
@@ -99,16 +100,6 @@ export function crearManoConVaso(): ManoConVaso {
   const brazo = new THREE.Group();
   grupo.add(brazo);
 
-  // Manga y puño, entrando desde abajo a la derecha.
-  const manga = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.42, 14), buzo);
-  manga.rotation.set(-1.15, 0, 0.35);
-  manga.position.set(0.07, -0.17, 0.14);
-  brazo.add(manga);
-  const puno = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.05, 14), naranja);
-  puno.rotation.copy(manga.rotation);
-  puno.position.set(0.012, -0.075, -0.035);
-  brazo.add(puno);
-
   // El vaso.
   const vaso = new THREE.Group();
   const alto = 0.15;
@@ -152,22 +143,58 @@ export function crearManoConVaso(): ManoConVaso {
   vaso.add(sorbete);
   brazo.add(vaso);
 
-  // La mano agarrando el vaso: palma del lado de afuera y cuatro dedos que lo
-  // rodean por delante; el pulgar del lado de adentro.
-  const palma = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.085, 0.075), piel);
-  palma.position.set(0.058, -0.01, 0.01);
-  brazo.add(palma);
-  for (let i = 0; i < 4; i++) {
-    const dedo = new THREE.Mesh(new THREE.CapsuleGeometry(0.0115, 0.05, 3, 8), piel);
-    dedo.rotation.z = Math.PI / 2;
-    dedo.rotation.y = 0.55;
-    dedo.position.set(0.035, 0.022 - i * 0.022, -0.04);
-    brazo.add(dedo);
-  }
-  const pulgar = new THREE.Mesh(new THREE.CapsuleGeometry(0.013, 0.045, 3, 8), piel);
-  pulgar.rotation.set(0.4, 0, -0.5);
-  pulgar.position.set(0.03, 0.035, 0.045);
-  brazo.add(pulgar);
+  // La mano derecha agarrando el vaso, vista desde los ojos: el dorso del lado
+  // de afuera (a la derecha del vaso), el pulgar cruzando por adelante arriba y
+  // los otros cuatro dedos por detrás, que casi no se ven. De ahí baja la
+  // muñeca a la manga. Formas redondeadas: con bloques parecía de juguete.
+  const mano = new THREE.Group();
+  const dorso = new THREE.Mesh(new RoundedBoxGeometry(0.03, 0.088, 0.09, 4, 0.013), piel);
+  dorso.position.set(0.064, -0.004, -0.004);
+  dorso.rotation.z = 0.1;
+  mano.add(dorso);
+  // Un dedo de dos falanges, que rodea el vaso a la altura y.
+  const dedo = (y: number, atras: boolean, largo: number) => {
+    const g = new THREE.Group();
+    const r = 0.0105;
+    const a = new THREE.Mesh(new THREE.CapsuleGeometry(r, largo, 4, 10), piel);
+    a.rotation.z = Math.PI / 2;
+    const b = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.92, largo * 0.8, 4, 10), piel);
+    b.rotation.z = Math.PI / 2;
+    // Primera falange pegada al vaso; la segunda dobla siguiendo la curva.
+    const g1 = new THREE.Group();
+    g1.add(a);
+    g1.position.set(0.045, y, atras ? -0.036 : 0.036);
+    g1.rotation.y = atras ? -0.75 : 0.75;
+    const g2 = new THREE.Group();
+    g2.add(b);
+    g2.position.set(0.012, y, atras ? -0.056 : 0.056);
+    g2.rotation.y = atras ? -0.2 : 0.2;
+    g.add(g1, g2);
+    return g;
+  };
+  [0.03, 0.008, -0.014, -0.036].forEach((y, i) => mano.add(dedo(y, true, i === 3 ? 0.024 : 0.03)));
+  // El pulgar, por adelante y arriba, apenas inclinado.
+  const pulgar = dedo(0.03, false, 0.032);
+  pulgar.scale.setScalar(0.85);
+  pulgar.position.set(0.012, 0.012, 0);
+  mano.add(pulgar);
+  // Muñeca y antebrazo: bajan hacia la esquina, hacia los ojos.
+  const haciaAbajo = new THREE.Vector3(0.38, -0.62, 0.69).normalize();
+  const alinear = (m: THREE.Object3D) => m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), haciaAbajo);
+  const munecaPos = new THREE.Vector3(0.07, -0.05, 0.008);
+  const muneca = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.033, 0.07, 16), piel);
+  alinear(muneca);
+  muneca.position.copy(munecaPos).addScaledVector(haciaAbajo, 0.02);
+  mano.add(muneca);
+  const puno = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.045, 18), naranja);
+  alinear(puno);
+  puno.position.copy(munecaPos).addScaledVector(haciaAbajo, 0.065);
+  mano.add(puno);
+  const manga = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.058, 0.36, 18), buzo);
+  alinear(manga);
+  manga.position.copy(munecaPos).addScaledVector(haciaAbajo, 0.26);
+  mano.add(manga);
+  brazo.add(mano);
 
   // Abajo a la derecha, un poco girado hacia el centro.
   grupo.position.set(0.24, -0.27, -0.5);

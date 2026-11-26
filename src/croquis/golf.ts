@@ -16,6 +16,12 @@ import type { Pieza, Predio, Punto, Vista } from "./tipos";
 /** Píxel del mapa → metros. 0,25 m por píxel deja el predio en ~100 × 120 m. */
 const p = (px: number, py: number): Punto => [(px - 250) * 0.25, (py - 470) * 0.25];
 const rect = (x1: number, y1: number, x2: number, y2: number): Punto[] => [p(x1, y1), p(x2, y1), p(x2, y2), p(x1, y2)];
+/** Grados para que el frente de una pieza en (px, py) mire al centro del predio. */
+const alCentro = (px: number, py: number) => {
+  const [x, z] = p(px, py);
+  const [cx, cz] = p(170, 420);
+  return (Math.atan2(cx - x, cz - z) * 180) / Math.PI;
+};
 const en = (px: number, py: number) => {
   const [x, z] = p(px, py);
   return { x, z };
@@ -40,9 +46,10 @@ const piezas: Pieza[] = [
   { tipo: "barra", ...en(112, 403), rot: 180 },
   { tipo: "barra", ...en(92, 470), rot: 180, largo: 5 },
   { tipo: "barra", ...en(378, 360), rot: 90 },
-  // DJ y pantalla, al fondo, mirando hacia la entrada.
-  { tipo: "pantalla", ...en(140, 262), texto: "NAVIDAD\nEN EL GOLF" },
-  { tipo: "dj", ...en(140, 282) },
+  // El escenario (truss, techo negro, banderines y vallado azul, como en las
+  // fotos), con la pantalla atrás, mirando hacia la entrada.
+  { tipo: "pantalla", ...en(140, 250), texto: "NAVIDAD\nEN EL GOLF" },
+  { tipo: "dj", ...en(140, 272) },
   // Baños (los íconos de los bordes) y primeros auxilios (las cruces).
   { tipo: "banos", ...en(44, 262), rot: 90, cantidad: 4 },
   { tipo: "banos", ...en(44, 400), rot: 90, cantidad: 4 },
@@ -61,7 +68,18 @@ const piezas: Pieza[] = [
   // Ambientación.
   { tipo: "arbolNavidad", ...en(196, 432) },
   { tipo: "arbolNavidad", ...en(305, 690) },
-  { tipo: "banderaGolf", ...en(360, 610) },
+  { tipo: "banderaGolf", ...en(380, 620) },
+  // Lo que se ve en las fotos del lugar: torres de luz de cancha, palos de
+  // rugby, el contenedor y banderas en la entrada.
+  { tipo: "torreLuz", ...en(30, 228), rot: alCentro(30, 228) },
+  { tipo: "torreLuz", ...en(250, 224), rot: alCentro(250, 224) },
+  { tipo: "torreLuz", ...en(26, 506), rot: alCentro(26, 506) },
+  { tipo: "torreLuz", ...en(466, 298), rot: alCentro(466, 298) },
+  { tipo: "torreLuz", ...en(300, 524), rot: alCentro(300, 524) },
+  { tipo: "palosRugby", ...en(318, 660) },
+  { tipo: "contenedor", ...en(150, 222) },
+  { tipo: "bandera", ...en(92, 732) },
+  { tipo: "bandera", ...en(284, 732) },
 ];
 
 const golf: Predio = {
@@ -70,8 +88,8 @@ const golf: Predio = {
   // El orden importa: cada zona se dibuja arriba de las anteriores.
   zonas: [
     { id: "general", nombre: "General +18", poligono: rect(60, 236, 225, 480), color: "#8a1f2c", etiqueta: p(100, 345), gente: 12, entradas: { incluye: ["general"], excluye: ["+15"] } },
-    { id: "backstage", nombre: "Backstage +23", poligono: rect(92, 238, 192, 288), color: "#4b1830", etiqueta: p(110, 262), gente: 5, entradas: { incluye: ["backstage"] }, especial: true },
-    { id: "vip", nombre: "VIP +20", poligono: rect(145, 290, 222, 382), color: "#d22b3c", etiqueta: p(184, 330), gente: 9, entradas: { incluye: ["vip"] }, especial: true },
+    { id: "backstage", nombre: "Backstage +23", poligono: rect(92, 238, 192, 288), color: "#4b1830", etiqueta: p(110, 262), gente: 5, entradas: { incluye: ["backstage"] } },
+    { id: "vip", nombre: "VIP +20", poligono: rect(145, 290, 222, 382), color: "#d22b3c", etiqueta: p(184, 330), gente: 9, entradas: { incluye: ["vip"] } },
     { id: "sector15", nombre: "Sector +15", poligono: rect(63, 410, 152, 478), color: "#b4471f", etiqueta: p(118, 440), gente: 12, entradas: { incluye: ["+15"] } },
     { id: "pasillo", nombre: "Pasillo", poligono: rect(225, 314, 368, 332), color: "#55555c", gente: 2 },
     { id: "rampa", nombre: "Rampa", poligono: [p(225, 442), p(380, 405), p(445, 405), p(272, 490)], color: "#55555c", gente: 2 },
@@ -83,8 +101,8 @@ const golf: Predio = {
   ],
   vallas: [
     // El sector principal, con guirnalda.
-    { puntos: [p(225, 314), p(225, 236), p(60, 236), p(60, 480), p(100, 480)], luces: true },
-    { puntos: [p(225, 332), p(225, 442)], luces: true },
+    { puntos: [p(225, 314), p(225, 236), p(60, 236), p(60, 480), p(100, 480)], luces: true, estilo: "media" },
+    { puntos: [p(225, 332), p(225, 442)], luces: true, estilo: "media" },
     // VIP (con su ingreso abajo), backstage y sector +15.
     { puntos: [p(145, 290), p(145, 382), p(170, 382)] },
     { puntos: [p(195, 382), p(222, 382)] },
@@ -97,7 +115,7 @@ const golf: Predio = {
     { puntos: [p(225, 442), p(380, 405)] },
     { puntos: [p(272, 490), p(445, 405)], luces: true },
     { puntos: [p(368, 332), p(368, 405)] },
-    { puntos: [p(368, 314), p(445, 314), p(445, 405)], luces: true },
+    { puntos: [p(368, 314), p(445, 314), p(445, 405)], luces: true, estilo: "media" },
     // Carriles de ingreso.
     { puntos: [p(100, 480), p(100, 598)] },
     { puntos: [p(155, 478), p(155, 598)] },
@@ -133,7 +151,7 @@ const golf: Predio = {
     vista(
       "general",
       "General +18",
-      "La zona más grande. El DJ y la pantalla al fondo, y barras arriba, sobre el costado y frente al sector +15.",
+      "La zona más grande, sobre el césped. El escenario y la pantalla al fondo, y barras arriba, sobre el costado y frente al sector +15.",
       [110, 360],
       [26, 34, 52],
       { zona: "general", muestra: ["barra"] }

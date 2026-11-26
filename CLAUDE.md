@@ -2095,8 +2095,10 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
 - **Comprar al entrar a un sector**: cada zona dice qué entradas son suyas por palabras en el
   nombre (`entradas: { incluye, excluye }` en el predio, sin tildes ni mayúsculas, así
   "VIP – 2do lote" sigue siendo del VIP al cambiar de lote). Parado en esa zona aparece abajo
-  **"Comprar VIP – 2do lote · $1200"**; en las zonas `especial` (VIP y Backstage) **el modal
-  de compra se abre solo** al entrar, una vez por zona. El modal es el mismo `CompraEntradas`
+  **"Comprar VIP – 2do lote · $1200"**, que cambia con el sector. **El modal NO se abre solo**
+  (pedido del autor: abrirse cada vez que se pasa por un sector molestaba; existió una
+  versión con zonas `especial` y se sacó, también del VIP de la Plaza de Toros). Tocando el
+  botón se abre el mismo `CompraEntradas`
   de siempre, encima del mapa (`encima` → `ModalShell` con `capa` `z-[90]`) y con esa
   entrada ya en 1 (`preseleccion`, sólo el valor inicial del contador: precios, promos y
   mensaje no cambian). Con el modal abierto la caminata se pausa y Escape cierra sólo el modal.
@@ -2136,6 +2138,40 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
   **No se probó en un celular real**: es lo que hay que mirar primero (fluidez en uno de gama
   media).
 
+### El Golf como en las fotos, mano nueva y mirar con el mouse
+
+Con fotos del lugar (cancha de césped abierta, escenario de truss) el Golf dejó de ser un
+plano de colores:
+
+- **Césped de cancha** (`texturaPasto`: verde con hojitas y franjas de corte de 8 m) y
+  **cielo** en un domo con degradé por hora (`texturaCielo`; el atardecer, violeta arriba y
+  naranja en el horizonte, como en las fotos). La niebla toma el color del horizonte. Los
+  **sectores son un tinte** sobre el pasto (opacidad 0,16) con el borde marcado: todo es césped.
+- **Vallas con estilo** (`Valla.estilo`): `media` = media sombra negra de 2,1 m (el
+  perímetro), `reja` (por defecto) = valla de contención con textura de barrotes. Postes de
+  todas las vallas en una sola malla instanciada.
+- **El escenario (`dj`) es el de las fotos**: tarima, torres y techo de truss de aluminio
+  (textura con transparencia), techo negro, banderines negros colgando, alas con el sonido
+  colgado, subwoofers, cabina del DJ, luces y haces, y el **vallado azul** adelante. Para
+  chocar se usa su huella (`userData.solido`), no la caja de todas sus mallas.
+- Piezas nuevas: `torreLuz` (torre de cancha con reflectores), `palosRugby`, `contenedor`
+  (chapa acanalada) y `bandera` (vertical con el logo, flamea). Árboles: **pinos y
+  cipreses** altos y árboles de copa ancha, instanciados.
+- **Mano nueva**: dorso al costado del vaso, pulgar por adelante, los otros dedos atrás,
+  muñeca y manga con el puño naranja (`RoundedBoxGeometry` y cápsulas, sombreado suave).
+- **La gente no frena** al caminar (pedido del autor: complicaba recorrer). Sólo frenan
+  vallas y piezas sólidas.
+- **Mirar con el mouse sin mantener apretado** (Pointer Lock): un click en el mapa lo toma
+  (pide `unadjustedMovement` donde existe), aparece una mirilla, y **Esc lo suelta**. Ese
+  Escape no saca de la caminata (`soltadoEn`). Con el dedo se sigue arrastrando. **El andar
+  se suaviza** (la velocidad se acerca a la pedida, sin tirones).
+- **Carteles caminando**: los de piezas se ven entre 7 y 22 m; los de sector, a más de 20 m
+  (arriba ya dice dónde se está).
+- Al mezclar con el PR de Franco (Plaza de Toros, bailar y fumar) conviven todo: `onMira` y
+  `onBaile`, `estilo` e `invisible` en las vallas, y los pinos respetan `radioLibre`.
+- Probado en navegador (vista general y caminata, Golf y Plaza). **El Pointer Lock no se
+  pudo probar** (el navegador de pruebas no lo permite): hay que verlo en Chrome normal.
+
 ### Croquis 3D de la Plaza de Toros (Navidad Colonia)
 
 Segundo predio del croquis (`src/croquis/plazaToros.ts`, para `navidad-colonia`). La plaza
@@ -2173,7 +2209,7 @@ tiene un millón de caras.
   14, como en el Golf.
 - Probado en navegador con datos de prueba: vistas de día y de noche, escritorio y 375 px;
   caminar del ingreso a la escalera; la altura medida al subir (a mitad 1,1 m, arriba 2,5 m,
-  en el VIP 2,6 m con la zona "vip"); la compra del VIP +30 que se abre sola al entrar; y la
+  en el VIP 2,6 m con la zona "vip"); la compra del VIP +30 (ya no se abre sola: ver arriba); y la
   vista desde el VIP. **No se probó en un celular real.**
 
 ### Eventos "próximamente": flyer borroso + contador (v49)

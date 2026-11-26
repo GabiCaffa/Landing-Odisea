@@ -45,6 +45,8 @@ interface Opciones {
   reducirMovimiento: boolean;
   /** Avisa la zona en la que se está parado al caminar (null = afuera). */
   onZona?: (zona: { id: string; nombre: string } | null) => void;
+  /** Avisa cuando el mouse queda tomado para mirar (click en el mapa) o se suelta (Esc). */
+  onMira?: (tomado: boolean) => void;
   /** Avisa cuando el baile se prende o se apaga solo (al moverse, con la tecla B). */
   onBaile?: (activo: boolean) => void;
 }
@@ -151,6 +153,116 @@ function cartel(texto: string, altoMundo: number, fondo: string, color = "#fffff
 
 const ROJO = "#c8202f";
 
+/** Un canvas como textura que se repite. */
+function texturaCanvas(w: number, h: number, dibujar: (ctx: CanvasRenderingContext2D) => void, color = true) {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  dibujar(c.getContext("2d")!);
+  const tex = new THREE.CanvasTexture(c);
+  if (color) tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+/**
+ * Césped de cancha, como el de las fotos: verde con hojitas sueltas y las
+ * franjas del corte. Cada repetición son 16 m (dos franjas de 8).
+ */
+function texturaPasto() {
+  return texturaCanvas(512, 512, (ctx) => {
+    ctx.fillStyle = "#5a8c43";
+    ctx.fillRect(0, 0, 512, 256);
+    ctx.fillStyle = "#4d7c38";
+    ctx.fillRect(0, 256, 512, 256);
+    const r = azar(99);
+    for (let k = 0; k < 14000; k++) {
+      const x = r() * 512;
+      const y = r() * 512;
+      ctx.fillStyle = r() < 0.55 ? `rgba(28,58,20,${0.12 + r() * 0.18})` : `rgba(150,200,95,${0.06 + r() * 0.1})`;
+      ctx.fillRect(x, y, 1 + r() * 1.4, 2 + r() * 3.5);
+    }
+  });
+}
+
+/** Cielo: un degradé de arriba al horizonte, y abajo el color del suelo lejano. */
+function texturaCielo(arriba: string, medio: string, horizonte: string, abajo: string) {
+  return texturaCanvas(4, 512, (ctx) => {
+    const g = ctx.createLinearGradient(0, 0, 0, 512);
+    g.addColorStop(0, arriba);
+    g.addColorStop(0.32, medio);
+    g.addColorStop(0.497, horizonte);
+    g.addColorStop(0.52, abajo);
+    g.addColorStop(1, abajo);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 4, 512);
+  });
+}
+
+/** Truss de aluminio: dos largueros y la diagonal en zigzag, con fondo transparente. */
+function texturaTruss() {
+  return texturaCanvas(64, 128, (ctx) => {
+    ctx.clearRect(0, 0, 64, 128);
+    ctx.strokeStyle = "#e4e7ea";
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(4, 0);
+    ctx.lineTo(4, 128);
+    ctx.moveTo(60, 0);
+    ctx.lineTo(60, 128);
+    ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(4, 0);
+    ctx.lineTo(60, 64);
+    ctx.lineTo(4, 128);
+    ctx.moveTo(4, 64);
+    ctx.lineTo(60, 64);
+    ctx.stroke();
+  });
+}
+
+/** Valla de reja (las de contención): marco y barrotes, transparente entre medio. */
+function texturaReja() {
+  return texturaCanvas(128, 64, (ctx) => {
+    ctx.clearRect(0, 0, 128, 64);
+    ctx.fillStyle = "#c9ced4";
+    ctx.fillRect(0, 0, 128, 6);
+    ctx.fillRect(0, 58, 128, 6);
+    ctx.fillRect(0, 0, 6, 64);
+    for (let x = 16; x < 128; x += 12) ctx.fillRect(x, 0, 3, 64);
+  });
+}
+
+/** Vallado azul del frente del escenario: paneles con su marco blanco. */
+function texturaPanelesAzules() {
+  return texturaCanvas(128, 128, (ctx) => {
+    ctx.fillStyle = "#e9eef2";
+    ctx.fillRect(0, 0, 128, 128);
+    const g = ctx.createLinearGradient(0, 0, 0, 128);
+    g.addColorStop(0, "#2b9be8");
+    g.addColorStop(1, "#1677c4");
+    ctx.fillStyle = g;
+    ctx.fillRect(6, 6, 116, 116);
+  });
+}
+
+/** Chapa acanalada del contenedor. */
+function texturaChapa() {
+  return texturaCanvas(64, 64, (ctx) => {
+    ctx.fillStyle = "#2f6fae";
+    ctx.fillRect(0, 0, 64, 64);
+    for (let x = 0; x < 64; x += 8) {
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      ctx.fillRect(x, 0, 3, 64);
+      ctx.fillStyle = "rgba(255,255,255,0.1)";
+      ctx.fillRect(x + 4, 0, 2, 64);
+    }
+  });
+}
+
+
 // ─── El motor ───────────────────────────────────────────────────────────────
 
 export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opciones): ControlCroquis {
@@ -163,7 +275,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const escena = new THREE.Scene();
-  escena.fog = new THREE.Fog(0x000000, 160, 520);
+  escena.fog = new THREE.Fog(0x000000, 140, 560);
   const camara = new THREE.PerspectiveCamera(42, 1, 0.5, 1500);
 
   const controles = new OrbitControls(camara, canvas);
@@ -214,20 +326,46 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     return luz;
   });
 
-  // ── Piso ──
-  const pasto = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), mate("#4f7d3c"));
+  // ── Cielo ──
+  // Un domo con degradé hasta el horizonte (las fotos son de atardecer: violeta
+  // arriba y naranja abajo). No lleva niebla: es el fondo.
+  const cielos = {
+    dia: texturaCielo("#4a82c4", "#8fc0ea", "#dcecf6", "#5d7f5a"),
+    atardecer: texturaCielo("#3d3656", "#9a5f78", "#f08a3c", "#2e2a27"),
+    noche: texturaCielo("#03050b", "#0c1430", "#2a2c4a", "#06070a"),
+  };
+  const domo = new THREE.Mesh(
+    new THREE.SphereGeometry(900, 32, 16),
+    new THREE.MeshBasicMaterial({ map: cielos.noche, side: THREE.BackSide, fog: false, depthWrite: false })
+  );
+  escena.add(domo);
+
+  // ── Piso: césped de cancha ──
+  const texPasto = texturaPasto();
+  texPasto.repeat.set(900 / 16, 900 / 16);
+  const pasto = new THREE.Mesh(
+    new THREE.PlaneGeometry(900, 900),
+    new THREE.MeshStandardMaterial({ map: texPasto, roughness: 0.95 })
+  );
   pasto.rotation.x = -Math.PI / 2;
   pasto.receiveShadow = true;
   escena.add(pasto);
 
   const zonasMat: Record<string, THREE.MeshStandardMaterial> = {};
+  // Caminando, el cartel de la zona se ve de lejos y no encima (arriba ya dice dónde se está).
+  const cartelesZona: THREE.Sprite[] = [];
   predio.zonas.forEach((z, i) => {
     const forma = new THREE.Shape(z.poligono.map(([x, zz]) => new THREE.Vector2(x, -zz)));
+    // El lugar es abierto y todo es césped: la zona es un tinte encima del
+    // pasto, con el borde marcado, y no un piso de color.
     const mat = new THREE.MeshStandardMaterial({
       color: z.color,
       roughness: 0.9,
       emissive: z.color,
       emissiveIntensity: 0.05,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
     });
     zonasMat[z.id] = mat;
     const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma), mat);
@@ -235,26 +373,52 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     piso.position.y = (z.altura ?? 0) + 0.03 + i * 0.012;
     piso.receiveShadow = true;
     escena.add(piso);
+    const borde = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(z.poligono.map(([x, zz]) => new THREE.Vector3(x, 0.08 + i * 0.012, zz))),
+      new THREE.LineBasicMaterial({ color: z.color, transparent: true, opacity: 0.8 })
+    );
+    escena.add(borde);
     if (z.etiqueta) {
       const s = cartel(z.nombre.toUpperCase(), 3.2, z.color);
       s.position.set(z.etiqueta[0], 6.5 + (z.altura ?? 0), z.etiqueta[1]);
       escena.add(s);
+      cartelesZona.push(s);
     }
   });
 
   // ── Vallas y guirnaldas ──
   const metal = mate("#9aa0a8", { metalness: 0.4, roughness: 0.5 });
   const posicionesLuz: THREE.Vector3[] = [];
+  const texReja = texturaReja();
+  const mediaSombra = new THREE.MeshStandardMaterial({ color: "#16191b", roughness: 1, side: THREE.DoubleSide, transparent: true, opacity: 0.93 });
+  const postes: { x: number; z: number; alto: number }[] = [];
   for (const v of predio.vallas) {
     if (v.invisible) continue; // sólo frena (ver `tramos`)
+    const media = v.estilo === "media";
+    const alto = media ? 2.1 : 1.15;
     for (let i = 0; i < v.puntos.length - 1; i++) {
       const [x1, z1] = v.puntos[i];
       const [x2, z2] = v.puntos[i + 1];
       const largo = Math.hypot(x2 - x1, z2 - z1);
-      const tramo = caja(largo, 1.15, 0.12, metal, (x1 + x2) / 2, 0.58, (z1 + z2) / 2);
-      tramo.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
-      tramo.castShadow = true;
-      escena.add(tramo);
+      const giro = -Math.atan2(z2 - z1, x2 - x1);
+      let lienzo: THREE.Mesh;
+      if (media) {
+        lienzo = new THREE.Mesh(new THREE.PlaneGeometry(largo, alto), mediaSombra);
+      } else {
+        const t = texReja.clone();
+        t.needsUpdate = true;
+        t.repeat.set(largo / 2.4, 1);
+        lienzo = new THREE.Mesh(
+          new THREE.PlaneGeometry(largo, alto),
+          new THREE.MeshStandardMaterial({ map: t, alphaTest: 0.5, side: THREE.DoubleSide, metalness: 0.5, roughness: 0.45 })
+        );
+      }
+      lienzo.position.set((x1 + x2) / 2, alto / 2, (z1 + z2) / 2);
+      lienzo.rotation.y = giro;
+      lienzo.castShadow = true;
+      escena.add(lienzo);
+      const pasos = Math.max(1, Math.round(largo / (media ? 3 : 2.4)));
+      for (let k = 0; k <= pasos; k++) postes.push({ x: x1 + ((x2 - x1) * k) / pasos, z: z1 + ((z2 - z1) * k) / pasos, alto });
       if (v.luces) {
         const n = Math.max(1, Math.floor(largo / 1.4));
         for (let k = 0; k <= n; k++) {
@@ -266,6 +430,13 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       }
     }
   }
+  // Los postes de todas las vallas, en una sola malla.
+  const mPostes = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 1, 6), metal, Math.max(1, postes.length));
+  const m4p = new THREE.Matrix4();
+  postes.forEach((pp, i) => mPostes.setMatrixAt(i, m4p.compose(new THREE.Vector3(pp.x, pp.alto / 2, pp.z), new THREE.Quaternion(), new THREE.Vector3(1, pp.alto, 1))));
+  mPostes.count = postes.length;
+  escena.add(mPostes);
+
   const lamparitas = new THREE.InstancedMesh(
     new THREE.SphereGeometry(0.11, 6, 4),
     new THREE.MeshBasicMaterial({ color: 0xffffff }),
@@ -283,6 +454,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   // ── Piezas ──
   // x, z: dónde está la pieza en el predio (se completa al ubicarla).
   const cartelesPieza: { tipo: TipoPieza; sprite: THREE.Sprite; x: number; z: number }[] = [];
+  // Banderas que flamean con el viento.
+  const banderas: THREE.Mesh[] = [];
   const rayos: THREE.Object3D[] = [];
   const conCartel = (tipo: TipoPieza, texto: string, fondo: string, g: THREE.Group, alto: number) => {
     const s = cartel(texto, 1.9, fondo);
@@ -416,41 +589,161 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       return g;
     },
     dj: () => {
+      // El escenario de las fotos: tarima, torres y techo de truss de aluminio,
+      // techo negro, banderines negros colgando adelante, alas laterales con el
+      // sonido colgado, y el vallado azul adelante. Mira al sur (+z).
       const g = new THREE.Group();
-      g.add(caja(10, 0.9, 6, mate("#1b1b1f"), 0, 0.45, 0));
-      g.add(caja(3.4, 1.1, 1.1, mate("#0f0f12"), 0, 1.45, 0.9));
-      g.add(caja(3.4, 0.12, 0.05, brilla("#ff2a4a", 2), 0, 1.6, 1.48));
-      const truss = mate("#3b3b42", { metalness: 0.6, roughness: 0.4 });
-      for (const sx of [-4.8, 4.8])
-        for (const sz of [-2.8, 2.8]) g.add(caja(0.28, 7, 0.28, truss, sx, 4.4, sz));
-      g.add(caja(9.9, 0.3, 0.3, truss, 0, 7.8, 2.8));
-      g.add(caja(9.9, 0.3, 0.3, truss, 0, 7.8, -2.8));
-      const colores = ["#ff2a4a", "#ffd24a", "#38e8ff", "#ff2a4a", "#a855f7"];
-      colores.forEach((c, i) => g.add(caja(0.5, 0.4, 0.5, brilla(c, 2.2), -4 + i * 2, 7.45, 2.8)));
+      const negro = mate("#141418", { flatShading: false, roughness: 0.8 });
+      const tela = new THREE.MeshStandardMaterial({ color: "#111114", roughness: 1, side: THREE.DoubleSide });
+      const texTruss = texturaTruss();
+      const truss = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+        const largo = Math.max(w, h, d);
+        const t = texTruss.clone();
+        t.needsUpdate = true;
+        t.repeat.set(1, largo / 1.1);
+        if (largo === w) t.rotation = Math.PI / 2;
+        const m = new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, d),
+          new THREE.MeshStandardMaterial({ map: t, alphaTest: 0.5, side: THREE.DoubleSide, metalness: 0.7, roughness: 0.35 })
+        );
+        m.position.set(x, y, z);
+        return m;
+      };
+      // Tarima y faldón.
+      g.add(caja(16, 1.4, 9, negro, 0, 0.7, 0));
+      g.add(caja(16, 0.06, 9, mate("#2a2a30"), 0, 1.43, 0));
+      for (let i = 0; i < 4; i++) g.add(caja(1.6, 0.35, 0.5, mate("#3a3a40"), -8.9, 0.18 + i * 0.35, 3.2 - i * 0.5));
+      // Torres y techo.
+      for (const sx of [-7.7, 7.7]) for (const sz of [-4.2, 4.2]) g.add(truss(0.5, 10.5, 0.5, sx, 5.25, sz));
+      g.add(truss(16.4, 0.5, 0.5, 0, 10, 4.2));
+      g.add(truss(16.4, 0.5, 0.5, 0, 10, -4.2));
+      g.add(truss(0.5, 0.5, 8.9, -7.7, 10, 0));
+      g.add(truss(0.5, 0.5, 8.9, 7.7, 10, 0));
+      g.add(caja(17.4, 0.35, 10.2, negro, 0, 10.6, 0));
+      // Alas laterales (como un arco de truss) con el sonido colgado.
+      for (const sx of [-10.4, 10.4]) {
+        g.add(truss(0.5, 9, 0.5, sx, 4.5, 3.6));
+        g.add(truss(0.5, 9, 0.5, sx, 4.5, -1.2));
+        g.add(truss(0.5, 0.5, 5.3, sx, 9, 1.2));
+        for (let i = 0; i < 6; i++) {
+          const caj = caja(1.3, 0.55, 0.9, negro, sx, 8.2 - i * 0.58, 2.4);
+          caj.rotation.x = -0.04 * i;
+          g.add(caj);
+        }
+        // Subwoofers en el piso, adelante.
+        g.add(caja(1.6, 1.3, 1.2, negro, sx * 0.86, 0.65, 5.4));
+        g.add(caja(1.6, 1.3, 1.2, negro, sx * 0.86, 1.95, 5.4));
+      }
+      // Banderines negros colgando del frente, como en las fotos.
+      const tri = new THREE.Shape([new THREE.Vector2(-0.9, 0), new THREE.Vector2(0.9, 0), new THREE.Vector2(0, -3.4)]);
+      for (let i = 0; i < 6; i++) {
+        const b = new THREE.Mesh(new THREE.ShapeGeometry(tri), tela);
+        b.position.set(-6.2 + i * 2.48, 9.7, 4.35);
+        g.add(b);
+      }
+      // Cabina del DJ con su luz.
+      g.add(caja(3.6, 1.1, 1.2, mate("#0f0f12"), 0, 1.98, 1.6));
+      g.add(caja(3.6, 0.12, 0.05, brilla("#ff2a4a", 2), 0, 2.2, 2.22));
+      // Luces colgadas del techo.
+      const colores = ["#ff2a4a", "#ffd24a", "#38e8ff", "#ff2a4a", "#a855f7", "#ffffff"];
+      colores.forEach((c, i) => g.add(caja(0.5, 0.45, 0.5, brilla(c, 2.2), -6.2 + i * 2.48, 9.45, 4.2)));
       // Haces de luz: se ven de noche y al atardecer, y se mueven.
-      colores.slice(0, 4).forEach((c, i) => {
+      colores.slice(0, 5).forEach((c, i) => {
         const pivote = new THREE.Group();
-        pivote.position.set(-3 + i * 2, 7.4, 2.8);
+        pivote.position.set(-5 + i * 2.5, 9.4, 4.2);
         const haz = new THREE.Mesh(
-          new THREE.ConeGeometry(2.4, 18, 16, 1, true),
+          new THREE.ConeGeometry(2.6, 20, 16, 1, true),
           new THREE.MeshBasicMaterial({
             color: c,
             transparent: true,
-            opacity: 0.13,
+            opacity: 0.12,
             blending: THREE.AdditiveBlending,
             depthWrite: false,
             side: THREE.DoubleSide,
           })
         );
-        haz.position.y = -9;
+        haz.position.y = -10;
         pivote.add(haz);
         pivote.userData.fase = i * 1.3;
         g.add(pivote);
         rayos.push(pivote);
       });
+      // Vallado azul delante del escenario.
+      const panel = texturaPanelesAzules();
+      panel.repeat.set(20, 1);
+      g.add(
+        new THREE.Mesh(
+          new THREE.BoxGeometry(20, 1.2, 0.08),
+          new THREE.MeshStandardMaterial({ map: panel, roughness: 0.6 })
+        ).translateY(0.6).translateZ(6.6)
+      );
       const s = cartel("DJ", 2.2, "#111114");
-      s.position.set(0, 10, 0);
+      s.position.set(0, 12.2, 0);
       g.add(s);
+      // Para chocar alcanza con la tarima y las alas, no con el vallado de adelante.
+      g.userData.solido = [22, 10.5, 0, 0];
+      return g;
+    },
+    torreLuz: () => {
+      // Torre de iluminación de cancha: poste alto y la cabeza con reflectores.
+      const g = new THREE.Group();
+      const galvanizado = mate("#a8adb3", { metalness: 0.6, roughness: 0.45, flatShading: false });
+      const poste = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.32, 17, 10), galvanizado);
+      poste.position.y = 8.5;
+      g.add(poste);
+      g.add(caja(3.2, 0.2, 0.3, galvanizado, 0, 16.4, 0.2));
+      g.add(caja(3.2, 0.2, 0.3, galvanizado, 0, 17.4, 0.2));
+      for (let i = 0; i < 4; i++) {
+        const r = caja(0.7, 0.55, 0.25, brilla("#fff6dc", 1.8), -1.15 + i * 0.77, 16.9, 0.45);
+        r.rotation.x = 0.35;
+        g.add(r);
+      }
+      g.userData.solido = [1, 1, 0, 0];
+      return g;
+    },
+    palosRugby: () => {
+      // Los palos de rugby que se ven en las fotos (es una cancha).
+      const g = new THREE.Group();
+      const blanco = mate("#f2f2f2", { flatShading: false });
+      for (const x of [-2.8, 2.8]) {
+        const palo = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 12, 10), blanco);
+        palo.position.set(x, 6, 0);
+        g.add(palo);
+      }
+      const travesano = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5.6, 10), blanco);
+      travesano.rotation.z = Math.PI / 2;
+      travesano.position.y = 3;
+      g.add(travesano);
+      return g;
+    },
+    contenedor: () => {
+      const g = new THREE.Group();
+      const chapa = texturaChapa();
+      chapa.repeat.set(6, 1);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(12.2, 2.6, 2.44), new THREE.MeshStandardMaterial({ map: chapa, roughness: 0.55, metalness: 0.3 }));
+      m.position.y = 1.3;
+      g.add(m);
+      g.add(caja(0.1, 2.5, 2.3, mate("#e8e8e8"), -6.12, 1.3, 0));
+      return g;
+    },
+    bandera: (p) => {
+      // Mástil con bandera vertical con el logo, como las de la entrada.
+      const g = new THREE.Group();
+      const mastil = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 7.5, 8), mate("#dcdcdc", { flatShading: false }));
+      mastil.position.y = 3.75;
+      g.add(mastil);
+      const { tex } = texturaTexto(p.texto ?? "ODÍSEA", { fondo: "#f4f4f4", color: "#111114", redondo: false, alto: 120 });
+      const tela = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.1, 3.2),
+        new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.9 })
+      );
+      // El texto va a lo largo de la bandera, que cuelga vertical.
+      tex.center.set(0.5, 0.5);
+      tex.rotation = Math.PI / 2;
+      tela.position.set(0.6, 5.6, 0);
+      tela.userData.flamea = true;
+      g.add(tela);
+      banderas.push(tela);
       return g;
     },
     pantalla: (p) => {
@@ -805,32 +1098,51 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     gruposPieza.push({ tipo: p.tipo, g });
   }
 
-  // ── Árboles alrededor (es un club de golf) ──
-  const nArboles = op.movil ? 60 : 110;
-  const troncos = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 2.4, 6), mate("#5a3a22"), nArboles);
-  const copas = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(2.4, 0), mate("#2f5d2a"), nArboles);
-  const tonosCopa = ["#2f5d2a", "#3a6b30", "#284f24", "#41742f"].map((c) => new THREE.Color(c));
+  // ── Árboles alrededor ──
+  // Como en las fotos: pinos y cipreses altos y oscuros, y árboles de copa
+  // ancha. Todo instanciado (cuatro mallas para más de cien árboles).
+  const nArboles = op.movil ? 70 : 130;
+  const troncos = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.4, 1, 6), mate("#4a3322"), nArboles);
+  const conos = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 8), mate("#1f4a2a"), nArboles);
+  const conos2 = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 8), mate("#24522e"), nArboles);
+  const copas = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), mate("#2f5d2a"), nArboles);
+  const tonosCopa = ["#2f5d2a", "#3a6b30", "#284f24", "#355f2c"].map((c) => new THREE.Color(c));
   const q = new THREE.Quaternion();
   const esc = new THREE.Vector3();
   const pos = new THREE.Vector3();
+  let nPinos = 0;
+  let nCopas = 0;
   let puestos = 0;
   for (let intento = 0; puestos < nArboles && intento < nArboles * 30; intento++) {
-    const x = minX - 90 + sorteo() * (maxX - minX + 180);
-    const z = minZ - 90 + sorteo() * (maxZ - minZ + 180);
-    if (x > minX - 14 && x < maxX + 14 && z > minZ - 14 && z < maxZ + 14) continue;
+    const x = minX - 110 + sorteo() * (maxX - minX + 220);
+    const z = minZ - 110 + sorteo() * (maxZ - minZ + 220);
+    if (x > minX - 16 && x < maxX + 16 && z > minZ - 16 && z < maxZ + 16) continue;
+    // Sin árboles adentro de un edificio redondo (la Plaza de Toros).
     if (predio.radioLibre && Math.hypot(x - (minX + maxX) / 2, z - (minZ + maxZ) / 2) < predio.radioLibre) continue;
-    const s = 0.8 + sorteo() * 0.9;
-    esc.set(s, s, s);
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), sorteo() * Math.PI);
-    troncos.setMatrixAt(puestos, m4.compose(pos.set(x, 1.2 * s, z), q, esc));
-    copas.setMatrixAt(puestos, m4.compose(pos.set(x, (2.4 + 2) * s, z), q, esc.set(s, s * 1.15, s)));
-    copas.setColorAt(puestos, tonosCopa[puestos % tonosCopa.length]);
+    if (sorteo() < 0.6) {
+      // Pino o ciprés: alto y angosto.
+      const alto = 9 + sorteo() * 9;
+      const ancho = 1.6 + sorteo() * 1.6;
+      troncos.setMatrixAt(puestos, m4.compose(pos.set(x, alto * 0.12, z), q, esc.set(1, alto * 0.24, 1)));
+      conos.setMatrixAt(nPinos, m4.compose(pos.set(x, alto * 0.5, z), q, esc.set(ancho, alto * 0.62, ancho)));
+      conos2.setMatrixAt(nPinos, m4.compose(pos.set(x, alto * 0.76, z), q, esc.set(ancho * 0.72, alto * 0.48, ancho * 0.72)));
+      nPinos++;
+    } else {
+      const s = 3 + sorteo() * 2.8;
+      troncos.setMatrixAt(puestos, m4.compose(pos.set(x, s * 0.55, z), q, esc.set(1.2, s * 1.1, 1.2)));
+      copas.setMatrixAt(nCopas, m4.compose(pos.set(x, s * 1.55, z), q, esc.set(s, s * 0.85, s)));
+      copas.setColorAt(nCopas, tonosCopa[nCopas % tonosCopa.length]);
+      nCopas++;
+    }
     puestos++;
   }
   troncos.count = puestos;
-  copas.count = puestos;
-  copas.castShadow = true;
-  escena.add(troncos, copas);
+  conos.count = nPinos;
+  conos2.count = nPinos;
+  copas.count = nCopas;
+  conos.castShadow = conos2.castShadow = copas.castShadow = true;
+  escena.add(troncos, conos, conos2, copas);
 
   // ── Gente ──
   // Cada persona son piezas de malla instanciada: piernas (con zapatillas),
@@ -1022,9 +1334,19 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const tramos: [Punto, Punto][] = predio.vallas.flatMap((v) =>
     v.puntos.slice(1).map((pt, i) => [v.puntos[i], pt] as [Punto, Punto])
   );
-  const SOLIDOS = new Set<TipoPieza>(["barra", "banos", "auxilios", "dj", "pantalla", "arbolNavidad"]);
+  const SOLIDOS = new Set<TipoPieza>(["barra", "banos", "auxilios", "pantalla", "arbolNavidad", "contenedor"]);
   const obstaculos: [number, number, number, number][] = [];
   for (const { tipo, g } of gruposPieza) {
+    if (g.userData.solido) {
+      const [w, d, cx, cz] = g.userData.solido as number[];
+      const caja3 = new THREE.Box3();
+      g.updateMatrixWorld(true);
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        caja3.expandByPoint(new THREE.Vector3(cx + (sx * w) / 2, 0, cz + (sz * d) / 2).applyMatrix4(g.matrixWorld));
+      }
+      obstaculos.push([caja3.min.x - 0.3, caja3.max.x + 0.3, caja3.min.z - 0.3, caja3.max.z + 0.3]);
+      continue;
+    }
     if (!SOLIDOS.has(tipo)) continue;
     g.updateMatrixWorld(true);
     const caja3 = new THREE.Box3();
@@ -1037,10 +1359,9 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     });
     if (!caja3.isEmpty()) obstaculos.push([caja3.min.x - 0.3, caja3.max.x + 0.3, caja3.min.z - 0.3, caja3.max.z + 0.3]);
   }
-  const RADIO_PERSONA = 0.5;
-  const ocupado = (x: number, z: number) =>
-    obstaculos.some(([a, b, c, d]) => x > a && x < b && z > c && z < d) ||
-    gente.some((pp) => (pp.x - x) ** 2 + (pp.z - z) ** 2 < RADIO_PERSONA * RADIO_PERSONA);
+  // La gente NO frena: se la atraviesa. Chocar con cada persona hacía la
+  // caminata trabada, y el mapa es para recorrer el lugar.
+  const ocupado = (x: number, z: number) => obstaculos.some(([a, b, c, d]) => x > a && x < b && z > c && z < d);
   const choca = (x0: number, z0: number, x1: number, z1: number) => {
     const dx = x1 - x0;
     const dz = z1 - z0;
@@ -1118,8 +1439,25 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   // Mirar arrastrando sobre el mapa (mouse o dedo). El joystick y los botones
   // son HTML encima del canvas: sus toques no llegan acá.
   let arrastre: { id: number; x: number; y: number } | null = null;
+  // Con mouse: un click en el mapa lo "toma" (Pointer Lock) y la vista sigue
+  // al mouse sin mantener apretado, como en cualquier juego; Esc lo suelta.
+  // Con el dedo, se arrastra.
+  const tomado = () => document.pointerLockElement === canvas;
   const alBajar = (e: PointerEvent) => {
     if (!caminando || pausado) return;
+    if (e.pointerType === "mouse" && canvas.requestPointerLock) {
+      if (!tomado()) {
+        try {
+          // `unadjustedMovement` saca la aceleración del sistema (en Chrome): la
+          // vista responde pareja. Si el navegador no lo acepta, se pide sin eso.
+          const r = (canvas.requestPointerLock as (o?: unknown) => Promise<void> | void)({ unadjustedMovement: true });
+          if (r && typeof (r as Promise<void>).catch === "function") (r as Promise<void>).catch(() => canvas.requestPointerLock());
+        } catch {
+          canvas.requestPointerLock();
+        }
+      }
+      return;
+    }
     arrastre = { id: e.pointerId, x: e.clientX, y: e.clientY };
     try {
       canvas.setPointerCapture(e.pointerId);
@@ -1138,12 +1476,27 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const alSubir = (e: PointerEvent) => {
     if (arrastre && e.pointerId === arrastre.id) arrastre = null;
   };
+  const alMoverMouse = (e: MouseEvent) => {
+    if (!tomado() || !caminando || pausado) return;
+    // Algunos navegadores mandan de vez en cuando un salto enorme: se recorta.
+    const dx = THREE.MathUtils.clamp(e.movementX, -120, 120);
+    const dy = THREE.MathUtils.clamp(e.movementY, -120, 120);
+    yaw -= dx * 0.0022;
+    pitch = THREE.MathUtils.clamp(pitch - dy * 0.0022, -1.1, 0.9);
+  };
+  const alCambiarToma = () => op.onMira?.(tomado());
+  const soltarMouse = () => {
+    if (tomado()) document.exitPointerLock();
+  };
+  document.addEventListener("mousemove", alMoverMouse);
+  document.addEventListener("pointerlockchange", alCambiarToma);
   canvas.addEventListener("pointerdown", alBajar);
   canvas.addEventListener("pointermove", alMover);
   canvas.addEventListener("pointerup", alSubir);
   canvas.addEventListener("pointercancel", alSubir);
 
   const mirar = new THREE.Vector3();
+  const vel = { x: 0, z: 0 };
   const caminar = (dt: number) => {
     let ix = pausado ? 0 : palanca.x;
     let iy = pausado ? 0 : palanca.y;
@@ -1158,23 +1511,35 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     const rapido = corriendo || teclas.has("ShiftLeft") || teclas.has("ShiftRight");
     let paso = 0;
 
+    // La velocidad se acerca de a poco a la pedida: arranca y frena suave,
+    // sin el tirón de pasar de 0 a 3,6 m/s en un cuadro.
+    let objX = 0;
+    let objZ = 0;
     if (fuerza > 0.08) {
       // Caminar corta el baile.
       if (bailando) ponerBaile(false);
       const fx = Math.sin(yaw);
       const fz = Math.cos(yaw);
       // Derecha de "adelante" (fx, fz) es (-fz, fx).
-      let dx = fx * iy - fz * ix;
-      let dz = fz * iy + fx * ix;
-      const n = Math.hypot(dx, dz) || 1;
+      const ax = fx * iy - fz * ix;
+      const az = fz * iy + fx * ix;
+      const n = Math.hypot(ax, az) || 1;
       const velocidad = (rapido ? 7 : 3.6) * fuerza;
-      dx = (dx / n) * velocidad * dt;
-      dz = (dz / n) * velocidad * dt;
+      objX = (ax / n) * velocidad;
+      objZ = (az / n) * velocidad;
+    }
+    const k = 1 - Math.exp(-dt * 10);
+    vel.x += (objX - vel.x) * k;
+    vel.z += (objZ - vel.z) * k;
+    if (Math.abs(vel.x) < 0.01 && Math.abs(vel.z) < 0.01 && fuerza <= 0.08) vel.x = vel.z = 0;
+
+    if (vel.x !== 0 || vel.z !== 0) {
+      const dx = vel.x * dt;
+      const dz = vel.z * dt;
       const x0 = yo.x;
       const z0 = yo.z;
-      // Si algo tapa el paso, se esquiva: se prueba el mismo paso girado a un
-      // lado y al otro, cada vez más, como quien se abre camino entre la gente.
-      // Contra una valla eso mismo es deslizarse por ella.
+      // Si algo tapa el paso, se prueba el mismo paso girado a un lado y al
+      // otro, cada vez más: contra una valla o una barra es deslizarse por ella.
       let [nx, nz] = [x0, z0];
       for (const ang of [0, 0.45, -0.45, 0.9, -0.9, 1.35, -1.35]) {
         const c = Math.cos(ang);
@@ -1214,7 +1579,12 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     for (const c of cartelesPieza) {
       const ddx = c.x - yo.x;
       const ddz = c.z - yo.z;
-      c.sprite.visible = ddx * ddx + ddz * ddz < 22 * 22;
+      const d2 = ddx * ddx + ddz * ddz;
+      c.sprite.visible = d2 < 22 * 22 && d2 > 7 * 7;
+    }
+    for (const s of cartelesZona) {
+      const d2 = (s.position.x - yo.x) ** 2 + (s.position.z - yo.z) ** 2;
+      s.visible = d2 > 20 * 20;
     }
 
     const zona = zonaDe(yo.x, yo.z);
@@ -1232,8 +1602,13 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     pausado = false;
     teclas.clear();
     palanca.x = palanca.y = 0;
+    vel.x = vel.z = 0;
     arrastre = null;
     viaje = 1;
+    if (!activo) {
+      soltarMouse();
+      for (const s of cartelesZona) s.visible = true;
+    }
     controles.enabled = !activo;
     // La mano está a medio metro de los ojos: con el plano cercano de 0,5 m se cortaba.
     camara.near = activo ? 0.05 : 0.5;
@@ -1257,9 +1632,11 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       atardecer: { fondo: "#e08a5c", cielo: ["#ffcfa0", "#3b2f25", 0.75], sol: ["#ffb070", 1.6, [-110, 35, 40]], brillo: 0.6, focos: 250, lamp: "#d8d8d8" },
       noche: { fondo: "#060912", cielo: ["#3a4a7a", "#0b0f0a", 0.32], sol: ["#9fb4ff", 0.45, [-60, 100, -40]], brillo: 1, focos: 700, lamp: "#ffffff" },
     }[hora];
-    const fondo = new THREE.Color(H.fondo);
-    escena.background = fondo;
-    (escena.fog as THREE.Fog).color.copy(fondo);
+    (domo.material as THREE.MeshBasicMaterial).map = cielos[hora];
+    (domo.material as THREE.MeshBasicMaterial).needsUpdate = true;
+    // La niebla toma el color del horizonte, así lo lejano se funde con el cielo.
+    (escena.fog as THREE.Fog).color.set({ dia: "#cfe3f2", atardecer: "#8f5f66", noche: "#0c1020" }[hora]);
+    escena.background = new THREE.Color(H.fondo);
     cielo.color.set(H.cielo[0] as string);
     cielo.groundColor.set(H.cielo[1] as string);
     cielo.intensity = H.cielo[2] as number;
@@ -1322,6 +1699,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
     ubicarGente(t);
     if (!op.reducirMovimiento) {
+      for (const [i, b] of banderas.entries()) b.rotation.y = Math.sin(t * 1.6 + i) * 0.35;
       for (const r of rayos) {
         const f = r.userData.fase as number;
         r.rotation.z = Math.sin(t * 0.7 + f) * 0.55;
@@ -1433,6 +1811,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     caminar: (activo) => ponerCaminata(activo),
     pausar: (activo) => {
       pausado = activo;
+      if (activo) soltarMouse();
       teclas.clear();
       palanca.x = palanca.y = 0;
       arrastre = null;
@@ -1451,6 +1830,9 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       window.removeEventListener("keydown", alApretar);
       window.removeEventListener("keyup", alSoltar);
       window.removeEventListener("blur", alPerderFoco);
+      soltarMouse();
+      document.removeEventListener("mousemove", alMoverMouse);
+      document.removeEventListener("pointerlockchange", alCambiarToma);
       canvas.removeEventListener("pointerdown", alBajar);
       canvas.removeEventListener("pointermove", alMover);
       canvas.removeEventListener("pointerup", alSubir);
