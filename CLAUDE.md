@@ -2368,6 +2368,36 @@ Primer paso para que los predios se vean mejor, sin bajar nada:
   pasaba el umbral y se veían manchas en vez de letras.
 - **Ojo al probar con Vite**: la recarga en caliente del motor deja dos copias y
   `__croquis` apunta a la nueva; hay que recargar la página entera.
+
+### Cielos de foto y texturas reales (Poly Haven, CC0)
+
+Segundo paso de gráficos, con permiso del autor para bajar 6 archivos de Poly Haven
+(polyhaven.com, CC0). Lo que va al repo pesa ~165 KB (`public/croquis/cielos/` y
+`public/croquis/texturas/`; detalle en `public/croquis/LEEME-cielos-texturas.txt`).
+
+- **Cielos** (día, atardecer, noche con estrellas): `.hdr` de 1k pasados a imagen común con
+  `scripts/cielo-hdr-a-webp.mjs` (lector RGBE propio, exposición a mano, curva ACES, WebP de
+  1024×512, 9-23 KB). Van en el domo (`ponerCielo` en el motor): **el degradé de antes queda
+  mientras cargan** o si no cargan. El domo se gira (`uSol`) para que el sol de la foto
+  coincida con la luz del sol de la escena. **La luz de ambiente sale de la foto** del cielo
+  (`post.ponerCielo` → PMREM una vez por cielo); como es más tenue que la genérica, tiene su
+  propia tabla de intensidades (1,1 / 0,7 / 0,3). La niebla tomó el color del horizonte de
+  cada foto.
+- **Texturas** (WebP 512, en `textura()` / `conFoto()` del motor, con caché por archivo):
+  ladrillo en la fachada de la Plaza (dibujado de fondo en su lienzo, debajo de los arcos y
+  las ventanas que se prenden de noche), en las torres, las almenas y el muro del ruedo (este
+  último teñido de rojo); revoque en las gradas y la galería; **arena en el ruedo** (un
+  círculo nuevo debajo de la fiesta).
+  > **La arena y el revoque de Poly Haven son casi lisos** (el detalle está en los mapas de
+  > relieve, que no se bajaron): se les subió el contraste ×7 y ×4 al convertirlos.
+  > **Trampa:** la fachada pide la imagen del ladrillo cuando ya la había pedido el muro; el
+  > aviso de "cargó" se perdía y la fachada quedaba beige. `textura()` guarda una lista de
+  > espera por archivo.
+- **Se pasó la Plaza a ladrillo** (era beige liso) sin una foto actual de la fachada
+  restaurada: si no se parece, el color se ajusta en `texturasFachada` y en `conFoto`.
+- Probado en navegador: Plaza de día (vista general y Llegada) y Golf al atardecer
+  caminando. **No probado en un celular real** (las texturas son 165 KB más y la luz de
+  ambiente se arma una vez por hora).
 - **No está a escala** (ruedo de ~52 m). Las formas salen de una foto aérea de la plaza
   remodelada y de cuadros de los videos de julio (en Drive, sólo miniaturas: los videos
   pesan 130-740 MB).

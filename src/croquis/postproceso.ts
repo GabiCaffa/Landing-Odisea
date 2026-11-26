@@ -23,6 +23,8 @@ import type { Hora } from "./tipos";
  */
 
 export interface Postproceso {
+  /** El cielo de foto de la hora (o null: la luz de ambiente genérica). */
+  ponerCielo(cielo: THREE.Texture | null): void;
   dibujar(): void;
   ajustar(w: number, h: number, pixelRatio: number): void;
   ponerHora(hora: Hora): void;
@@ -37,8 +39,17 @@ export function crearPostproceso(
 ): Postproceso {
   const pmrem = new THREE.PMREMGenerator(renderer);
   const ambiente = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  pmrem.dispose();
   escena.environment = ambiente;
+  // Con el cielo de foto, la luz de ambiente sale de él (tiñe todo del color de la
+  // hora). Se arma una vez por cielo.
+  const deCielo = new Map<THREE.Texture, THREE.Texture>();
+  let conFoto = false;
+  let horaActual: Hora = "noche";
+  // La que sale de la foto del cielo es más tenue que la genérica (un cielo LDR,
+  // sin el sol "de verdad"): por eso dos tablas.
+  const aplicarIntensidad = () => {
+    escena.environmentIntensity = (conFoto ? { dia: 1.1, atardecer: 0.7, noche: 0.3 } : { dia: 0.45, atardecer: 0.2, noche: 0.05 })[horaActual];
+  };
 
   let composer: EffectComposer | null = null;
   let brillo: UnrealBloomPass | null = null;
@@ -51,6 +62,20 @@ export function crearPostproceso(
   }
 
   return {
+    ponerCielo(cielo) {
+      conFoto = !!cielo;
+      aplicarIntensidad();
+      if (!cielo) {
+        escena.environment = ambiente;
+        return;
+      }
+      let env = deCielo.get(cielo);
+      if (!env) {
+        env = pmrem.fromEquirectangular(cielo).texture;
+        deCielo.set(cielo, env);
+      }
+      escena.environment = env;
+    },
     dibujar() {
       if (composer) composer.render();
       else renderer.render(escena, camara);
@@ -65,7 +90,8 @@ export function crearPostproceso(
     ponerHora(hora) {
       // Cuánto aporta la luz de ambiente: de día mucho, de noche poco (si no, la
       // noche se ve gris).
-      escena.environmentIntensity = { dia: 0.45, atardecer: 0.2, noche: 0.05 }[hora];
+      horaActual = hora;
+      aplicarIntensidad();
       if (brillo) {
         brillo.strength = { dia: 0.1, atardecer: 0.35, noche: 0.55 }[hora];
         brillo.threshold = { dia: 0.98, atardecer: 0.95, noche: 0.9 }[hora];
@@ -74,6 +100,8 @@ export function crearPostproceso(
     },
     liberar() {
       ambiente.dispose();
+      for (const t of deCielo.values()) t.dispose();
+      pmrem.dispose();
       composer?.dispose();
     },
   };
