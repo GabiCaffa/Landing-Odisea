@@ -11,6 +11,7 @@ import type { EventTicket } from "@/lib/ticketTypes";
 import type { Hora, Predio, ZonaPredio } from "@/croquis/tipos";
 import type { ControlCroquis } from "@/croquis/motor";
 import { cargarPredio } from "@/croquis/registro";
+import MusicaSoundcloud from "@/components/MusicaSoundcloud";
 
 interface Props {
   slug: string;
@@ -210,6 +211,9 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
     setHora(h);
     control.current?.ponerHora(h);
   };
+  // Lo lee el reproductor de música cada 400 ms: más fuerte cerca del escenario.
+  const volumenMusica = () => control.current?.volumenMusica() ?? 0.6;
+
   const ponerCaminata = (activo: boolean) => {
     setCaminando(activo);
     control.current?.caminar(activo);
@@ -296,7 +300,10 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             </Link>
           )}
         </div>
-        <div className="pointer-events-auto -mr-1 flex flex-shrink-0 items-center gap-2">
+        <div className="pointer-events-auto -mr-1 flex flex-shrink-0 items-start gap-2">
+          {predio?.musica && estado === "listo" && (
+            <MusicaSoundcloud url={predio.musica.soundcloud} volumen={volumenMusica} auto />
+          )}
           <button
             type="button"
             onClick={() => void compartir()}

@@ -2283,6 +2283,26 @@ tiene un millón de caras.
   sur va corrida al lado del ingreso, la escalera del VIP sube por el costado este, y el árbol
   de Navidad es ambientación. **No hay baños ni auxilios dibujados** (están en el edificio y
   no se sabe dónde).
+- **Música (SoundCloud) y sponsor (Ferant)** — pedido del autor para que no quede vacío:
+  - `Predio.musica = { soundcloud, fuente }`. `MusicaSoundcloud.tsx` usa el **widget oficial
+    de SoundCloud** (iframe escondido + `api.js`): la licencia es de SoundCloud. Botón con
+    una nota arriba a la derecha (pausa/vuelve a sonar) y una tira con el tema y el link a
+    SoundCloud. **Arranca sola al entrar al mapa** (`auto`); si el navegador la frena (sin un
+    toque previo de la persona, p. ej. al entrar por un link en iOS), queda "esperando" con el
+    botón titilando y **suena con el primer toque o tecla en cualquier parte del mapa**; si
+    ni así arranca, aparece el reproductor de SoundCloud para darle play. El volumen sigue al
+    mapa (`volumenMusica()` del motor): caminando, de 100% cerca del escenario a 25% lejos.
+  - **Ojo**: al entrar al mapa se carga SoundCloud (tercero, con sus cookies) aunque nadie
+    toque nada. Conviene mencionarlo en la Política de Privacidad. El set actual es de un
+    usuario de SoundCloud ("bavikon"): si lo borra o lo hace privado, deja de sonar.
+  - Pieza nueva **`lona`** (imagen de `public/`, con marco): 9 lonas de Ferant sobre el muro
+    del ruedo, 4 grandes colgadas arriba de las gradas y 2 paneles amarillos a los costados
+    del escenario. Logos en `public/sponsors/`.
+  - **Dos trampas**: (1) los PNG venían con **fondo transparente**, y en 3D (material opaco)
+    lo transparente se dibuja **negro**: con letras oscuras la lona quedaba toda negra. Se
+    aplanaron sobre blanco. (2) Caminando, el plano cercano de la cámara está a 5 cm (por la
+    mano) y el marco a 1 cm detrás del logo lo tapaba: el marco va 20 cm atrás y el logo con
+    `polygonOffset`.
 - **No está a escala** (ruedo de ~52 m). Las formas salen de una foto aérea de la plaza
   remodelada y de cuadros de los videos de julio (en Drive, sólo miniaturas: los videos
   pesan 130-740 MB).

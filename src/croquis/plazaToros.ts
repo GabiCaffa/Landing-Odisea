@@ -36,6 +36,11 @@ const ESC = { x0: -10, x1: 10, fondo: -23, frente: -11 };
 const VIP_FRENTE = -17;
 const VIP_ALTURA = 2.6;
 const ESCALERA = { x0: 10, x1: 12.4, abajo: -10.5, arriba: -19.5 };
+/**
+ * Dónde van las lonas del sponsor sobre el muro (ángulo, 0 = sur): esquivando el
+ * escenario (norte), el ingreso (sur) y las barras (este, oeste y la del sur).
+ */
+const LONAS_MURO = [0.85, 1.2, 1.95, 2.35, -0.45, -0.85, -1.2, -1.95, -2.35];
 
 /** El ruedo menos el escenario y la escalera: lo que es General. */
 const general: Punto[] = (() => {
@@ -84,6 +89,44 @@ const piezas: Pieza[] = [
   { tipo: "acceso", x: 0, z: 25.4, rot: 180, largo: 5, texto: "INGRESO" },
   // Ambientación.
   { tipo: "arbolNavidad", x: -15, z: 18 },
+  // Sponsor: Ferant. Lonas en el muro del ruedo (mirando al centro) y dos
+  // paneles a los costados del escenario.
+  ...LONAS_MURO.map((a) => {
+    const [x, z] = en(25.9, a);
+    return {
+      tipo: "lona" as const,
+      x,
+      z,
+      rot: (a * 180) / Math.PI + 180,
+      largo: 4.3,
+      alto: 1.4,
+      altura: 0.12,
+      imagen: "/sponsors/ferant-horizontal.png",
+    };
+  }),
+  // Lonas grandes colgadas arriba de las gradas, que se ven desde todo el ruedo.
+  ...[0.9, 2.25, -0.9, -2.25].map((a) => {
+    const [x, z] = en(43.2, a);
+    return {
+      tipo: "lona" as const,
+      x,
+      z,
+      rot: (a * 180) / Math.PI + 180,
+      largo: 9,
+      alto: 2.93,
+      altura: 10.9,
+      imagen: "/sponsors/ferant-horizontal.png",
+    };
+  }),
+  ...[-1, 1].map((lado) => ({
+    tipo: "lona" as const,
+    x: lado * 12.3,
+    z: ESC.frente - 0.6,
+    largo: 2.6,
+    alto: 2.72,
+    altura: 4.2,
+    imagen: "/sponsors/ferant-amarillo.png",
+  })),
 ];
 
 /** Lo que frena al caminar y no se ve como valla (lo que se ve es el muro, el escenario, la baranda). */
@@ -132,6 +175,8 @@ const plazaToros: Predio = {
     { x: 0, z: 6, color: "#a855f7" },
   ],
   inicio: { x: 0, z: 22 },
+  // Suena al tocar "Música"; caminando, más fuerte cerca del escenario.
+  musica: { soundcloud: "https://soundcloud.com/bavikon/reggaeton-mix-2026-reggaeton", fuente: { x: 0, z: -14 } },
   // Las gradas y la fachada ocupan hasta ~47 m; la explanada y la calle, hasta ~70.
   radioLibre: 74,
   vistas: [

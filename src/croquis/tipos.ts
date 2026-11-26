@@ -54,7 +54,8 @@ export type TipoPieza =
   | "bandera"
   | "plazaToros"
   | "escenario"
-  | "escalera";
+  | "escalera"
+  | "lona";
 
 export interface Pieza {
   tipo: TipoPieza;
@@ -76,6 +77,9 @@ export interface Pieza {
   altura?: number;
   /** Escenario: parte de atrás más alta (el VIP), con su profundidad y altura. */
   elevado?: { fondo: number; altura: number };
+  /** Lona: la imagen (de `public/`, p. ej. un sponsor) y su alto en metros (el ancho es `largo`). */
+  imagen?: string;
+  alto?: number;
 }
 
 export interface Valla {
@@ -124,4 +128,9 @@ export interface Predio {
    * zonas (las gradas y la fachada de la plaza de toros, alrededor del ruedo).
    */
   radioLibre?: number;
+  /**
+   * Música de fondo del mapa: un set o playlist pública de SoundCloud. Suena al
+   * tocar "Música" y, caminando, más fuerte cerca de `fuente` (el escenario).
+   */
+  musica?: { soundcloud: string; fuente: { x: number; z: number } };
 }
