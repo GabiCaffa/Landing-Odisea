@@ -2080,6 +2080,18 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
     sacan de sus mallas) y **la gente**. Si algo tapa, se esquiva probando el paso girado a un
     lado y al otro. Los controles y arcos de ingreso se atraviesan.
   - Arriba se ve **en qué sector estás**; los carteles de barras y baños aparecen sólo cerca.
+  - **Bailar y fumar** (botones redondos a la derecha, arriba de "Correr" en el celular;
+    teclas **B** y **F** en la PC). *Bailar* se prende y se apaga: la cámara rebota al ritmo
+    (~124 bpm) con un vaivén de cabeza y el vaso sube y baja; **caminar lo corta** (el motor
+    avisa con `onBaile` para apagar el botón). *Fumar* es una pitada de ~5,6 s: entra la otra
+    mano con el cigarro desde abajo a la izquierda (`mano.izquierda`), lo lleva a la boca, la
+    brasa se aviva, baja y sale el humo (9 sprites en `mano.humo`, delante de la cara). Todo
+    en `personaje.ts`, en la misma pasada de la mano. Con `prefers-reduced-motion` no hay
+    rebote de cámara. En desarrollo, `__croquis.congelar()` frena el bucle para sacar una
+    captura de un momento exacto (la animación sigue sola mientras la pestaña está a la vista).
+    > **Ojo legal**: Uruguay prohíbe la publicidad y promoción de productos de tabaco
+    > (Ley 18.256). Un botón de fumar en la web que vende entradas lo pidió el autor; si
+    > alguien lo objeta, se saca borrando el botón de `CroquisVisor` (y la tecla F del motor).
 - **Comprar al entrar a un sector**: cada zona dice qué entradas son suyas por palabras en el
   nombre (`entradas: { incluye, excluye }` en el predio, sin tildes ni mayúsculas, así
   "VIP – 2do lote" sigue siendo del VIP al cambiar de lote). Parado en esa zona aparece abajo

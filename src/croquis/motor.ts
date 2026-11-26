@@ -33,6 +33,10 @@ export interface ControlCroquis {
   /** Joystick: x a la derecha, y hacia adelante, de -1 a 1. */
   mover(x: number, y: number): void;
   correr(activo: boolean): void;
+  /** Bailar en el lugar: la cámara rebota al ritmo y el vaso sube y baja. Moverse lo corta. */
+  bailar(activo: boolean): void;
+  /** Una pitada de cigarro (unos 5 s): la otra mano, la brasa y el humo. */
+  fumar(): void;
   liberar(): void;
 }
 
@@ -41,6 +45,8 @@ interface Opciones {
   reducirMovimiento: boolean;
   /** Avisa la zona en la que se está parado al caminar (null = afuera). */
   onZona?: (zona: { id: string; nombre: string } | null) => void;
+  /** Avisa cuando el baile se prende o se apaga solo (al moverse, con la tecla B). */
+  onBaile?: (activo: boolean) => void;
 }
 
 /** ¿Se cruzan los segmentos ab y cd? */
@@ -1002,7 +1008,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const escenaMano = new THREE.Scene();
   const soporte = new THREE.Group();
   soporte.matrixAutoUpdate = false;
-  soporte.add(mano.grupo);
+  soporte.add(mano.grupo, mano.izquierda, mano.humo);
   escenaMano.add(soporte);
   // Luz propia, pareja a cualquier hora: la manga negra y el vaso se perdían de noche.
   escenaMano.add(new THREE.HemisphereLight("#ffffff", "#3a3a44", 1.6));
@@ -1048,6 +1054,13 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
   let caminando = false;
   let corriendo = false;
+  let bailando = false;
+  const ponerBaile = (activo: boolean) => {
+    if (activo === bailando) return;
+    bailando = activo;
+    mano.bailar(activo);
+    op.onBaile?.(activo);
+  };
   let pausado = false;
   const palanca = { x: 0, y: 0 };
   const teclas = new Set<string>();
@@ -1086,9 +1099,13 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
   const TECLAS_JUEGO = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
   const alApretar = (e: KeyboardEvent) => {
-    if (!caminando || pausado || !TECLAS_JUEGO.has(e.code)) return;
+    if (!caminando || pausado) return;
     const destino = e.target as HTMLElement | null;
     if (destino && /input|textarea|select/i.test(destino.tagName)) return;
+    // B baila, F fuma: atajos de los botones de la pantalla.
+    if (e.code === "KeyB" && !e.repeat) return ponerBaile(!bailando);
+    if (e.code === "KeyF" && !e.repeat) return mano.fumar();
+    if (!TECLAS_JUEGO.has(e.code)) return;
     e.preventDefault();
     teclas.add(e.code);
   };
@@ -1142,6 +1159,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     let paso = 0;
 
     if (fuerza > 0.08) {
+      // Caminar corta el baile.
+      if (bailando) ponerBaile(false);
       const fx = Math.sin(yaw);
       const fz = Math.cos(yaw);
       // Derecha de "adelante" (fx, fz) es (-fz, fx).
@@ -1178,14 +1197,17 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     // Subir o bajar (la escalera del VIP) se acompaña, no salta.
     const objetivo = alturaEn(yo.x, yo.z);
     piso = dt > 0 ? piso + (objetivo - piso) * Math.min(1, dt * 10) : objetivo;
-    camara.position.set(yo.x, piso + OJOS + bamboleo, yo.z);
+    // Bailando: rebote al ritmo (~124 bpm) y un vaivén de la cabeza.
+    const baile = bailando && !quietos ? Math.abs(Math.sin(t * 6.5)) * 0.07 : 0;
+    camara.position.set(yo.x, piso + OJOS + bamboleo + baile, yo.z);
     mirar.set(
       yo.x + Math.sin(yaw) * Math.cos(pitch),
-      piso + OJOS + bamboleo + Math.sin(pitch),
+      piso + OJOS + bamboleo + baile + Math.sin(pitch),
       yo.z + Math.cos(yaw) * Math.cos(pitch)
     );
     camara.lookAt(mirar);
-    mano.animar(t, quietos ? 0 : paso);
+    if (bailando && !quietos) camara.rotateZ(Math.sin(t * 3.25) * 0.04);
+    mano.animar(t, quietos ? 0 : paso, dt);
 
     // Se ven sólo los carteles de lo que está cerca: con todos prendidos
     // (atraviesan todo) se amontonaban.
@@ -1206,6 +1228,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const ponerCaminata = (activo: boolean) => {
     if (activo === caminando) return;
     caminando = activo;
+    if (!activo) ponerBaile(false);
     pausado = false;
     teclas.clear();
     palanca.x = palanca.y = 0;
@@ -1345,6 +1368,9 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     // En el celular, más al centro: en la esquina está el botón de correr.
     mano.grupo.position.set(medioAlto * (w / h) * (op.movil ? 0.38 : 0.6), -medioAlto * 0.58, -lejos);
     mano.grupo.scale.setScalar(0.85);
+    // La mano del cigarro, abajo a la izquierda (sube hasta la boca al fumar).
+    mano.izquierda.position.set(-medioAlto * (w / h) * (op.movil ? 0.3 : 0.45), -medioAlto * 0.62, -lejos);
+    mano.izquierda.scale.setScalar(0.85);
     // El visor tapa el tercio de abajo con la descripción y los botones. En
     // vez de acomodar cada vista a mano, se corre el centro de la imagen hacia
     // arriba: lo que la cámara mira queda en la parte visible.
@@ -1386,6 +1412,9 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       obstaculos,
       ocupado,
       choca,
+      mano,
+      // Frena el bucle para sacar una captura de un momento exacto.
+      congelar: () => cancelAnimationFrame(raf),
     };
   }
 
@@ -1415,6 +1444,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     correr: (activo) => {
       corriendo = activo;
     },
+    bailar: (activo) => ponerBaile(activo),
+    fumar: () => mano.fumar(),
     liberar: () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", alApretar);
