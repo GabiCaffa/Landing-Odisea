@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { Cigarette, Footprints, MapPin, Moon, Music, Share2, Sun, Sunset, Ticket, X } from "lucide-react";
+import { Cigarette, CupSoda, Eye, Footprints, MapPin, Moon, Music, PersonStanding, Share2, Sun, Sunset, Ticket, X } from "lucide-react";
 import { toast } from "sonner";
 import { SITIO, urlDeMapa } from "@/lib/rutas";
 import { formatEventDate, useAuth } from "@/contexts/AuthContext";
@@ -121,6 +121,8 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const [zona, setZona] = useState<{ id: string; nombre: string } | null>(null);
   // Bailando en el lugar (lo apaga el motor solo al caminar).
   const [bailando, setBailando] = useState(false);
+  // Primera persona (en los ojos) o tercera (atrás, se ve el personaje entero).
+  const [primera, setPrimera] = useState(false);
   // La compra abierta encima del mapa, con la entrada de la zona ya elegida.
   const [comprando, setComprando] = useState<{ preseleccion?: string } | null>(null);
   const comprandoRef = useRef(false);
@@ -182,6 +184,7 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             setMouseTomado(t);
           },
           onBaile: (activo) => setBailando(activo),
+          onVista: (p) => setPrimera(p),
         });
         setPredio(p);
         setVista(p.vistas[0]?.id ?? "");
@@ -345,12 +348,26 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
               </button>
             </>
           )}
-          {/* Bailar y fumar: a la derecha, arriba de "Correr" en el celular. */}
+          {/* Vista, bailar, tomar y fumar: a la derecha, arriba de "Correr" en el
+              celular (ahí en dos columnas: en un teléfono acostado no entran cuatro). */}
           <div
-            className={`absolute right-[max(1.25rem,env(safe-area-inset-right))] flex flex-col gap-2 ${
-              tactil ? "bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]" : "bottom-28"
+            className={`absolute right-[max(1.25rem,env(safe-area-inset-right))] grid gap-2 ${
+              tactil ? "grid-cols-2 bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]" : "grid-cols-1 bottom-28"
             }`}
           >
+            <button
+              type="button"
+              onClick={() => {
+                control.current?.vista(!primera);
+                setPrimera(!primera);
+              }}
+              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-white/25 bg-black/60 text-[10px] font-bold uppercase text-white shadow-lg backdrop-blur"
+              title={tactil ? undefined : "Cambiar de vista (V)"}
+              aria-label={primera ? "Pasar a tercera persona" : "Pasar a primera persona"}
+            >
+              {primera ? <Eye className="h-5 w-5" aria-hidden /> : <PersonStanding className="h-5 w-5" aria-hidden />}
+              {primera ? "1ª pers." : "3ª pers."}
+            </button>
             <button
               type="button"
               onClick={() => control.current?.bailar(!bailando)}
@@ -362,6 +379,15 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             >
               <Music className="h-5 w-5" aria-hidden />
               Bailar
+            </button>
+            <button
+              type="button"
+              onClick={() => control.current?.tomar()}
+              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-white/25 bg-black/60 text-[10px] font-bold uppercase text-white shadow-lg backdrop-blur"
+              title={tactil ? undefined : "Tomar (T)"}
+            >
+              <CupSoda className="h-5 w-5" aria-hidden />
+              Tomar
             </button>
             <button
               type="button"
@@ -389,11 +415,11 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
               <p className="whitespace-nowrap rounded-full bg-black/55 px-4 py-2 text-[11px] text-white/85 backdrop-blur sm:text-xs">
                 {mouseTomado ? (
                   <>
-                    <b>WASD</b> para caminar · <b>Shift</b> para correr · <b>B</b> bailar · <b>F</b> fumar · <b>Esc</b> suelta el mouse
+                    <b>WASD</b> caminar · <b>Shift</b> correr · <b>B</b> bailar · <b>T</b> tomar · <b>F</b> fumar · <b>V</b> vista · <b>Esc</b> suelta el mouse
                   </>
                 ) : (
                   <>
-                    <b>Hacé click en el mapa</b> para mirar con el mouse · <b>WASD</b> para caminar · <b>B</b> bailar · <b>F</b> fumar
+                    <b>Hacé click en el mapa</b> para mirar con el mouse · <b>WASD</b> caminar · <b>B</b> bailar · <b>T</b> tomar · <b>V</b> vista
                   </>
                 )}
               </p>

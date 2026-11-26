@@ -3,7 +3,9 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Hora, Pieza, Predio, Punto, TipoPieza, Vista, ZonaPredio } from "./tipos";
 import { crearManoConVaso } from "./personaje";
-import { CANT_PEINADOS, crearGenteReal, type Figurante } from "./gente";
+import { crearGenteReal, type Figurante } from "./gente";
+import { crearJugador, type Jugador } from "./jugador";
+import { CANT_PERSONAS, cargarRecursos } from "./modelos";
 
 /**
  * El motor del croquis 3D: arma la escena de un `Predio` (datos) con piezas
@@ -17,7 +19,9 @@ import { CANT_PEINADOS, crearGenteReal, type Figurante } from "./gente";
  *   diferencia entre andar fluido y trabarse.
  * - **La gente es UNA malla instanciada** (cuerpo + cabeza): cientos de
  *   personas cuestan pocas llamadas de dibujo. Las más cercanas a la cámara se
- *   cambian por personajes con cara y animaciones (`gente.ts`).
+ *   cambian por personajes de Mixamo con ropa y animaciones (`gente.ts`).
+ * - **Al caminar se maneja un personaje** (`jugador.ts`), en primera o tercera
+ *   persona. Mientras su modelo no llega, se ve la mano con el vaso.
  * - **Se dibuja un cuadro apenas se arma**, sin esperar al bucle de animación:
  *   con la pestaña en segundo plano `requestAnimationFrame` no corre, y el
  *   mapa tiene que verse igual al volver.
@@ -39,6 +43,10 @@ export interface ControlCroquis {
   bailar(activo: boolean): void;
   /** Una pitada de cigarro (unos 5 s): la otra mano, la brasa y el humo. */
   fumar(): void;
+  /** Tomar un trago del vaso. */
+  tomar(): void;
+  /** Primera persona (true) o tercera (false). */
+  vista(primera: boolean): void;
   liberar(): void;
 }
 
@@ -51,6 +59,8 @@ interface Opciones {
   onMira?: (tomado: boolean) => void;
   /** Avisa cuando el baile se prende o se apaga solo (al moverse, con la tecla B). */
   onBaile?: (activo: boolean) => void;
+  /** Avisa al cambiar de primera a tercera persona (tecla V). */
+  onVista?: (primera: boolean) => void;
 }
 
 /** ¿Se cruzan los segmentos ab y cd? */
@@ -1267,8 +1277,6 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const pantalones = paleta(["#2b3f63", "#1a1a1e", "#3a4f7a", "#c9b79c", "#55555c", "#1f2a44"]);
   const pieles = paleta(["#f1c9a5", "#e2ad82", "#c98d62", "#a8714a", "#7a4b2e"]);
   const pelos = paleta(["#141010", "#2a1a12", "#4a2c18", "#8a5a2b", "#d8b26a", "#7a2c1a"]);
-  // El personaje usa una textura de piel clara: el tono es cuánto se la oscurece.
-  const pielBase = pieles[0];
   gente.forEach((pp, i) => {
     const r = () => Math.floor(sorteo() * 1e6);
     const pantalon = pantalones[r() % pantalones.length];
@@ -1277,26 +1285,15 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     mPelo.setColorAt(i, pelo);
     const remera = remeras[r() % remeras.length];
     const tono = pieles[r() % pieles.length];
-    const genero = (sorteo() < 0.5 ? 0 : 1) as 0 | 1;
+    const otra = sorteo();
     pp.fig = {
       x: pp.x,
       y: pp.y,
       z: pp.z,
       giro: pp.giro,
       escala: pp.escala,
-      genero,
-      peinado: r() % CANT_PEINADOS,
-      barba: genero === 0 && sorteo() < 0.3,
-      remera,
-      pantalon,
-      piel: new THREE.Color(
-        Math.min(1, tono.r / pielBase.r),
-        Math.min(1, tono.g / pielBase.g),
-        Math.min(1, tono.b / pielBase.b)
-      ),
-      pelo,
-      corto: sorteo() < 0.25,
-      accion: pp.baila ? "bailar" : sorteo() < 0.5 ? "charlar" : "quieto",
+      modelo: r() % CANT_PERSONAS,
+      accion: pp.baila ? "bailar" : otra < 0.4 ? "charlar" : otra < 0.7 ? "tomar" : "quieto",
       fase: sorteo(),
     };
     if (pp.arriba) {
@@ -1341,9 +1338,9 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
   // Las más cercanas a la cámara, con cara y animaciones (se cargan aparte;
   // hasta que llegan, y si no llegan, se ve la gente de siempre).
-  const genteReal = crearGenteReal(escena, {
+  const recursos = cargarRecursos({ movil: op.movil, sombras: !op.movil });
+  const genteReal = crearGenteReal(escena, recursos.gente, {
     movil: op.movil,
-    sombras: !op.movil,
     quietos: op.reducirMovimiento,
   });
   let proximaEleccion = 0;
@@ -1445,11 +1442,48 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   let caminando = false;
   let corriendo = false;
   let bailando = false;
+  // El personaje propio (jugador.ts). Hasta que llega su modelo —y si no
+  // llega—, se camina con la mano y el vaso de siempre.
+  let jugador: Jugador | null = null;
+  let primera = false;
+  let rellenoActual = 0;
+  let cerrado = false;
+  recursos.yo
+    .then((pl) => {
+      if (cerrado) return;
+      jugador = crearJugador(escena, pl, {
+        quietos: op.reducirMovimiento,
+        alTerminar: (a) => {
+          if (a === "bailar" && bailando) {
+            bailando = false;
+            op.onBaile?.(false);
+          }
+        },
+      });
+      jugador.ponerRelleno(rellenoActual);
+      // Si ya se estaba bailando con la mano, sigue el personaje.
+      if (bailando) jugador.hacer("bailar");
+    })
+    .catch((e) => {
+      if (import.meta.env.DEV) console.warn("[croquis] no se pudo cargar el personaje", e);
+    });
   const ponerBaile = (activo: boolean) => {
     if (activo === bailando) return;
     bailando = activo;
     mano.bailar(activo);
+    jugador?.hacer(activo ? "bailar" : null);
     op.onBaile?.(activo);
+  };
+  const fumar = () => (jugador ? jugador.hacer("fumar") : mano.fumar());
+  const tomar = () => {
+    if (!jugador) return;
+    if (bailando) ponerBaile(false);
+    jugador.hacer("tomar");
+  };
+  const ponerVista = (p: boolean) => {
+    if (p === primera) return;
+    primera = p;
+    op.onVista?.(p);
   };
   let pausado = false;
   const palanca = { x: 0, y: 0 };
@@ -1492,9 +1526,11 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     if (!caminando || pausado) return;
     const destino = e.target as HTMLElement | null;
     if (destino && /input|textarea|select/i.test(destino.tagName)) return;
-    // B baila, F fuma: atajos de los botones de la pantalla.
+    // B baila, F fuma, T toma, V cambia de vista: atajos de los botones.
     if (e.code === "KeyB" && !e.repeat) return ponerBaile(!bailando);
-    if (e.code === "KeyF" && !e.repeat) return mano.fumar();
+    if (e.code === "KeyF" && !e.repeat) return fumar();
+    if (e.code === "KeyT" && !e.repeat) return tomar();
+    if (e.code === "KeyV" && !e.repeat) return ponerVista(!primera);
     if (!TECLAS_JUEGO.has(e.code)) return;
     e.preventDefault();
     teclas.add(e.code);
@@ -1566,6 +1602,34 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
   const mirar = new THREE.Vector3();
   const vel = { x: 0, z: 0 };
+  const ojo = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  /**
+   * La cámara con el personaje: en los ojos (primera persona) o atrás, sobre
+   * el hombro derecho (tercera). El personaje se mueve con el mismo yo/vel.
+   */
+  const ubicarCamaraJugador = (j: Jugador, dt: number) => {
+    j.actualizar(dt, { x: yo.x, y: piso, z: yo.z, yaw, vx: vel.x, vz: vel.z, primera });
+    dir.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+    if (primera) {
+      j.ojos(ojo);
+      camara.position.copy(ojo);
+    } else {
+      // Se apunta a la altura de los hombros y la cámara va un poco más arriba:
+      // el personaje queda en el tercio de abajo, entero, sin taparle la vista.
+      j.cabeza(ojo);
+      ojo.y -= 0.15;
+      // Derecha de la mirada: (-cos yaw, 0, sin yaw)… mirando a +z, la derecha es -x.
+      const rx = -Math.cos(yaw);
+      const rz = Math.sin(yaw);
+      camara.position.set(ojo.x - dir.x * 2.9 + rx * 0.5, ojo.y - dir.y * 2.9 + 0.4, ojo.z - dir.z * 2.9 + rz * 0.5);
+      camara.position.y = Math.max(camara.position.y, piso + 0.35);
+      ojo.x += rx * 0.5;
+      ojo.z += rz * 0.5;
+      ojo.y += 0.4;
+    }
+    camara.lookAt(ojo.x + dir.x * 5, ojo.y + dir.y * 5, ojo.z + dir.z * 5);
+  };
   const caminar = (dt: number) => {
     let ix = pausado ? 0 : palanca.x;
     let iy = pausado ? 0 : palanca.y;
@@ -1593,7 +1657,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       const ax = fx * iy - fz * ix;
       const az = fz * iy + fx * ix;
       const n = Math.hypot(ax, az) || 1;
-      const velocidad = (rapido ? 7 : 3.6) * fuerza;
+      const velocidad = (jugador ? (rapido ? 6 : 2.6) : rapido ? 7 : 3.6) * fuerza;
       objX = (ax / n) * velocidad;
       objZ = (az / n) * velocidad;
     }
@@ -1631,6 +1695,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     // Subir o bajar (la escalera del VIP) se acompaña, no salta.
     const objetivo = alturaEn(yo.x, yo.z);
     piso = dt > 0 ? piso + (objetivo - piso) * Math.min(1, dt * 10) : objetivo;
+    if (jugador) ubicarCamaraJugador(jugador, dt);
+    else {
     // Bailando: rebote al ritmo (~124 bpm) y un vaivén de la cabeza.
     const baile = bailando && !quietos ? Math.abs(Math.sin(t * 6.5)) * 0.07 : 0;
     camara.position.set(yo.x, piso + OJOS + bamboleo + baile, yo.z);
@@ -1642,6 +1708,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     camara.lookAt(mirar);
     if (bailando && !quietos) camara.rotateZ(Math.sin(t * 3.25) * 0.04);
     mano.animar(t, quietos ? 0 : paso, dt);
+    }
 
     // Se ven sólo los carteles de lo que está cerca: con todos prendidos
     // (atraviesan todo) se amontonaban.
@@ -1677,6 +1744,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     if (!activo) {
       soltarMouse();
       for (const s of cartelesZona) s.visible = true;
+      if (jugador) jugador.raiz.visible = false;
     }
     controles.enabled = !activo;
     // La mano está a medio metro de los ojos: con el plano cercano de 0,5 m se cortaba.
@@ -1718,7 +1786,9 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     focos.forEach((f) => (f.intensity = H.focos));
     (lamparitas.material as THREE.MeshBasicMaterial).color.set(H.lamp);
     for (const r of rayos) r.visible = hora !== "dia";
-    genteReal.ponerRelleno({ dia: 0, atardecer: 0.12, noche: 0.32 }[hora]);
+    rellenoActual = { dia: 0, atardecer: 0.12, noche: 0.32 }[hora];
+    genteReal.ponerRelleno(rellenoActual);
+    jugador?.ponerRelleno(rellenoActual);
   };
 
   // ── Cámara y vistas ──
@@ -1795,7 +1865,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   /** Un cuadro: el predio y, caminando, la mano con el vaso encima de todo. */
   function dibujar() {
     renderer.render(escena, camara);
-    if (!caminando) return;
+    // Con el personaje cargado no hace falta la mano: se ve el cuerpo.
+    if (!caminando || jugador) return;
     soporte.matrix.copy(camara.matrixWorld);
     soporte.matrixWorldNeedsUpdate = true;
     renderer.autoClear = false;
@@ -1864,6 +1935,15 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       reales: () => gente.filter((pp) => pp.fig.real).length,
       escena,
       ponerHora,
+      jugador: () => jugador,
+      vista: ponerVista,
+      tomar,
+      fumar,
+      bailar: ponerBaile,
+      mover: (x: number, y: number) => {
+        palanca.x = x;
+        palanca.y = y;
+      },
       // Pararse en un punto, mirando a `giro` (radianes): para revisar de cerca.
       ir: (x: number, z: number, giro = yaw) => {
         yo.x = x;
@@ -1909,10 +1989,14 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       corriendo = activo;
     },
     bailar: (activo) => ponerBaile(activo),
-    fumar: () => mano.fumar(),
+    fumar,
+    tomar,
+    vista: (p) => ponerVista(p),
     liberar: () => {
       cancelAnimationFrame(raf);
       genteReal.liberar();
+      cerrado = true;
+      jugador?.liberar();
       window.removeEventListener("keydown", alApretar);
       window.removeEventListener("keyup", alSoltar);
       window.removeEventListener("blur", alPerderFoco);

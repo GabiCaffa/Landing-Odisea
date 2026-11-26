@@ -2172,54 +2172,75 @@ plano de colores:
 - Probado en navegador (vista general y caminata, Golf y Plaza). **El Pointer Lock no se
   pudo probar** (el navegador de pruebas no lo permite): hay que verlo en Chrome normal.
 
-### Gente con cara en el mapa: personajes animados de Quaternius (kit base)
+### Gente con ropa y tu personaje en el mapa: personajes de Mixamo
 
 La gente del croquis eran cajas y esferas. Ahora **las personas más cercanas a la cámara
-son personajes de verdad**, con cara, pelo, ropa y animaciones (bailar, charlar, quedarse
-quieto). Pedido del autor: "que no sean muñecos, personajes con cara".
+son personajes de verdad**, con ropa, cara y animaciones, y **al caminar se maneja un
+personaje propio** con el vaso de ODÍSEA en la mano, en primera o tercera persona.
 
-- **De dónde salen**: los paquetes gratis de **Quaternius** (licencia **CC0**: uso
-  comercial libre, sin citar): *Universal Base Characters [Standard]* (hombre y mujer,
-  peinados) y *Universal Animation Library [Standard]* (43 animaciones, entre ellas baile).
-  Se bajaron de quaternius.itch.io; los zips (140 MB) **no van al repo**.
-- **Lo que va al repo**: `public/croquis/gente/` (cuerpo-m, cuerpo-f, pelos y
-  animaciones, **730 KB en total**), armado con `scripts/gente/armar-personas.mjs`
-  (instrucciones en su cabecera; las herramientas, gltf-transform y sharp, se instalan
-  aparte, no son dependencias del sitio). El script: texturas a WebP (1024 los cuerpos,
-  512 el pelo), sin mapas de normales ni rugosidad, cuerpo simplificado al 60 %,
-  compresión **meshopt**, peinados pasados al espacio del hueso de la cabeza (se cuelgan de
-  ella, sin esqueleto propio) y animaciones **sólo con giros**: Quaternius graba también la
-  traslación y la escala de cada hueso con las medidas del maniquí, y aplicadas tal cual le
-  cambiaban las proporciones a cada cuerpo. La pelvis queda como diferencia con su reposo y
-  en el sitio se le suma la del cuerpo (por eso la cadera sube y baja bien al bailar).
-- **Cómo convive con la multitud** (`src/croquis/gente.ts`): la multitud sigue siendo la
-  malla instanciada (cientos de personas en seis llamadas de dibujo). Cada ¼ s el motor
-  toma la gente **en cuadro y a menos de 70 m**, de la más cercana a la más lejana, y se
-  la reparte a un grupo fijo de personajes (**40 en escritorio, 14 en el celular**, mitad
-  hombres y mitad mujeres); la instanciada de ese lugar se achica a nada. Caminando, la
-  gente que se cruza de cerca siempre tiene cara. Cada persona guarda su apariencia
-  (`Persona.fig`: género, peinado, barba, colores, short, qué hace), así el personaje se
-  ve igual cada vez que le toca.
-- **La ropa se pinta por código**: los cuerpos gratis vienen en ropa interior y Quaternius
-  no tiene ropa de calle gratis (sólo un pack de ropa de fantasía). Cada vértice se marca
-  por el hueso que más lo mueve —torso y brazos: remera; cadera y piernas: pantalón; pies:
-  zapatillas— y el sombreador lo pinta con el color de esa persona, conservando como luz y
-  sombra lo pintado en la textura. La piel es la textura clara multiplicada por el tono.
-- **De noche** los personajes quedaban negros (el predio sólo tiene los focos): llevan una
-  luz propia según la hora (`ponerRelleno`: 0 de día, 0,12 al atardecer, 0,32 de noche).
-- **Peso y carga**: nada se baja hasta abrir el mapa. El lector de modelos (GLTFLoader +
-  meshopt) va en el chunk `motor`, que pasó de ~140 a ~190 KB gzip; `vendor` sigue en
-  137,19 KB. Si los modelos no cargan, el mapa sigue con la gente de siempre.
-- **Es el "kit base" para predios nuevos**: un predio sigue siendo un archivo de datos, y la
-  gente (cuántas, dónde, si bailan) sale de las zonas (`gente` por cada 100 m²), sin
-  tocar nada de esto.
-- En desarrollo, `__croquis.reales()` dice cuántos personajes hay en pantalla e
-  `__croquis.ir(x, z, giro)` para a la cámara en un punto, para revisar de cerca.
-- Probado en navegador: el Golf (pista de cerca, día y noche), el VIP elevado de la Plaza de
-  Toros, y 740×360 táctil (14 personajes). **No se probó en un celular real**: es lo que hay
-  que mirar (fluidez con 14 personajes animados en uno de gama media).
-- Quedó afuera: personajes caminando por el predio, y que el jugador se vea a sí mismo
-  (sigue en primera persona con la mano y el vaso).
+> **Primero se probó con Quaternius (CC0) y se descartó.** Sus cuerpos gratis vienen en
+> ropa interior, y la ropa pintada por código encima (remera y pantalón según el hueso de
+> cada vértice) se veía pintada, con el cuerpo marcado debajo. El autor lo rechazó con
+> capturas. Tampoco tenía animaciones de tomar ni de fumar.
+
+- **De dónde salen**: **Mixamo** (mixamo.com, de Adobe, gratis con cuenta). Adobe permite
+  usar personajes y animaciones en proyectos comerciales, webs incluidas; lo que no se
+  puede es redistribuirlos sueltos. Los bajó el autor con su cuenta: Remy (el personaje
+  propio), 8 personajes con ropa de calle para la gente y las animaciones (Breathing Idle,
+  Talking, Drinking, Smoking, Walking, Running y cuatro bailes: Bboy Hip Hop Move, Brooklyn
+  Uprock, Snake Hip Hop Dance, Dancing Twerk).
+- **Lo que va al repo**: `public/croquis/gente/`: `yo.glb` (445 KB), `persona-1..8.glb`
+  (~340 KB cada uno) y `animaciones.glb` (810 KB). **Los FBX no** (~550 MB). Se arman con
+  `scripts/gente/` (pasos en la cabecera de `armar-mixamo.mjs`): el FBX se pasa a GLB **en
+  el navegador** (`convertir.html`: FBXLoader + GLTFExporter de three, servido por
+  `servidor-fbx.mjs`), sin instalar FBX2glTF ni Blender; después gltf-transform simplifica
+  (14 mil triángulos el propio, 7-13 mil la gente), pasa las texturas a WebP (1024 y 512)
+  y comprime con meshopt. Las animaciones van a 15 cuadros por segundo.
+- **Tres trampas del armado, por si se agregan personajes**:
+  1. FBXLoader crea **un hueso por cada prenda que lo usa** y cuelga las copias del
+     original. Las animaciones mueven sólo el primero por nombre: el armado junta todas las
+     copias en él (`juntarHuesos`).
+  2. Mixamo **numera el prefijo** de los huesos de algunos personajes (`mixamorig2Hips`,
+     `mixamorig6Hips`): esos quedaban en pose en T. El armado lo normaliza a `mixamorig`.
+  3. Las animaciones traen la traslación y la escala de cada hueso con las medidas del
+     esqueleto con que se bajaron. Se dejan **sólo los giros** y la cadera, que el sitio
+     lleva a la medida de cada cuerpo (`adaptar` en `modelos.ts`). Caminar y correr, en
+     el lugar.
+- **La gente** (`src/croquis/gente.ts`): la multitud sigue siendo la malla instanciada
+  (cientos en pocas llamadas de dibujo). Cada ¼ s el motor toma la gente **en cuadro y a
+  menos de 70 m** y se la reparte a un grupo fijo de personajes: **40 en escritorio, 14 en
+  el celular**, hasta 5 por modelo; la instanciada de ese lugar se achica a nada. Cada
+  persona guarda **qué modelo es y qué hace** (`Persona.fig`: bailar —uno de los cuatro—,
+  charlar, tomar o quieto), así se ve igual cada vez que le toca. Los que charlan o toman
+  tienen el vaso de ODÍSEA. **La gente no fuma**: el botón de fumar es sólo del personaje
+  propio (ver el "Ojo legal" de más abajo).
+- **Tu personaje** (`src/croquis/jugador.ts`): Remy con el vaso en la mano izquierda.
+  Elige la animación por la velocidad (quieto, caminar, correr; las velocidades bajaron a
+  2,6 y 6 m/s para que no patine) y hace **bailar** (B; apretarlo de nuevo después cambia
+  de baile), **tomar** (T, botón nuevo) y **fumar** (F), con animaciones de cuerpo entero.
+  Moverse corta lo que esté haciendo. **Las animaciones de Mixamo toman con la izquierda y
+  fuman con la derecha** (medido: qué mano se acerca a la cabeza en cada una): por eso el
+  vaso va en la izquierda y el cigarro aparece en la derecha, con humo que sale de la brasa.
+- **Primera y tercera persona con un botón** (y la tecla **V**). Arranca en tercera: la
+  cámara va atrás, sobre el hombro derecho, a la altura de los hombros, y el cuerpo gira
+  hacia donde camina. En primera, la cámara va en los ojos y **la cabeza se achica a nada**
+  (si no, se ve por dentro); se ve el cuerpo al mirar para abajo y el vaso y el cigarro al
+  tomar o fumar. La mano dibujada de `personaje.ts` queda **sólo de respaldo** mientras el
+  modelo no llegó o si no carga.
+- **Carga y peso**: nada se baja hasta abrir el mapa. Primero `animaciones.glb` y `yo.glb`
+  (1,25 MB) y después la gente de a un modelo (**3 en el celular**, 8 en escritorio): la
+  gente aparece a medida que llega y, mientras tanto, está la de siempre. El lector de
+  modelos va en el chunk `motor` (~190 KB gzip); `vendor` sigue en 137,19 KB.
+- **De noche** los personajes tienen luz propia (`ponerRelleno`: 0 de día, 0,12 al
+  atardecer, 0,32 de noche); si no, quedaban negros.
+- En el celular, Vista, Bailar, Tomar y Fumar van en dos columnas: en un teléfono acostado
+  no entran cuatro botones uno arriba del otro.
+- En desarrollo: `__croquis.reales()`, `ir(x, z, giro)`, `mover(x, y)`, `vista(primera)`,
+  `tomar()`, `fumar()`, `bailar(true)` y `jugador()`, para probar con el panel oculto.
+- Probado en navegador: el Golf de día y de noche (la gente bailando y tomando, el
+  personaje caminando, bailando, tomando y fumando en tercera y tomando en primera) y
+  740×360 táctil. **No se probó en un celular real** (fluidez con 14 personajes + el propio)
+  **ni el Pointer Lock en Chrome normal**.
 
 ### Croquis 3D de la Plaza de Toros (Navidad Colonia)
 
