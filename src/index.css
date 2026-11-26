@@ -902,3 +902,35 @@
   color: hsl(var(--popover-foreground));
 }
 :root[data-admin="oscuro"] optgroup { color: hsl(var(--muted-foreground)); }
+
+/* ── Tarjeta de evento en Black Friday ── */
+/* La pone EventCard cuando el evento tiene vigente una promo con "Black Friday"
+   en el nombre. Redefine los colores DENTRO de la tarjeta (las utilidades usan
+   estas variables), así funciona igual con cualquier tema estacional. Va al
+   final y con :root delante para ganarle al encendido del tema. */
+:root .evento-card.evento-black {
+  --papel: 0 0% 0%;
+  --card: 0 0% 3%;
+  --tinta: 0 0% 100%;
+  --foreground: 0 0% 100%;
+  --muted-foreground: 0 0% 72%;
+  --border: 0 0% 22%;
+  --celeste-deep: 0 0% 100%;
+  background: #070707;
+  color: #fff;
+  border-color: hsl(0 0% 100% / 0.28);
+  box-shadow: 0 0 0 1px hsl(0 0% 100% / 0.08), 0 18px 40px -18px hsl(0 0% 0% / 0.9);
+}
+:root .evento-card.evento-black:hover,
+:root .evento-card.evento-black:focus-within {
+  border-color: hsl(0 0% 100% / 0.6);
+  box-shadow: 0 0 0 1px hsl(0 0% 100% / 0.25), 0 0 36px -10px hsl(0 0% 100% / 0.35);
+}
+.evento-black-sello {
+  border-top: 1px solid hsl(0 0% 100% / 0.25);
+}
+:root .evento-black .evento-fecha {
+  background: #fff;
+  color: #000;
+  box-shadow: none;
+}

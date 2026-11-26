@@ -120,9 +120,21 @@ const EventCard = ({
   // Los carteles de promo (2x1, etc.), sin repetir y de a tres como mucho. En
   // escritorio van sobre el flyer; en celular, donde el flyer es una miniatura,
   // pasan a una pastilla bajo el título.
-  const etiquetas = isSoldOut || proximo
-    ? []
-    : [...new Set(promos.filter((p) => promoVigente(p)).map((p) => p.name))].slice(0, 3);
+  const vigentes = isSoldOut || proximo ? [] : promos.filter((p) => promoVigente(p));
+
+  // Black Friday: la promo vigente cuyo nombre dice "Black Friday" pone la
+  // tarjeta en negro, con el porcentaje del nombre en grande ("BLACK FRIDAY
+  // 30% OFF" → "30% OFF"). Sale del NOMBRE y no del descuento que calcula,
+  // porque lo que se anuncia es contra el precio de la ticketera (con la
+  // comisión), no contra el precio de la web: un 20% de la web es ~30% contra
+  // la ticketera. Se apaga sola cuando vence la promo.
+  const promoBlack = vigentes.find((p) => /black\s*friday/i.test(p.name));
+  const offBlack = promoBlack
+    ? (promoBlack.name.match(/\d+\s*%(\s*off)?/i)?.[0].replace(/\s+/g, " ").toUpperCase() ?? null)
+    : null;
+  const textoOffBlack = offBlack ? (/off/i.test(offBlack) ? offBlack : `${offBlack} OFF`) : null;
+
+  const etiquetas = [...new Set(vigentes.filter((p) => p !== promoBlack).map((p) => p.name))].slice(0, 3);
 
   return (
     /*
@@ -138,7 +150,7 @@ const EventCard = ({
      */
     <article
       onMouseEnter={playHover}
-      className={`evento-card card-techno relative h-full w-full overflow-hidden ${
+      className={`evento-card card-techno relative h-full w-full overflow-hidden ${promoBlack ? "evento-black " : ""}${
         vertical
           ? "flex flex-col"
           : "grid grid-cols-[104px_minmax(0,1fr)] gap-x-3 gap-y-3 p-3 sm:flex sm:flex-col sm:gap-0 sm:p-0"
@@ -223,7 +235,7 @@ const EventCard = ({
             no descuenta nada, sólo avisa. Con el evento agotado no va. */}
         {etiqueta && !isSoldOut && !proximo && (
           <div
-            className={`evento-promo absolute bottom-3 left-3 z-[2] max-w-[calc(100%-1.5rem)] rounded-full bg-black/80 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/25 backdrop-blur ${
+            className={`evento-promo absolute ${promoBlack ? "bottom-[5.25rem]" : "bottom-3"} left-3 z-[3] max-w-[calc(100%-1.5rem)] rounded-full bg-black/80 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/25 backdrop-blur ${
               vertical ? "block" : "hidden sm:block"
             }`}
           >
@@ -241,6 +253,20 @@ const EventCard = ({
             {nombre}
           </div>
         ))}
+
+        {/* Black Friday: la franja negra con el porcentaje bien grande. */}
+        {promoBlack && (
+          <div
+            className={`evento-black-sello absolute inset-x-0 bottom-0 z-[2] flex-col items-center bg-black/90 px-3 pb-2.5 pt-2 text-center text-white ${
+              vertical ? "flex" : "hidden sm:flex"
+            }`}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-white/75">Black Friday</span>
+            {textoOffBlack && (
+              <span className="font-sport text-5xl font-black leading-none tracking-tight">{textoOffBlack}</span>
+            )}
+          </div>
+        )}
 
         {proximo && (
           <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center gap-2 bg-black/40">
@@ -313,6 +339,14 @@ const EventCard = ({
           {proximo ? "" : description}
         </p>
 
+        {/* Black Friday en la fila compacta de celular (la franja del flyer no entra en la miniatura). */}
+        {promoBlack && !vertical && (
+          <span className="mb-2 inline-flex w-fit items-baseline gap-1.5 rounded-md bg-black px-2 py-1 text-white ring-1 ring-white/30 sm:hidden">
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/75">Black Friday</span>
+            {textoOffBlack && <span className="font-sport text-base font-black leading-none">{textoOffBlack}</span>}
+          </span>
+        )}
+
         {/* Promos (2x1, etc.): pastilla bajo el título en celular. */}
         {etiquetas.length > 0 && (
           <span className={`mb-2 w-fit rounded-full bg-celeste px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground sm:hidden ${vertical ? "hidden" : "inline-flex"}`}>
@@ -369,17 +403,21 @@ const EventCard = ({
         ) : (
         <div className={`mt-auto flex items-stretch gap-2 ${vertical ? "" : "col-span-2 sm:col-auto"}`}>
           <span
-            className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-bold uppercase tracking-wide transition-all ${
+            className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm ${promoBlack ? "whitespace-nowrap " : ""} font-bold uppercase tracking-wide transition-all ${
               isSoldOut
                 ? "border border-tinta/20 text-tinta"
-                : "bg-celeste text-accent-foreground"
+                : promoBlack
+                  ? "bg-white text-black"
+                  : "bg-celeste text-accent-foreground"
             }`}
           >
             {isSoldOut
               ? "Ver la fecha"
               : dias > 1
                 ? `Elegí tu día (${dias})`
-                : cartel
+                : promoBlack
+                  ? `Comprar · ${textoOffBlack ?? "Black Friday"}`
+                  : cartel
                   ? `Comprar · ${cartel}`
                   : "Comprar entradas"}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
