@@ -93,7 +93,7 @@ const golf: Predio = {
     { id: "sector15", nombre: "Sector +15", poligono: rect(63, 410, 152, 478), color: "#b4471f", etiqueta: p(118, 440), gente: 12, entradas: { incluye: ["+15"] } },
     { id: "pasillo", nombre: "Pasillo", poligono: rect(225, 314, 368, 332), color: "#55555c", gente: 2 },
     { id: "rampa", nombre: "Rampa", poligono: [p(225, 442), p(380, 405), p(445, 405), p(272, 490)], color: "#55555c", gente: 2 },
-    { id: "pista", nombre: "Pista electrónica", poligono: rect(368, 314, 445, 405), color: "#3b1f6e", etiqueta: p(406, 340), gente: 14 },
+    { id: "pista", nombre: "Pista electrónica", poligono: rect(368, 314, 445, 405), color: "#3b1f6e", etiqueta: p(406, 340), gente: 14, baile: "fuerte" },
     { id: "carril15", nombre: "Ingreso +15", poligono: rect(100, 478, 155, 598), color: "#46464d", gente: 2 },
     { id: "carrilGeneral", nombre: "Ingreso General", poligono: rect(155, 480, 222, 598), color: "#4d4d54", gente: 2 },
     { id: "carrilVip", nombre: "Ingreso VIP", poligono: rect(222, 486, 268, 598), color: "#46464d", gente: 1 },

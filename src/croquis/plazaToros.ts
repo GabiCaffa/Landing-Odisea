@@ -163,6 +163,7 @@ const plazaToros: Predio = {
       color: "#d22b3c",
       etiqueta: [-4, -20],
       gente: 14,
+      baile: "fuerte",
       altura: VIP_ALTURA,
       entradas: { incluye: ["vip", "+30"] },
     },
