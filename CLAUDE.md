@@ -2844,6 +2844,22 @@ el vendedor cobra de más.
 > scrollea y los 16 px no se pagan. Medido antes y después: 22 px de scroll
 > con el tachado apagado, 22 con el tachado prendido.
 
+### Tarjeta negra de Black Friday (sin migración)
+
+`EventCard`: si el evento tiene **vigente** una promo cuyo nombre contiene
+"Black Friday" (sin importar mayúsculas), la tarjeta pasa a negro (`.evento-black`
+en `index.css`, que redefine las variables de color dentro de la tarjeta y le gana
+al tema estacional). Lleva una franja sobre el flyer con "BLACK FRIDAY" y el
+porcentaje **sacado del nombre** de la promo ("BLACK FRIDAY 30% OFF" → "30% OFF").
+El botón dice "Comprar · 30% OFF" en vez del cartel del sitio, y esa promo no
+repite su pastilla celeste. Las demás tarjetas siguen con el cartel de siempre
+("15% OFF").
+
+El % sale del nombre y no del descuento real a propósito: se anuncia contra el
+precio de ticketera (con comisión). 20% sobre $1000 = $800 contra $1150 ≈ 30%.
+Se apaga sola cuando vence la promo. Sin número en el nombre, la franja dice
+sólo "Black Friday".
+
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
 La card 02 de `PromosSection` era un link fijo a WhatsApp ("Quiero info"). Ahora abre
