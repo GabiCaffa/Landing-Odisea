@@ -2095,8 +2095,10 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
 - **Comprar al entrar a un sector**: cada zona dice qué entradas son suyas por palabras en el
   nombre (`entradas: { incluye, excluye }` en el predio, sin tildes ni mayúsculas, así
   "VIP – 2do lote" sigue siendo del VIP al cambiar de lote). Parado en esa zona aparece abajo
-  **"Comprar VIP – 2do lote · $1200"**; en las zonas `especial` (VIP y Backstage) **el modal
-  de compra se abre solo** al entrar, una vez por zona. El modal es el mismo `CompraEntradas`
+  **"Comprar VIP – 2do lote · $1200"**, que cambia con el sector. **El modal NO se abre solo**
+  (pedido del autor: abrirse cada vez que se pasa por un sector molestaba; existió una
+  versión con zonas `especial` y se sacó, también del VIP de la Plaza de Toros). Tocando el
+  botón se abre el mismo `CompraEntradas`
   de siempre, encima del mapa (`encima` → `ModalShell` con `capa` `z-[90]`) y con esa
   entrada ya en 1 (`preseleccion`, sólo el valor inicial del contador: precios, promos y
   mensaje no cambian). Con el modal abierto la caminata se pausa y Escape cierra sólo el modal.
@@ -2135,6 +2137,121 @@ Modelo: el croquis de referencia que pasó el autor (`baile-en-la-carpa.vercel.a
   cerrar (devuelve el scroll y libera el canvas) y que en otro evento no aparece el botón.
   **No se probó en un celular real**: es lo que hay que mirar primero (fluidez en uno de gama
   media).
+
+### El Golf como en las fotos, mano nueva y mirar con el mouse
+
+Con fotos del lugar (cancha de césped abierta, escenario de truss) el Golf dejó de ser un
+plano de colores:
+
+- **Césped de cancha** (`texturaPasto`: verde con hojitas y franjas de corte de 8 m) y
+  **cielo** en un domo con degradé por hora (`texturaCielo`; el atardecer, violeta arriba y
+  naranja en el horizonte, como en las fotos). La niebla toma el color del horizonte. Los
+  **sectores son un tinte** sobre el pasto (opacidad 0,16) con el borde marcado: todo es césped.
+- **Vallas con estilo** (`Valla.estilo`): `media` = media sombra negra de 2,1 m (el
+  perímetro), `reja` (por defecto) = valla de contención con textura de barrotes. Postes de
+  todas las vallas en una sola malla instanciada.
+- **El escenario (`dj`) es el de las fotos**: tarima, torres y techo de truss de aluminio
+  (textura con transparencia), techo negro, banderines negros colgando, alas con el sonido
+  colgado, subwoofers, cabina del DJ, luces y haces, y el **vallado azul** adelante. Para
+  chocar se usa su huella (`userData.solido`), no la caja de todas sus mallas.
+- Piezas nuevas: `torreLuz` (torre de cancha con reflectores), `palosRugby`, `contenedor`
+  (chapa acanalada) y `bandera` (vertical con el logo, flamea). Árboles: **pinos y
+  cipreses** altos y árboles de copa ancha, instanciados.
+- **Mano nueva**: dorso al costado del vaso, pulgar por adelante, los otros dedos atrás,
+  muñeca y manga con el puño naranja (`RoundedBoxGeometry` y cápsulas, sombreado suave).
+- **La gente no frena** al caminar (pedido del autor: complicaba recorrer). Sólo frenan
+  vallas y piezas sólidas.
+- **Mirar con el mouse sin mantener apretado** (Pointer Lock): un click en el mapa lo toma
+  (pide `unadjustedMovement` donde existe), aparece una mirilla, y **Esc lo suelta**. Ese
+  Escape no saca de la caminata (`soltadoEn`). Con el dedo se sigue arrastrando. **El andar
+  se suaviza** (la velocidad se acerca a la pedida, sin tirones).
+- **Carteles caminando**: los de piezas se ven entre 7 y 22 m; los de sector, a más de 20 m
+  (arriba ya dice dónde se está).
+- Al mezclar con el PR de Franco (Plaza de Toros, bailar y fumar) conviven todo: `onMira` y
+  `onBaile`, `estilo` e `invisible` en las vallas, y los pinos respetan `radioLibre`.
+- Probado en navegador (vista general y caminata, Golf y Plaza). **El Pointer Lock no se
+  pudo probar** (el navegador de pruebas no lo permite): hay que verlo en Chrome normal.
+
+### Gente con ropa y tu personaje en el mapa: personajes de Mixamo
+
+La gente del croquis eran cajas y esferas. Ahora **las personas más cercanas a la cámara
+son personajes de verdad**, con ropa, cara y animaciones, y **al caminar se maneja un
+personaje propio** con el vaso de ODÍSEA en la mano, en primera o tercera persona.
+
+> **Primero se probó con Quaternius (CC0) y se descartó.** Sus cuerpos gratis vienen en
+> ropa interior, y la ropa pintada por código encima (remera y pantalón según el hueso de
+> cada vértice) se veía pintada, con el cuerpo marcado debajo. El autor lo rechazó con
+> capturas. Tampoco tenía animaciones de tomar ni de fumar.
+
+- **De dónde salen**: **Mixamo** (mixamo.com, de Adobe, gratis con cuenta). Adobe permite
+  usar personajes y animaciones en proyectos comerciales, webs incluidas; lo que no se
+  puede es redistribuirlos sueltos. Los bajó el autor con su cuenta: Remy (el personaje
+  propio), 8 personajes con ropa de calle para la gente y las animaciones (Breathing Idle,
+  Talking, Drinking, Smoking, Walking, Running y cuatro bailes: Bboy Hip Hop Move, Brooklyn
+  Uprock, Snake Hip Hop Dance, Dancing Twerk).
+- **Lo que va al repo**: `public/croquis/gente/`: `yo.glb` (445 KB), `persona-1..8.glb`
+  (~340 KB cada uno) y `animaciones.glb` (810 KB). **Los FBX no** (~550 MB). Se arman con
+  `scripts/gente/` (pasos en la cabecera de `armar-mixamo.mjs`): el FBX se pasa a GLB **en
+  el navegador** (`convertir.html`: FBXLoader + GLTFExporter de three, servido por
+  `servidor-fbx.mjs`), sin instalar FBX2glTF ni Blender; después gltf-transform simplifica
+  (14 mil triángulos el propio, 7-13 mil la gente), pasa las texturas a WebP (1024 y 512)
+  y comprime con meshopt. Las animaciones van a 15 cuadros por segundo.
+- **Tres trampas del armado, por si se agregan personajes**:
+  1. FBXLoader crea **un hueso por cada prenda que lo usa** y cuelga las copias del
+     original. Las animaciones mueven sólo el primero por nombre: el armado junta todas las
+     copias en él (`juntarHuesos`).
+  2. Mixamo **numera el prefijo** de los huesos de algunos personajes (`mixamorig2Hips`,
+     `mixamorig6Hips`): esos quedaban en pose en T. El armado lo normaliza a `mixamorig`.
+  3. Las animaciones traen la traslación y la escala de cada hueso con las medidas del
+     esqueleto con que se bajaron. Se dejan **sólo los giros** y la cadera, que el sitio
+     lleva a la medida de cada cuerpo (`adaptar` en `modelos.ts`). Caminar y correr, en
+     el lugar.
+- **La gente** (`src/croquis/gente.ts`): la multitud sigue siendo la malla instanciada
+  (cientos en pocas llamadas de dibujo). Cada ¼ s el motor toma la gente **en cuadro y a
+  menos de 70 m** y se la reparte a un grupo fijo de personajes: **40 en escritorio, 14 en
+  el celular**, hasta 5 por modelo; la instanciada de ese lugar se achica a nada. Cada
+  persona guarda **qué modelo es y qué hace** (`Persona.fig`: bailar —uno de los cuatro—,
+  charlar, tomar o quieto), así se ve igual cada vez que le toca. Los que charlan o toman
+  tienen el vaso de ODÍSEA. **La gente no fuma**: el botón de fumar es sólo del personaje
+  propio (ver el "Ojo legal" de más abajo).
+- **Tu personaje** (`src/croquis/jugador.ts`): Remy con el vaso en la mano izquierda.
+  Elige la animación por la velocidad (quieto, caminar, correr; las velocidades bajaron a
+  2,6 y 6 m/s para que no patine) y hace **bailar** (B; apretarlo de nuevo después cambia
+  de baile), **tomar** (T, botón nuevo) y **fumar** (F), con animaciones de cuerpo entero.
+  Moverse corta lo que esté haciendo. **Las animaciones de Mixamo toman con la izquierda y
+  fuman con la derecha** (medido: qué mano se acerca a la cabeza en cada una): por eso el
+  vaso va en la izquierda y el cigarro aparece en la derecha, con humo que sale de la brasa.
+- **Primera y tercera persona con un botón** (y la tecla **V**). Arranca en tercera: la
+  cámara va atrás, sobre el hombro derecho, a la altura de los hombros, y el cuerpo gira
+  hacia donde camina. En primera, la cámara va en los ojos y **la cabeza se achica a nada**
+  (si no, se ve por dentro); se ve el cuerpo al mirar para abajo y el vaso y el cigarro al
+  tomar o fumar. La mano dibujada de `personaje.ts` queda **sólo de respaldo** mientras el
+  modelo no llegó o si no carga.
+- **Carga y peso**: nada se baja hasta abrir el mapa. Primero `animaciones.glb` y `yo.glb`
+  (1,25 MB) y después la gente de a un modelo (**3 en el celular**, 8 en escritorio): la
+  gente aparece a medida que llega y, mientras tanto, está la de siempre. El lector de
+  modelos va en el chunk `motor` (~190 KB gzip); `vendor` sigue en 137,19 KB.
+- **De noche** los personajes tienen luz propia (`ponerRelleno`: 0 de día, 0,12 al
+  atardecer, 0,32 de noche); si no, quedaban negros.
+- En el celular, Vista, Bailar, Tomar y Fumar van en dos columnas: en un teléfono acostado
+  no entran cuatro botones uno arriba del otro.
+- **La gente no se pisa ni se mete en las cosas** (pedido del autor): al repartirla se
+  respeta una distancia entre personas (0,8 m bailando, 0,6 m en las rondas), medio metro
+  de las vallas, lo sólido de la caminata (barras, baños, DJ…), 1,3 m de los postes finos
+  (torres de luz, banderas, palos de rugby) y los molinetes del control. En una zona en alto
+  (el VIP sobre el escenario) no se miran los sólidos: se está parado encima.
+- **Fuera de la pista la gente está en rondas** de 2 a 4, mirándose, charlando o tomando.
+  Antes cada uno miraba para cualquier lado y en la entrada parecía que hablaban solos. El
+  que queda solo (no entró la ronda) no habla: toma o está quieto.
+- **El visor dice "Demo en desarrollo · versión cómica"** bajo el nombre del predio,
+  pedido del autor: los personajes y las animaciones no están a la altura todavía y se
+  publica igual como demo.
+- En desarrollo: `__croquis.reales()`, `ir(x, z, giro)`, `mover(x, y)`, `vista(primera)`,
+  `tomar()`, `fumar()`, `bailar(true)` y `jugador()`, para probar con el panel oculto.
+- Probado en navegador: el Golf de día y de noche (la gente bailando y tomando, el
+  personaje caminando, bailando, tomando y fumando en tercera y tomando en primera) y
+  740×360 táctil. **No se probó en un celular real** (fluidez con 14 personajes + el propio)
+  **ni el Pointer Lock en Chrome normal**.
 
 ### Croquis 3D de la Plaza de Toros (Navidad Colonia)
 
@@ -2193,7 +2310,7 @@ tiene un millón de caras.
   14, como en el Golf.
 - Probado en navegador con datos de prueba: vistas de día y de noche, escritorio y 375 px;
   caminar del ingreso a la escalera; la altura medida al subir (a mitad 1,1 m, arriba 2,5 m,
-  en el VIP 2,6 m con la zona "vip"); la compra del VIP +30 que se abre sola al entrar; y la
+  en el VIP 2,6 m con la zona "vip"); la compra del VIP +30 (ya no se abre sola: ver arriba); y la
   vista desde el VIP. **No se probó en un celular real.**
 
 ### Eventos "próximamente": flyer borroso + contador (v49)

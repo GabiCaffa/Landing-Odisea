@@ -1,0 +1,11 @@
+Gente del croquis 3D (mapa de cada evento).
+
+Personajes y animaciones de Mixamo (mixamo.com, Adobe), gratis con cuenta.
+Adobe permite usarlos en proyectos comerciales, juegos y webs incluidos;
+no se pueden redistribuir sueltos como archivos para que otros los usen.
+
+yo.glb          el personaje que maneja la persona (Remy)
+persona-N.glb   la gente de la fiesta
+animaciones.glb quieto, charlar, tomar, fumar, caminar, correr y 4 bailes
+
+Se arman con scripts/gente/ (ver la cabecera de armar-mixamo.mjs).

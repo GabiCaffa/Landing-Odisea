@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { Cigarette, Footprints, MapPin, Moon, Music, Share2, Sun, Sunset, Ticket, X } from "lucide-react";
+import { Cigarette, CupSoda, Eye, Footprints, MapPin, Moon, Music, PersonStanding, Share2, Sun, Sunset, Ticket, X } from "lucide-react";
 import { toast } from "sonner";
 import { SITIO, urlDeMapa } from "@/lib/rutas";
 import { formatEventDate, useAuth } from "@/contexts/AuthContext";
@@ -122,6 +122,8 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const [zona, setZona] = useState<{ id: string; nombre: string } | null>(null);
   // Bailando en el lugar (lo apaga el motor solo al caminar).
   const [bailando, setBailando] = useState(false);
+  // Primera persona (en los ojos) o tercera (atrás, se ve el personaje entero).
+  const [primera, setPrimera] = useState(false);
   // La compra abierta encima del mapa, con la entrada de la zona ya elegida.
   const [comprando, setComprando] = useState<{ preseleccion?: string } | null>(null);
   const comprandoRef = useRef(false);
@@ -133,6 +135,10 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const [vertical, setVertical] = useState(() => window.matchMedia("(orientation: portrait)").matches);
   const caminandoRef = useRef(false);
   caminandoRef.current = caminando;
+  // El mouse tomado para mirar (Pointer Lock). Esc lo suelta: ese mismo Escape
+  // no tiene que sacar de la caminata.
+  const [mouseTomado, setMouseTomado] = useState(false);
+  const soltadoEn = useRef(0);
 
   useEffect(() => {
     const mq = window.matchMedia("(orientation: portrait)");
@@ -144,6 +150,7 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || comprandoRef.current) return;
+      if (document.pointerLockElement || Date.now() - soltadoEn.current < 400) return;
       if (caminandoRef.current) {
         caminandoRef.current = false;
         setCaminando(false);
@@ -173,7 +180,12 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
           movil,
           reducirMovimiento,
           onZona: (z) => setZona(z),
+          onMira: (t) => {
+            if (!t) soltadoEn.current = Date.now();
+            setMouseTomado(t);
+          },
           onBaile: (activo) => setBailando(activo),
+          onVista: (p) => setPrimera(p),
         });
         setPredio(p);
         setVista(p.vistas[0]?.id ?? "");
@@ -223,21 +235,8 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
     control.current?.pausar(false);
   };
 
-  // Al entrar caminando a una zona especial (VIP, backstage) se abre la compra
-  // sola, con su entrada puesta. Una vez por zona: si la cierra y vuelve a
-  // entrar, no se la vuelve a poner adelante; queda el botón de abajo.
-  const yaOfrecidas = useRef(new Set<string>());
-  useEffect(() => {
-    if (!caminando || !zona || !zonaDatos?.especial || !entradasZona.length) return;
-    if (yaOfrecidas.current.has(zona.id)) return;
-    // Un respiro para que se vea dónde se entró antes de que aparezca el modal.
-    const id = window.setTimeout(() => {
-      yaOfrecidas.current.add(zona.id);
-      abrirCompra(entradasZona[0].name);
-    }, 700);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caminando, zona?.id, entradasZona.length]);
+  // La compra NO se abre sola al entrar a un sector (pedido del autor): queda
+  // el botón naranja de abajo, que cambia con el sector donde se está.
 
   const actual = predio?.vistas.find((v) => v.id === vista);
 
@@ -285,6 +284,10 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
         <div className="min-w-0">
           <h2 className="truncate text-xl font-black tracking-tight sm:text-2xl">{predio?.nombre ?? "Mapa del predio"}</h2>
+          {/* Pedido del autor: que quede claro que es un juego en desarrollo. */}
+          <p className="mt-1 inline-flex items-center rounded-full border border-[#F25C26]/60 bg-black/50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#F25C26] sm:text-[11px]">
+            Demo en desarrollo · versión cómica
+          </p>
           {predio && <p className="mt-0.5 line-clamp-2 text-xs text-white/70 sm:text-sm">{predio.subtitulo}</p>}
           {/* Debajo del nombre y no al lado de los botones: en un celular le
               comía el título entero. */}
@@ -331,6 +334,9 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
               </p>
             </div>
           )}
+          {mouseTomado && (
+            <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/85 shadow" />
+          )}
           {tactil && vertical && (
             <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-2xl bg-black/65 p-3 text-center text-xs text-white/90 backdrop-blur">
               Poné el teléfono horizontal para caminar más cómodo.
@@ -353,12 +359,26 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
               </button>
             </>
           )}
-          {/* Bailar y fumar: a la derecha, arriba de "Correr" en el celular. */}
+          {/* Vista, bailar, tomar y fumar: a la derecha, arriba de "Correr" en el
+              celular (ahí en dos columnas: en un teléfono acostado no entran cuatro). */}
           <div
-            className={`absolute right-[max(1.25rem,env(safe-area-inset-right))] flex flex-col gap-2 ${
-              tactil ? "bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]" : "bottom-28"
+            className={`absolute right-[max(1.25rem,env(safe-area-inset-right))] grid gap-2 ${
+              tactil ? "grid-cols-2 bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]" : "grid-cols-1 bottom-28"
             }`}
           >
+            <button
+              type="button"
+              onClick={() => {
+                control.current?.vista(!primera);
+                setPrimera(!primera);
+              }}
+              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-white/25 bg-black/60 text-[10px] font-bold uppercase text-white shadow-lg backdrop-blur"
+              title={tactil ? undefined : "Cambiar de vista (V)"}
+              aria-label={primera ? "Pasar a tercera persona" : "Pasar a primera persona"}
+            >
+              {primera ? <Eye className="h-5 w-5" aria-hidden /> : <PersonStanding className="h-5 w-5" aria-hidden />}
+              {primera ? "1ª pers." : "3ª pers."}
+            </button>
             <button
               type="button"
               onClick={() => control.current?.bailar(!bailando)}
@@ -370,6 +390,15 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             >
               <Music className="h-5 w-5" aria-hidden />
               Bailar
+            </button>
+            <button
+              type="button"
+              onClick={() => control.current?.tomar()}
+              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-white/25 bg-black/60 text-[10px] font-bold uppercase text-white shadow-lg backdrop-blur"
+              title={tactil ? undefined : "Tomar (T)"}
+            >
+              <CupSoda className="h-5 w-5" aria-hidden />
+              Tomar
             </button>
             <button
               type="button"
@@ -395,7 +424,15 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             )}
             {!tactil && (
               <p className="whitespace-nowrap rounded-full bg-black/55 px-4 py-2 text-[11px] text-white/85 backdrop-blur sm:text-xs">
-                <b>WASD</b> para caminar · <b>← →</b> para girar · <b>Shift</b> para correr · <b>B</b> bailar · <b>F</b> fumar · arrastrá para mirar
+                {mouseTomado ? (
+                  <>
+                    <b>WASD</b> caminar · <b>Shift</b> correr · <b>B</b> bailar · <b>T</b> tomar · <b>F</b> fumar · <b>V</b> vista · <b>Esc</b> suelta el mouse
+                  </>
+                ) : (
+                  <>
+                    <b>Hacé click en el mapa</b> para mirar con el mouse · <b>WASD</b> caminar · <b>B</b> bailar · <b>T</b> tomar · <b>V</b> vista
+                  </>
+                )}
               </p>
             )}
             <button
