@@ -117,6 +117,9 @@ export const promoVigente = (p: EventPromo, ahora = Date.now()): boolean => {
   return true;
 };
 
+/** La promo de Black Friday: la reconoce el nombre ("Black Friday 30% OFF"). */
+export const esBlackFriday = (p: { name: string }): boolean => /black\s*friday/i.test(p.name);
+
 /**
  * Desde cuántas horas antes del fin la promo pasa de "Hasta el vie 12/10" a
  * contador ("Termina en 5 h 12 min"). Un contador de 20 días no genera
