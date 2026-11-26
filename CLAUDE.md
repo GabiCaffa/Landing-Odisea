@@ -2291,7 +2291,15 @@ tiene un millón de caras.
     toque previo de la persona, p. ej. al entrar por un link en iOS), queda "esperando" con el
     botón titilando y **suena con el primer toque o tecla en cualquier parte del mapa**; si
     ni así arranca, aparece el reproductor de SoundCloud para darle play. El volumen sigue al
-    mapa (`volumenMusica()` del motor): caminando, de 100% cerca del escenario a 25% lejos.
+    mapa (`volumenMusica()` del motor): caminando, de 100% cerca del escenario a 40% lejos;
+    desde las vistas, 65-90%.
+  - **"Sonando" = el tema AVANZA** (evento `PLAY_PROGRESS`), no el evento `PLAY`: con el audio
+    bloqueado por el navegador SoundCloud igual avisa PLAY, y la primera versión dejaba el
+    botón en naranja sin sonido y sin el aviso de "Tocá el mapa" (reportado por el autor
+    después del merge). `intentar()` hace `pause()` + `play()` (si SoundCloud cree que ya
+    suena, `play()` solo no hace nada) y a los 3,5 s se fija si avanzó. Una pausa sólo cuenta
+    si estaba sonando. No se pudo simular un navegador que bloquee: en el de pruebas el audio
+    arranca solo.
   - **Ojo**: al entrar al mapa se carga SoundCloud (tercero, con sus cookies) aunque nadie
     toque nada. Conviene mencionarlo en la Política de Privacidad. El set actual es de un
     usuario de SoundCloud ("bavikon"): si lo borra o lo hace privado, deja de sonar.
