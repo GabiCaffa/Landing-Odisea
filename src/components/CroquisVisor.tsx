@@ -280,6 +280,10 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
         <div className="min-w-0">
           <h2 className="truncate text-xl font-black tracking-tight sm:text-2xl">{predio?.nombre ?? "Mapa del predio"}</h2>
+          {/* Pedido del autor: que quede claro que es un juego en desarrollo. */}
+          <p className="mt-1 inline-flex items-center rounded-full border border-[#F25C26]/60 bg-black/50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#F25C26] sm:text-[11px]">
+            Demo en desarrollo · versión cómica
+          </p>
           {predio && <p className="mt-0.5 line-clamp-2 text-xs text-white/70 sm:text-sm">{predio.subtitulo}</p>}
           {/* Debajo del nombre y no al lado de los botones: en un celular le
               comía el título entero. */}

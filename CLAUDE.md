@@ -2235,6 +2235,17 @@ personaje propio** con el vaso de ODÍSEA en la mano, en primera o tercera perso
   atardecer, 0,32 de noche); si no, quedaban negros.
 - En el celular, Vista, Bailar, Tomar y Fumar van en dos columnas: en un teléfono acostado
   no entran cuatro botones uno arriba del otro.
+- **La gente no se pisa ni se mete en las cosas** (pedido del autor): al repartirla se
+  respeta una distancia entre personas (0,8 m bailando, 0,6 m en las rondas), medio metro
+  de las vallas, lo sólido de la caminata (barras, baños, DJ…), 1,3 m de los postes finos
+  (torres de luz, banderas, palos de rugby) y los molinetes del control. En una zona en alto
+  (el VIP sobre el escenario) no se miran los sólidos: se está parado encima.
+- **Fuera de la pista la gente está en rondas** de 2 a 4, mirándose, charlando o tomando.
+  Antes cada uno miraba para cualquier lado y en la entrada parecía que hablaban solos. El
+  que queda solo (no entró la ronda) no habla: toma o está quieto.
+- **El visor dice "Demo en desarrollo · versión cómica"** bajo el nombre del predio,
+  pedido del autor: los personajes y las animaciones no están a la altura todavía y se
+  publica igual como demo.
 - En desarrollo: `__croquis.reales()`, `ir(x, z, giro)`, `mover(x, y)`, `vista(primera)`,
   `tomar()`, `fumar()`, `bailar(true)` y `jugador()`, para probar con el panel oculto.
 - Probado en navegador: el Golf de día y de noche (la gente bailando y tomando, el

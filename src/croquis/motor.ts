@@ -1156,6 +1156,37 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   conos.castShadow = conos2.castShadow = copas.castShadow = true;
   escena.add(troncos, conos, conos2, copas);
 
+  // Lo que frena: las vallas (no se cruzan), las barras, baños, auxilios, el DJ
+  // y la pantalla (no se atraviesan) y la gente (se la esquiva). Los controles
+  // y los arcos de ingreso se atraviesan: son por donde se entra.
+  const tramos: [Punto, Punto][] = predio.vallas.flatMap((v) =>
+    v.puntos.slice(1).map((pt, i) => [v.puntos[i], pt] as [Punto, Punto])
+  );
+  const SOLIDOS = new Set<TipoPieza>(["barra", "banos", "auxilios", "pantalla", "arbolNavidad", "contenedor"]);
+  const obstaculos: [number, number, number, number][] = [];
+  for (const { tipo, g } of gruposPieza) {
+    if (g.userData.solido) {
+      const [w, d, cx, cz] = g.userData.solido as number[];
+      const caja3 = new THREE.Box3();
+      g.updateMatrixWorld(true);
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        caja3.expandByPoint(new THREE.Vector3(cx + (sx * w) / 2, 0, cz + (sz * d) / 2).applyMatrix4(g.matrixWorld));
+      }
+      obstaculos.push([caja3.min.x - 0.3, caja3.max.x + 0.3, caja3.min.z - 0.3, caja3.max.z + 0.3]);
+      continue;
+    }
+    if (!SOLIDOS.has(tipo)) continue;
+    g.updateMatrixWorld(true);
+    const caja3 = new THREE.Box3();
+    g.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || (o as THREE.InstancedMesh).isInstancedMesh) return;
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      if (mats.some((x) => x.transparent)) return; // los haces de luz
+      caja3.expandByObject(m);
+    });
+    if (!caja3.isEmpty()) obstaculos.push([caja3.min.x - 0.3, caja3.max.x + 0.3, caja3.min.z - 0.3, caja3.max.z + 0.3]);
+  }
   // ── Gente ──
   // Cada persona son piezas de malla instanciada: piernas (con zapatillas),
   // remera con brazos, piel (cabeza, cuello y manos) y pelo. Hay dos posturas
@@ -1171,6 +1202,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     ritmo: number;
     giro: number;
     baila: boolean;
+    /** Está en una ronda con otros (charla); si no, está sola. */
+    grupo: boolean;
     escala: number;
     arriba: boolean;
     idx: number;
@@ -1182,6 +1215,45 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const pedidas = predio.zonas.reduce((s, z) => s + (area(z.poligono) * (z.gente ?? 0)) / 100, 0);
   const factor = pedidas > tope ? tope / pedidas : 1;
   const djs = predio.piezas.filter((pz) => pz.tipo === "dj");
+  // Nadie parado adentro de otro ni de una cosa: una grilla de 1 m para mirar
+  // a los vecinos rápido, las vallas, lo sólido y los postes finos (torres de
+  // luz, banderas, palos de rugby). En una zona en alto (el VIP arriba del
+  // escenario) no se miran los sólidos: se está parado encima.
+  const grilla = new Map<string, Punto[]>();
+  const celda = (x: number, z: number) => `${Math.floor(x)},${Math.floor(z)}`;
+  const postesFinos = predio.piezas.filter((pz) => ["torreLuz", "palosRugby", "bandera", "banderaGolf"].includes(pz.tipo));
+  const distSegmento = ([px, pz]: Punto, [ax, az]: Punto, [bx, bz]: Punto) => {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const l2 = dx * dx + dz * dz || 1;
+    const k = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / l2));
+    return Math.hypot(px - (ax + k * dx), pz - (az + k * dz));
+  };
+  // Los molinetes del control se atraviesan caminando, pero nadie se queda parado adentro.
+  const molinetes: [number, number, number, number][] = gruposPieza
+    .filter(({ tipo }) => tipo === "control")
+    .map(({ g }) => {
+      g.updateMatrixWorld(true);
+      const c = new THREE.Box3().setFromObject(g);
+      return [c.min.x - 0.4, c.max.x + 0.4, c.min.z - 0.4, c.max.z + 0.4] as [number, number, number, number];
+    });
+  const hayLugar = (pt: Punto, elevada: boolean, separacion: number) => {
+    const [x, z] = pt;
+    if (!elevada && obstaculos.some(([a, b, c, d]) => x > a && x < b && z > c && z < d)) return false;
+    if (molinetes.some(([a, b, c, d]) => x > a && x < b && z > c && z < d)) return false;
+    if (tramos.some(([a, b]) => distSegmento(pt, a, b) < 0.5)) return false;
+    if (postesFinos.some((pz) => Math.hypot(pz.x - x, pz.z - z) < 1.3)) return false;
+    for (let i = -1; i <= 1; i++)
+      for (let j = -1; j <= 1; j++)
+        for (const [ox, oz] of grilla.get(celda(x + i, z + j)) ?? []) if (Math.hypot(ox - x, oz - z) < separacion) return false;
+    return true;
+  };
+  const ocupar = ([x, z]: Punto) => {
+    const k = celda(x, z);
+    const l = grilla.get(k);
+    if (l) l.push([x, z]);
+    else grilla.set(k, [[x, z]]);
+  };
   predio.zonas.forEach((z, i) => {
     const n = Math.round(((area(z.poligono) * (z.gente ?? 0)) / 100) * factor);
     if (!n) return;
@@ -1198,20 +1270,19 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       const cz = (z0 + z1) / 2;
       foco = djs.reduce((a, b) => (Math.hypot(b.x - cx, b.z - cz) < Math.hypot(a.x - cx, a.z - cz) ? b : a));
     }
-    let hechas = 0;
-    for (let k = 0; hechas < n && k < n * 40; k++) {
-      const pt: Punto = [x0 + sorteo() * (x1 - x0), z0 + sorteo() * (z1 - z0)];
-      if (!dentro(pt, z.poligono)) continue;
-      // La persona es de la ÚLTIMA zona que la contiene: así el VIP, que está
-      // dibujado arriba de General, no recibe gente de los dos lados.
+    const elevada = !!z.altura;
+    // La persona es de la ÚLTIMA zona que la contiene: así el VIP, que está
+    // dibujado arriba de General, no recibe gente de los dos lados.
+    const esDeAca = (pt: Punto) => {
+      if (!dentro(pt, z.poligono)) return false;
       let duena = -1;
       predio.zonas.forEach((otra, j) => {
         if (dentro(pt, otra.poligono)) duena = j;
       });
-      if (duena !== i) continue;
-      const giro = foco
-        ? Math.atan2(foco.x - pt[0], foco.z - pt[1]) + (sorteo() - 0.5) * 0.9
-        : sorteo() * Math.PI * 2;
+      return duena === i;
+    };
+    const sumar = (pt: Punto, giro: number, grupo: boolean) => {
+      ocupar(pt);
       gente.push({
         x: pt[0],
         y: z.altura ?? 0,
@@ -1220,12 +1291,46 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         ritmo: 5 + sorteo() * 3,
         giro,
         baila,
+        grupo,
         escala: 0.92 + sorteo() * 0.16,
         arriba: baila && sorteo() < (pista ? 0.45 : 0.18),
         idx: 0,
         fig: null as unknown as Figurante,
       });
-      hechas++;
+    };
+    let hechas = 0;
+    for (let k = 0; hechas < n && k < n * 40; k++) {
+      const pt: Punto = [x0 + sorteo() * (x1 - x0), z0 + sorteo() * (z1 - z0)];
+      if (!esDeAca(pt)) continue;
+      if (baila) {
+        // Bailando se mueven los brazos: un poco más de lugar.
+        if (!hayLugar(pt, elevada, 0.8)) continue;
+        const giro = foco
+          ? Math.atan2(foco.x - pt[0], foco.z - pt[1]) + (sorteo() - 0.5) * 0.9
+          : sorteo() * Math.PI * 2;
+        sumar(pt, giro, false);
+        hechas++;
+        continue;
+      }
+      // Fuera de la pista la gente está en ronda: de a 2, 3 o 4, mirándose. Sola
+      // y hablando parecía que hablaba con nadie.
+      const cuantos = Math.min(n - hechas, 2 + Math.floor(sorteo() * 3));
+      const radio = 0.45 + cuantos * 0.12;
+      const base = sorteo() * Math.PI * 2;
+      const ronda: Punto[] = [];
+      for (let m = 0; m < cuantos; m++) {
+        const a = base + (m / cuantos) * Math.PI * 2 + (sorteo() - 0.5) * 0.4;
+        const q: Punto = [pt[0] + Math.sin(a) * radio, pt[1] + Math.cos(a) * radio];
+        if (esDeAca(q) && hayLugar(q, elevada, 0.6) && ronda.every(([rx, rz]) => Math.hypot(rx - q[0], rz - q[1]) > 0.55))
+          ronda.push(q);
+      }
+      if (!ronda.length) continue;
+      for (const q of ronda) {
+        // Mirando al centro de la ronda (o, si quedó sola, hacia cualquier lado).
+        const giro = ronda.length > 1 ? Math.atan2(pt[0] - q[0], pt[1] - q[1]) + (sorteo() - 0.5) * 0.3 : sorteo() * Math.PI * 2;
+        sumar(q, giro, ronda.length > 1);
+        hechas++;
+      }
     }
   });
 
@@ -1293,7 +1398,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       giro: pp.giro,
       escala: pp.escala,
       modelo: r() % CANT_PERSONAS,
-      accion: pp.baila ? "bailar" : otra < 0.4 ? "charlar" : otra < 0.7 ? "tomar" : "quieto",
+      // En una ronda se charla o se toma; sola, nadie habla.
+      accion: pp.baila ? "bailar" : pp.grupo ? (otra < 0.55 ? "charlar" : "tomar") : otra < 0.5 ? "tomar" : "quieto",
       fase: sorteo(),
     };
     if (pp.arriba) {
@@ -1394,37 +1500,6 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   luzMano.position.set(0.6, 1.2, 0.8);
   escenaMano.add(luzMano);
 
-  // Lo que frena: las vallas (no se cruzan), las barras, baños, auxilios, el DJ
-  // y la pantalla (no se atraviesan) y la gente (se la esquiva). Los controles
-  // y los arcos de ingreso se atraviesan: son por donde se entra.
-  const tramos: [Punto, Punto][] = predio.vallas.flatMap((v) =>
-    v.puntos.slice(1).map((pt, i) => [v.puntos[i], pt] as [Punto, Punto])
-  );
-  const SOLIDOS = new Set<TipoPieza>(["barra", "banos", "auxilios", "pantalla", "arbolNavidad", "contenedor"]);
-  const obstaculos: [number, number, number, number][] = [];
-  for (const { tipo, g } of gruposPieza) {
-    if (g.userData.solido) {
-      const [w, d, cx, cz] = g.userData.solido as number[];
-      const caja3 = new THREE.Box3();
-      g.updateMatrixWorld(true);
-      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-        caja3.expandByPoint(new THREE.Vector3(cx + (sx * w) / 2, 0, cz + (sz * d) / 2).applyMatrix4(g.matrixWorld));
-      }
-      obstaculos.push([caja3.min.x - 0.3, caja3.max.x + 0.3, caja3.min.z - 0.3, caja3.max.z + 0.3]);
-      continue;
-    }
-    if (!SOLIDOS.has(tipo)) continue;
-    g.updateMatrixWorld(true);
-    const caja3 = new THREE.Box3();
-    g.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh || (o as THREE.InstancedMesh).isInstancedMesh) return;
-      const mats = Array.isArray(m.material) ? m.material : [m.material];
-      if (mats.some((x) => x.transparent)) return; // los haces de luz
-      caja3.expandByObject(m);
-    });
-    if (!caja3.isEmpty()) obstaculos.push([caja3.min.x - 0.3, caja3.max.x + 0.3, caja3.min.z - 0.3, caja3.max.z + 0.3]);
-  }
   // La gente NO frena: se la atraviesa. Chocar con cada persona hacía la
   // caminata trabada, y el mapa es para recorrer el lugar.
   const ocupado = (x: number, z: number) => obstaculos.some(([a, b, c, d]) => x > a && x < b && z > c && z < d);
