@@ -2941,6 +2941,13 @@ precio de ticketera (con comisión). 20% sobre $1000 = $800 contra $1150 ≈ 30%
 Se apaga sola cuando vence la promo. Sin número en el nombre, la franja dice
 sólo "Black Friday".
 
+**Mientras Black Friday esté vigente en algún evento, TODAS las tarjetas a la
+venta van en negro** (`modoBlack`, lo calcula `EventsSection`): las que no tienen
+la promo muestran el cartel del sitio en grande ("BLACK FRIDAY 15% OFF"). Es
+sólo cómo se ven: el precio no cambia (el 15% ya está en el precio cargado).
+Quedan normales las agotadas, los teasers y, si no hay cartel cargado, las que
+no tienen la promo. La promo se reconoce con `esBlackFriday` (`ticketPromos.ts`).
+
 ## 6.1 Promo cumpleaños en el sitio (sin migración)
 
 La card 02 de `PromosSection` era un link fijo a WhatsApp ("Quiero info"). Ahora abre

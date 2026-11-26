@@ -7,7 +7,7 @@ import { playHover, playThud } from "@/lib/spookySound";
 import { imagenRedimensionada, srcSetRedimensionado, PROPORCION_EVENTO } from "@/lib/imagenes";
 import { ImageTransform, DEFAULT_IMAGE_TRANSFORM } from "@/contexts/AuthContext";
 import { EventTicket, loteAgotado, stockDelLote, stockEsAutomatico, textoStockLote } from "@/lib/ticketTypes";
-import { EventPromo, promoVigente } from "@/lib/ticketPromos";
+import { EventPromo, esBlackFriday, promoVigente } from "@/lib/ticketPromos";
 import { urlDeEvento } from "@/lib/rutas";
 import { stockAMostrar } from "@/lib/stockHoja";
 import { useCartelEventos } from "@/contexts/ThemeContext";
@@ -75,7 +75,19 @@ interface EventCardProps {
    * quien la renderiza deja de pasarlo y la tarjeta queda normal.
    */
   revealAt?: string;
+  /**
+   * Black Friday está activo en ALGÚN evento. Las tarjetas sin la promo también
+   * se ponen en negro, con el cartel del sitio ("15% OFF") en grande: es sólo
+   * cómo se ve, el precio no cambia.
+   */
+  modoBlack?: boolean;
 }
+
+/** "BLACK FRIDAY 30% OFF" → "30% OFF"; "15%" → "15% OFF". Sin porcentaje, null. */
+const porcentajeOff = (texto: string): string | null => {
+  const m = texto.match(/\d+\s*%(\s*off)?/i)?.[0].replace(/\s+/g, " ").toUpperCase();
+  return m ? (/OFF/.test(m) ? m : `${m} OFF`) : null;
+};
 
 const EventCard = ({
   slug,
@@ -96,6 +108,7 @@ const EventCard = ({
   vertical = false,
   etiqueta,
   revealAt,
+  modoBlack = false,
 }: EventCardProps) => {
   const pos = imagePosition ?? DEFAULT_IMAGE_TRANSFORM;
   // Teaser (v49): sin link, sin compra, sin nada que el flyer o la descripción regalen.
@@ -128,11 +141,16 @@ const EventCard = ({
   // porque lo que se anuncia es contra el precio de la ticketera (con la
   // comisión), no contra el precio de la web: un 20% de la web es ~30% contra
   // la ticketera. Se apaga sola cuando vence la promo.
-  const promoBlack = vigentes.find((p) => /black\s*friday/i.test(p.name));
-  const offBlack = promoBlack
-    ? (promoBlack.name.match(/\d+\s*%(\s*off)?/i)?.[0].replace(/\s+/g, " ").toUpperCase() ?? null)
-    : null;
-  const textoOffBlack = offBlack ? (/off/i.test(offBlack) ? offBlack : `${offBlack} OFF`) : null;
+  const promoBlack = vigentes.find(esBlackFriday);
+  // En negro: la que tiene la promo, y mientras dure Black Friday también las
+  // demás que estén a la venta y tengan cartel (sólo cómo se ven: el 15% ya
+  // está en el precio cargado, no se descuenta nada).
+  const negra = !isSoldOut && !proximo && (!!promoBlack || (modoBlack && !!cartel));
+  const textoOffBlack = promoBlack
+    ? porcentajeOff(promoBlack.name)
+    : negra
+      ? (porcentajeOff(cartel) ?? cartel)
+      : null;
 
   const etiquetas = [...new Set(vigentes.filter((p) => p !== promoBlack).map((p) => p.name))].slice(0, 3);
 
@@ -150,7 +168,7 @@ const EventCard = ({
      */
     <article
       onMouseEnter={playHover}
-      className={`evento-card card-techno relative h-full w-full overflow-hidden ${promoBlack ? "evento-black " : ""}${
+      className={`evento-card card-techno relative h-full w-full overflow-hidden ${negra ? "evento-black " : ""}${
         vertical
           ? "flex flex-col"
           : "grid grid-cols-[104px_minmax(0,1fr)] gap-x-3 gap-y-3 p-3 sm:flex sm:flex-col sm:gap-0 sm:p-0"
@@ -235,7 +253,7 @@ const EventCard = ({
             no descuenta nada, sólo avisa. Con el evento agotado no va. */}
         {etiqueta && !isSoldOut && !proximo && (
           <div
-            className={`evento-promo absolute ${promoBlack ? "bottom-[5.25rem]" : "bottom-3"} left-3 z-[3] max-w-[calc(100%-1.5rem)] rounded-full bg-black/80 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/25 backdrop-blur ${
+            className={`evento-promo absolute ${negra ? "bottom-[5.25rem]" : "bottom-3"} left-3 z-[3] max-w-[calc(100%-1.5rem)] rounded-full bg-black/80 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-white/25 backdrop-blur ${
               vertical ? "block" : "hidden sm:block"
             }`}
           >
@@ -255,7 +273,7 @@ const EventCard = ({
         ))}
 
         {/* Black Friday: la franja negra con el porcentaje bien grande. */}
-        {promoBlack && (
+        {negra && (
           <div
             className={`evento-black-sello absolute inset-x-0 bottom-0 z-[2] flex-col items-center bg-black/90 px-3 pb-2.5 pt-2 text-center text-white ${
               vertical ? "flex" : "hidden sm:flex"
@@ -340,7 +358,7 @@ const EventCard = ({
         </p>
 
         {/* Black Friday en la fila compacta de celular (la franja del flyer no entra en la miniatura). */}
-        {promoBlack && !vertical && (
+        {negra && !vertical && (
           <span className="mb-2 inline-flex w-fit items-baseline gap-1.5 rounded-md bg-black px-2 py-1 text-white ring-1 ring-white/30 sm:hidden">
             <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/75">Black Friday</span>
             {textoOffBlack && <span className="font-sport text-base font-black leading-none">{textoOffBlack}</span>}
@@ -403,10 +421,10 @@ const EventCard = ({
         ) : (
         <div className={`mt-auto flex items-stretch gap-2 ${vertical ? "" : "col-span-2 sm:col-auto"}`}>
           <span
-            className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm ${promoBlack ? "whitespace-nowrap " : ""} font-bold uppercase tracking-wide transition-all ${
+            className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm ${negra ? "whitespace-nowrap " : ""} font-bold uppercase tracking-wide transition-all ${
               isSoldOut
                 ? "border border-tinta/20 text-tinta"
-                : promoBlack
+                : negra
                   ? "bg-white text-black"
                   : "bg-celeste text-accent-foreground"
             }`}
@@ -415,7 +433,7 @@ const EventCard = ({
               ? "Ver la fecha"
               : dias > 1
                 ? `Elegí tu día (${dias})`
-                : promoBlack
+                : negra
                   ? `Comprar · ${textoOffBlack ?? "Black Friday"}`
                   : cartel
                   ? `Comprar · ${cartel}`

@@ -9,6 +9,7 @@ import { useStockHoja } from "@/lib/stockHoja";
 import { useTheme } from "@/contexts/ThemeContext";
 import SpookySpiders from "./SpookySpiders";
 import { useAhora } from "@/lib/proximamente";
+import { esBlackFriday, promoVigente } from "@/lib/ticketPromos";
 
 /**
  * Las próximas fechas, como un carrusel con la elegida grande al centro y las
@@ -54,6 +55,12 @@ const EventsSection = () => {
     // `ahora` fuerza el recálculo en el momento del desbloqueo (v49).
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [events, ahora]
+  );
+
+  // Black Friday vigente en alguna fiesta: todas las tarjetas a la venta van en
+  // negro (las demás muestran su "15% OFF", sin cambiar precio).
+  const modoBlack = visibleEvents.some((e) =>
+    e.dias.some((d) => d.promos.some((p) => esBlackFriday(p) && promoVigente(p)))
   );
 
   /** A dónde lleva la tarjeta. Una fiesta aparte va a su página sin tema. */
@@ -128,6 +135,7 @@ const EventsSection = () => {
                     dias={entrada.dias.length}
                     etiqueta={entrada.destino.badge}
                     revealAt={entrada.revealAt}
+                    modoBlack={modoBlack}
                     vertical
                   />
                 </div>
