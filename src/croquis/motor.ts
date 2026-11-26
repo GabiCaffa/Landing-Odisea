@@ -2070,7 +2070,6 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       mano,
       // Frena el bucle para sacar una captura de un momento exacto.
       congelar: () => cancelAnimationFrame(raf),
-      escena,
     };
   }
 
@@ -2102,7 +2101,6 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       corriendo = activo;
     },
     bailar: (activo) => ponerBaile(activo),
-    fumar: () => mano.fumar(),
     volumenMusica: () => {
       const f = predio.musica?.fuente ?? { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
       if (caminando) {

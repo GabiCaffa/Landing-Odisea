@@ -126,6 +126,8 @@ const golf: Predio = {
   ],
   piezas,
   inicio: en(197, 742),
+  // Suena al entrar al mapa; caminando, más fuerte cerca del DJ.
+  musica: { soundcloud: "https://soundcloud.com/roulien/sets/nick-fanciulli", fuente: en(140, 272) },
   focos: [
     { ...en(140, 300), color: "#ff2a4a" },
     { ...en(406, 360), color: "#a855f7" },
