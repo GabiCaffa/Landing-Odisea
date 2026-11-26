@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Hora, Pieza, Predio, Punto, TipoPieza, Vista, ZonaPredio } from "./tipos";
 import { crearManoConVaso } from "./personaje";
+import { CANT_PEINADOS, crearGenteReal, type Figurante } from "./gente";
 
 /**
  * El motor del croquis 3D: arma la escena de un `Predio` (datos) con piezas
@@ -15,7 +16,8 @@ import { crearManoConVaso } from "./personaje";
  *   igual con materiales emisivos y en un celular de gama media es la
  *   diferencia entre andar fluido y trabarse.
  * - **La gente es UNA malla instanciada** (cuerpo + cabeza): cientos de
- *   personas cuestan dos llamadas de dibujo.
+ *   personas cuestan pocas llamadas de dibujo. Las más cercanas a la cámara se
+ *   cambian por personajes con cara y animaciones (`gente.ts`).
  * - **Se dibuja un cuadro apenas se arma**, sin esperar al bucle de animación:
  *   con la pestaña en segundo plano `requestAnimationFrame` no corre, y el
  *   mapa tiene que verse igual al volver.
@@ -1162,6 +1164,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     escala: number;
     arriba: boolean;
     idx: number;
+    /** Cómo se ve si la dibuja un personaje (`gente.ts`). Se arma con los colores. */
+    fig: Figurante;
   }
   const gente: Persona[] = [];
   const tope = op.movil ? 300 : 800;
@@ -1209,6 +1213,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         escala: 0.92 + sorteo() * 0.16,
         arriba: baila && sorteo() < (pista ? 0.45 : 0.18),
         idx: 0,
+        fig: null as unknown as Figurante,
       });
       hechas++;
     }
@@ -1262,12 +1267,38 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const pantalones = paleta(["#2b3f63", "#1a1a1e", "#3a4f7a", "#c9b79c", "#55555c", "#1f2a44"]);
   const pieles = paleta(["#f1c9a5", "#e2ad82", "#c98d62", "#a8714a", "#7a4b2e"]);
   const pelos = paleta(["#141010", "#2a1a12", "#4a2c18", "#8a5a2b", "#d8b26a", "#7a2c1a"]);
+  // El personaje usa una textura de piel clara: el tono es cuánto se la oscurece.
+  const pielBase = pieles[0];
   gente.forEach((pp, i) => {
     const r = () => Math.floor(sorteo() * 1e6);
-    mPiernas.setColorAt(i, pantalones[r() % pantalones.length]);
-    mPelo.setColorAt(i, pelos[r() % pelos.length]);
+    const pantalon = pantalones[r() % pantalones.length];
+    const pelo = pelos[r() % pelos.length];
+    mPiernas.setColorAt(i, pantalon);
+    mPelo.setColorAt(i, pelo);
     const remera = remeras[r() % remeras.length];
     const tono = pieles[r() % pieles.length];
+    const genero = (sorteo() < 0.5 ? 0 : 1) as 0 | 1;
+    pp.fig = {
+      x: pp.x,
+      y: pp.y,
+      z: pp.z,
+      giro: pp.giro,
+      escala: pp.escala,
+      genero,
+      peinado: r() % CANT_PEINADOS,
+      barba: genero === 0 && sorteo() < 0.3,
+      remera,
+      pantalon,
+      piel: new THREE.Color(
+        Math.min(1, tono.r / pielBase.r),
+        Math.min(1, tono.g / pielBase.g),
+        Math.min(1, tono.b / pielBase.b)
+      ),
+      pelo,
+      corto: sorteo() < 0.25,
+      accion: pp.baila ? "bailar" : sorteo() < 0.5 ? "charlar" : "quieto",
+      fase: sorteo(),
+    };
     if (pp.arriba) {
       mRemeraArriba.setColorAt(pp.idx, remera);
       mPielArriba.setColorAt(pp.idx, tono);
@@ -1281,6 +1312,15 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const ubicarGente = (t: number) => {
     const quietos = op.reducirMovimiento;
     gente.forEach((pp, i) => {
+      if (pp.fig.real) {
+        // La dibuja un personaje: la instanciada se achica a nada.
+        m4.makeScale(0, 0, 0);
+        mPiernas.setMatrixAt(i, m4);
+        mPelo.setMatrixAt(i, m4);
+        (pp.arriba ? mRemeraArriba : mRemeraAbajo).setMatrixAt(pp.idx, m4);
+        (pp.arriba ? mPielArriba : mPielAbajo).setMatrixAt(pp.idx, m4);
+        return;
+      }
       const fase = t * pp.ritmo + pp.fase;
       const salto = pp.baila && !quietos ? Math.abs(Math.sin(fase)) * 0.1 : 0;
       const giro = pp.giro + (pp.baila && !quietos ? Math.sin(fase * 0.5) * 0.18 : 0);
@@ -1297,6 +1337,35 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       }
     });
     for (const m of [mPiernas, mPelo, mRemeraAbajo, mRemeraArriba, mPielAbajo, mPielArriba]) m.instanceMatrix.needsUpdate = true;
+  };
+
+  // Las más cercanas a la cámara, con cara y animaciones (se cargan aparte;
+  // hasta que llegan, y si no llegan, se ve la gente de siempre).
+  const genteReal = crearGenteReal(escena, {
+    movil: op.movil,
+    sombras: !op.movil,
+    quietos: op.reducirMovimiento,
+  });
+  let proximaEleccion = 0;
+  const LEJOS_REAL = 70;
+  // Sólo la gente que está en cuadro: en las vistas desde arriba, la más
+  // cercana a la cámara suele quedar detrás de ella.
+  const cuadro = new THREE.Frustum();
+  const vp = new THREE.Matrix4();
+  const pecho = new THREE.Vector3();
+  const elegirCercanas = () => {
+    camara.updateMatrixWorld();
+    cuadro.setFromProjectionMatrix(vp.multiplyMatrices(camara.projectionMatrix, camara.matrixWorldInverse));
+    const cx = camara.position.x;
+    const cy = camara.position.y;
+    const cz = camara.position.z;
+    const cerca = gente
+      .map((pp) => ({ pp, d: (pp.x - cx) ** 2 + (pp.y + 1.2 - cy) ** 2 + (pp.z - cz) ** 2 }))
+      .filter((c) => c.d < LEJOS_REAL * LEJOS_REAL && cuadro.containsPoint(pecho.set(c.pp.x, c.pp.y + 1.2, c.pp.z)))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, genteReal.tope * 2)
+      .map((c) => c.pp.fig);
+    genteReal.elegir(cerca);
   };
 
   // Estado de la cámara (lo usan las vistas y la caminata).
@@ -1649,6 +1718,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     focos.forEach((f) => (f.intensity = H.focos));
     (lamparitas.material as THREE.MeshBasicMaterial).color.set(H.lamp);
     for (const r of rayos) r.visible = hora !== "dia";
+    genteReal.ponerRelleno({ dia: 0, atardecer: 0.12, noche: 0.32 }[hora]);
   };
 
   // ── Cámara y vistas ──
@@ -1697,6 +1767,11 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       controles.update();
     }
 
+    if (t >= proximaEleccion) {
+      proximaEleccion = t + 0.25;
+      elegirCercanas();
+    }
+    genteReal.actualizar(dt);
     ubicarGente(t);
     if (!op.reducirMovimiento) {
       for (const [i, b] of banderas.entries()) b.rotation.y = Math.sin(t * 1.6 + i) * 0.35;
@@ -1785,6 +1860,16 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         dibujar();
       },
       gente: gente.length,
+      // Cuántas personas están dibujadas con personaje (gente.ts).
+      reales: () => gente.filter((pp) => pp.fig.real).length,
+      escena,
+      ponerHora,
+      // Pararse en un punto, mirando a `giro` (radianes): para revisar de cerca.
+      ir: (x: number, z: number, giro = yaw) => {
+        yo.x = x;
+        yo.z = z;
+        yaw = giro;
+      },
       personaje: () => ({ x: yo.x, z: yo.z, y: piso, yaw, caminando, zona: zonaActual }),
       // Para entender por qué no se puede pasar por un lugar.
       obstaculos,
@@ -1827,6 +1912,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     fumar: () => mano.fumar(),
     liberar: () => {
       cancelAnimationFrame(raf);
+      genteReal.liberar();
       window.removeEventListener("keydown", alApretar);
       window.removeEventListener("keyup", alSoltar);
       window.removeEventListener("blur", alPerderFoco);

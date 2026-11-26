@@ -2172,6 +2172,55 @@ plano de colores:
 - Probado en navegador (vista general y caminata, Golf y Plaza). **El Pointer Lock no se
   pudo probar** (el navegador de pruebas no lo permite): hay que verlo en Chrome normal.
 
+### Gente con cara en el mapa: personajes animados de Quaternius (kit base)
+
+La gente del croquis eran cajas y esferas. Ahora **las personas más cercanas a la cámara
+son personajes de verdad**, con cara, pelo, ropa y animaciones (bailar, charlar, quedarse
+quieto). Pedido del autor: "que no sean muñecos, personajes con cara".
+
+- **De dónde salen**: los paquetes gratis de **Quaternius** (licencia **CC0**: uso
+  comercial libre, sin citar): *Universal Base Characters [Standard]* (hombre y mujer,
+  peinados) y *Universal Animation Library [Standard]* (43 animaciones, entre ellas baile).
+  Se bajaron de quaternius.itch.io; los zips (140 MB) **no van al repo**.
+- **Lo que va al repo**: `public/croquis/gente/` (cuerpo-m, cuerpo-f, pelos y
+  animaciones, **730 KB en total**), armado con `scripts/gente/armar-personas.mjs`
+  (instrucciones en su cabecera; las herramientas, gltf-transform y sharp, se instalan
+  aparte, no son dependencias del sitio). El script: texturas a WebP (1024 los cuerpos,
+  512 el pelo), sin mapas de normales ni rugosidad, cuerpo simplificado al 60 %,
+  compresión **meshopt**, peinados pasados al espacio del hueso de la cabeza (se cuelgan de
+  ella, sin esqueleto propio) y animaciones **sólo con giros**: Quaternius graba también la
+  traslación y la escala de cada hueso con las medidas del maniquí, y aplicadas tal cual le
+  cambiaban las proporciones a cada cuerpo. La pelvis queda como diferencia con su reposo y
+  en el sitio se le suma la del cuerpo (por eso la cadera sube y baja bien al bailar).
+- **Cómo convive con la multitud** (`src/croquis/gente.ts`): la multitud sigue siendo la
+  malla instanciada (cientos de personas en seis llamadas de dibujo). Cada ¼ s el motor
+  toma la gente **en cuadro y a menos de 70 m**, de la más cercana a la más lejana, y se
+  la reparte a un grupo fijo de personajes (**40 en escritorio, 14 en el celular**, mitad
+  hombres y mitad mujeres); la instanciada de ese lugar se achica a nada. Caminando, la
+  gente que se cruza de cerca siempre tiene cara. Cada persona guarda su apariencia
+  (`Persona.fig`: género, peinado, barba, colores, short, qué hace), así el personaje se
+  ve igual cada vez que le toca.
+- **La ropa se pinta por código**: los cuerpos gratis vienen en ropa interior y Quaternius
+  no tiene ropa de calle gratis (sólo un pack de ropa de fantasía). Cada vértice se marca
+  por el hueso que más lo mueve —torso y brazos: remera; cadera y piernas: pantalón; pies:
+  zapatillas— y el sombreador lo pinta con el color de esa persona, conservando como luz y
+  sombra lo pintado en la textura. La piel es la textura clara multiplicada por el tono.
+- **De noche** los personajes quedaban negros (el predio sólo tiene los focos): llevan una
+  luz propia según la hora (`ponerRelleno`: 0 de día, 0,12 al atardecer, 0,32 de noche).
+- **Peso y carga**: nada se baja hasta abrir el mapa. El lector de modelos (GLTFLoader +
+  meshopt) va en el chunk `motor`, que pasó de ~140 a ~190 KB gzip; `vendor` sigue en
+  137,19 KB. Si los modelos no cargan, el mapa sigue con la gente de siempre.
+- **Es el "kit base" para predios nuevos**: un predio sigue siendo un archivo de datos, y la
+  gente (cuántas, dónde, si bailan) sale de las zonas (`gente` por cada 100 m²), sin
+  tocar nada de esto.
+- En desarrollo, `__croquis.reales()` dice cuántos personajes hay en pantalla e
+  `__croquis.ir(x, z, giro)` para a la cámara en un punto, para revisar de cerca.
+- Probado en navegador: el Golf (pista de cerca, día y noche), el VIP elevado de la Plaza de
+  Toros, y 740×360 táctil (14 personajes). **No se probó en un celular real**: es lo que hay
+  que mirar (fluidez con 14 personajes animados en uno de gama media).
+- Quedó afuera: personajes caminando por el predio, y que el jugador se vea a sí mismo
+  (sigue en primera persona con la mano y el vaso).
+
 ### Croquis 3D de la Plaza de Toros (Navidad Colonia)
 
 Segundo predio del croquis (`src/croquis/plazaToros.ts`, para `navidad-colonia`). La plaza

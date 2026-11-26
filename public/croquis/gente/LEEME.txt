@@ -1,0 +1,9 @@
+Gente del croquis 3D (mapa de cada evento).
+
+Modelos y animaciones de Quaternius (quaternius.com), licencia CC0 1.0
+(dominio publico: uso comercial libre, sin atribucion obligatoria):
+  - Universal Base Characters [Standard]
+  - Universal Animation Library [Standard]
+
+Archivos armados y comprimidos con scripts/gente/armar-personas.mjs.
+La ropa no viene en los modelos: se pinta por codigo (src/croquis/gente.ts).
