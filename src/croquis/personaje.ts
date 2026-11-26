@@ -19,7 +19,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 const NARANJA = "#F25C26";
 
 /** El vaso: negro, bordes naranjas y el logo blanco dos veces (adelante y atrás). */
-function texturaVaso(): THREE.CanvasTexture {
+export function texturaVaso(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = 1024;
   c.height = 320;

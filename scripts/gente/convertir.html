@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Convertir FBX</title>
+    <script type="importmap">
+      { "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }
+    </script>
+  </head>
+  <body>
+    <pre id="log">cargando…</pre>
+    <script type="module">
+      import * as THREE from "three";
+      import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+      import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+
+      const log = (t) => (document.getElementById("log").textContent += "\n" + t);
+
+      const esperarImagenes = async (obj) => {
+        const esperas = [];
+        obj.traverse((o) => {
+          const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+          for (const m of mats)
+            for (const k of ["map", "normalMap", "specularMap", "emissiveMap", "alphaMap", "bumpMap"]) {
+              const img = m[k]?.image;
+              if (img && img instanceof HTMLImageElement && !img.complete)
+                esperas.push(new Promise((r) => { img.onload = r; img.onerror = r; }));
+            }
+        });
+        await Promise.all(esperas);
+        // TextureLoader pone la imagen recién cuando termina de cargar.
+        const mapas = [];
+        obj.traverse((o) => {
+          const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+          for (const m of mats) if (m.map) mapas.push(m.map);
+        });
+        for (let i = 0; i < 100 && mapas.some((t) => !t.image); i++) await new Promise((r) => setTimeout(r, 100));
+      };
+
+      window.convertir = async (nombre, { animacion = false, lado = 1024 } = {}) => {
+        const obj = await new FBXLoader().loadAsync("/fbx/" + encodeURIComponent(nombre));
+        await esperarImagenes(obj);
+        const info = { nombre, anims: obj.animations.map((a) => `${a.name}:${a.duration.toFixed(2)}s:${a.tracks.length}`), mallas: [], huesos: 0, altura: 0 };
+        obj.traverse((o) => {
+          if (o.isSkinnedMesh || o.isMesh) {
+            const g = o.geometry;
+            const mats = Array.isArray(o.material) ? o.material : [o.material];
+            info.mallas.push(`${o.name} v=${g.attributes.position.count} mats=${mats.map((m) => m.name + (m.map ? "[map " + (m.map.image?.width || "?") + "]" : "")).join("|")}`);
+          }
+          if (o.isBone) info.huesos++;
+        });
+        // Sólo el color: los demás mapas no se usan en el sitio, y alguno viene
+        // apuntando a un archivo que no está en el FBX.
+        info.sinImagen = [];
+        obj.traverse((o) => {
+          const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+          for (const m of mats) {
+            for (const k of ["normalMap", "specularMap", "emissiveMap", "alphaMap", "bumpMap", "aoMap", "lightMap", "envMap", "displacementMap"]) m[k] = null;
+            const img = m.map?.image;
+            const ok = img && ((img.naturalWidth ?? img.width) > 0);
+            if (m.map && !ok) {
+              info.sinImagen.push(m.name);
+              m.map = null;
+            }
+          }
+        });
+        const caja = new THREE.Box3().setFromObject(obj);
+        info.altura = +(caja.max.y - caja.min.y).toFixed(1);
+        // Para animaciones no se exportan mallas (vienen sin piel).
+        const glb = await new GLTFExporter().parseAsync(obj, {
+          binary: true,
+          animations: animacion ? obj.animations : [],
+          maxTextureSize: lado,
+          onlyVisible: false,
+        });
+        const salida = nombre.replace(/\.fbx$/i, ".glb").replace(/\s+/g, "_");
+        await fetch("/guardar/" + encodeURIComponent(salida), { method: "POST", body: glb });
+        info.salida = salida;
+        info.kb = Math.round(glb.byteLength / 1024);
+        log(JSON.stringify(info));
+        return info;
+      };
+      window.lista = () => fetch("/lista").then((r) => r.json());
+      log("listo");
+    </script>
+  </body>
+</html>
