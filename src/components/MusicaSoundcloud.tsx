@@ -29,7 +29,7 @@ interface WidgetSC {
   play(): void;
   pause(): void;
   setVolume(v: number): void;
-  bind(evento: string, cb: () => void): void;
+  bind(evento: string, cb: (datos?: { currentPosition?: number }) => void): void;
   getCurrentSound(cb: (s: SonidoSC | null) => void): void;
 }
 
@@ -37,7 +37,7 @@ declare global {
   interface Window {
     SC?: {
       Widget: ((el: HTMLIFrameElement) => WidgetSC) & {
-        Events: { READY: string; PLAY: string; PAUSE: string; FINISH: string; ERROR: string };
+        Events: { READY: string; PLAY: string; PLAY_PROGRESS: string; PAUSE: string; FINISH: string; ERROR: string };
       };
     };
   }
@@ -78,14 +78,35 @@ const MusicaSoundcloud = ({
   const widget = useRef<WidgetSC | null>(null);
   const volumenRef = useRef(volumen);
   volumenRef.current = volumen;
+  // Cuándo avanzó el tema por última vez. **"Sonando" es que avance, no el evento
+  // PLAY**: con el audio bloqueado por el navegador, SoundCloud igual avisa PLAY y el
+  // botón quedaba naranja sin que sonara nada.
+  const ultimoAvance = useRef(0);
+  const control = useRef(0);
+
+  /**
+   * Pide que suene y a los 3,5 s se fija si el tema avanzó. Si no: arrancando sola
+   * queda esperando un toque; si ya la tocaron, se muestra el reproductor.
+   * `pause()` antes de `play()`: si SoundCloud cree que ya está sonando, `play()` solo
+   * no hace nada.
+   */
+  const intentar = (siFalla: Estado) => {
+    const w = widget.current;
+    if (!w) return;
+    const pedido = Date.now();
+    w.pause();
+    w.play();
+    window.clearTimeout(control.current);
+    control.current = window.setTimeout(() => {
+      if (ultimoAvance.current < pedido) setEstado(siFalla);
+    }, 3500);
+  };
 
   const tocar = () => {
     if (estado === "sonando") return widget.current?.pause();
     if (widget.current) {
-      widget.current.play();
-      // Si ni con el toque arranca (iOS), se muestra el reproductor para darle play ahí.
-      if (estado === "esperando") window.setTimeout(() => setEstado((e) => (e === "esperando" ? "bloqueada" : e)), 3000);
-      return;
+      setEstado("cargando");
+      return intentar("bloqueada");
     }
     setEstado("cargando");
     setMontar(true);
@@ -95,7 +116,6 @@ const MusicaSoundcloud = ({
   useEffect(() => {
     if (!montar) return;
     let vivo = true;
-    let espera = 0;
     cargarApi()
       .then(() => {
         if (!vivo || !iframe.current || !window.SC) return;
@@ -103,30 +123,31 @@ const MusicaSoundcloud = ({
         const E = window.SC.Widget.Events;
         widget.current = w;
         w.bind(E.READY, () => {
-          w.setVolume(Math.round(volumenRef.current() * 100));
-          w.play();
-          // Si a los 3 s no sonó, el navegador lo frenó. Arrancando sola, se espera
-          // el primer toque; si la tocaron, se muestra el reproductor.
-          espera = window.setTimeout(
-            () => vivo && setEstado((e) => (e === "cargando" ? (auto ? "esperando" : "bloqueada") : e)),
-            3000
-          );
-        });
-        w.bind(E.PLAY, () => {
           if (!vivo) return;
-          setEstado("sonando");
+          w.setVolume(Math.round(volumenRef.current() * 100));
           w.getCurrentSound((s) => {
             if (vivo && s) setTema({ titulo: s.title ?? "SoundCloud", autor: s.user?.username, link: s.permalink_url ?? url });
           });
+          intentar(auto ? "esperando" : "bloqueada");
         });
-        w.bind(E.PAUSE, () => vivo && setEstado("pausada"));
+        // Suena de verdad recién cuando el tema avanza.
+        let ultimaPos = -1;
+        w.bind(E.PLAY_PROGRESS, (d) => {
+          const p = d?.currentPosition ?? 0;
+          if (!vivo || p <= ultimaPos) return;
+          ultimaPos = p;
+          ultimoAvance.current = Date.now();
+          setEstado((e) => (e === "sonando" ? e : "sonando"));
+        });
+        // Una pausa sólo cuenta si estaba sonando (bloqueado, SoundCloud también la avisa).
+        w.bind(E.PAUSE, () => vivo && setEstado((e) => (e === "sonando" ? "pausada" : e)));
         w.bind(E.FINISH, () => vivo && setEstado("pausada"));
         w.bind(E.ERROR, () => vivo && setEstado("error"));
       })
       .catch(() => vivo && setEstado("error"));
     return () => {
       vivo = false;
-      window.clearTimeout(espera);
+      window.clearTimeout(control.current);
     };
   }, [montar, url, auto]);
 
@@ -134,7 +155,8 @@ const MusicaSoundcloud = ({
   // cualquier parte la pone a sonar (ése sí cuenta como gesto de la persona).
   useEffect(() => {
     if (estado !== "esperando") return;
-    const arrancar = () => widget.current?.play();
+    // Con el toque de la persona el navegador ya deja: se vuelve a intentar.
+    const arrancar = () => intentar("bloqueada");
     window.addEventListener("pointerdown", arrancar, { once: true, capture: true });
     window.addEventListener("keydown", arrancar, { once: true, capture: true });
     return () => {

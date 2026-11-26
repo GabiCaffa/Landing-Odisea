@@ -2107,10 +2107,11 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       const f = predio.musica?.fuente ?? { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
       if (caminando) {
         const d = Math.hypot(yo.x - f.x, yo.z - f.z);
-        return THREE.MathUtils.clamp(1 - (d - 8) / 55, 0.25, 1);
+        return THREE.MathUtils.clamp(1 - (d - 8) / 60, 0.4, 1);
       }
+      // Desde las vistas (lejos, arriba) igual tiene que escucharse bien.
       const d = camara.position.distanceTo(new THREE.Vector3(f.x, 0, f.z));
-      return THREE.MathUtils.clamp(0.85 - (d - 20) / 200, 0.35, 0.8);
+      return THREE.MathUtils.clamp(0.9 - (d - 20) / 250, 0.65, 0.9);
     },
     fumar,
     tomar,
