@@ -30,8 +30,6 @@ export interface ZonaPredio {
    * cambia el lote. Al caminar por la zona se ofrece comprarla.
    */
   entradas?: { incluye: string[]; excluye?: string[] };
-  /** Al entrar caminando se abre la compra sola (una vez). Para VIP y backstage. */
-  especial?: boolean;
 }
 
 export type TipoPieza =
@@ -43,7 +41,11 @@ export type TipoPieza =
   | "control"
   | "acceso"
   | "arbolNavidad"
-  | "banderaGolf";
+  | "banderaGolf"
+  | "torreLuz"
+  | "palosRugby"
+  | "contenedor"
+  | "bandera";
 
 export interface Pieza {
   tipo: TipoPieza;
@@ -63,6 +65,11 @@ export interface Valla {
   puntos: Punto[];
   /** Guirnalda de lamparitas arriba. */
   luces?: boolean;
+  /**
+   * `reja` (por defecto): la valla de contención metálica, baja y que deja ver.
+   * `media`: media sombra negra de 2 m, como el cerco del perímetro en las fotos.
+   */
+  estilo?: "reja" | "media";
 }
 
 export interface Vista {

@@ -130,6 +130,10 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const [vertical, setVertical] = useState(() => window.matchMedia("(orientation: portrait)").matches);
   const caminandoRef = useRef(false);
   caminandoRef.current = caminando;
+  // El mouse tomado para mirar (Pointer Lock). Esc lo suelta: ese mismo Escape
+  // no tiene que sacar de la caminata.
+  const [mouseTomado, setMouseTomado] = useState(false);
+  const soltadoEn = useRef(0);
 
   useEffect(() => {
     const mq = window.matchMedia("(orientation: portrait)");
@@ -141,6 +145,7 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || comprandoRef.current) return;
+      if (document.pointerLockElement || Date.now() - soltadoEn.current < 400) return;
       if (caminandoRef.current) {
         caminandoRef.current = false;
         setCaminando(false);
@@ -170,6 +175,10 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
           movil,
           reducirMovimiento,
           onZona: (z) => setZona(z),
+          onMira: (t) => {
+            if (!t) soltadoEn.current = Date.now();
+            setMouseTomado(t);
+          },
         });
         setPredio(p);
         setVista(p.vistas[0]?.id ?? "");
@@ -216,21 +225,8 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
     control.current?.pausar(false);
   };
 
-  // Al entrar caminando a una zona especial (VIP, backstage) se abre la compra
-  // sola, con su entrada puesta. Una vez por zona: si la cierra y vuelve a
-  // entrar, no se la vuelve a poner adelante; queda el botón de abajo.
-  const yaOfrecidas = useRef(new Set<string>());
-  useEffect(() => {
-    if (!caminando || !zona || !zonaDatos?.especial || !entradasZona.length) return;
-    if (yaOfrecidas.current.has(zona.id)) return;
-    // Un respiro para que se vea dónde se entró antes de que aparezca el modal.
-    const id = window.setTimeout(() => {
-      yaOfrecidas.current.add(zona.id);
-      abrirCompra(entradasZona[0].name);
-    }, 700);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caminando, zona?.id, entradasZona.length]);
+  // La compra NO se abre sola al entrar a un sector (pedido del autor): queda
+  // el botón naranja de abajo, que cambia con el sector donde se está.
 
   const actual = predio?.vistas.find((v) => v.id === vista);
 
@@ -321,6 +317,9 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
               </p>
             </div>
           )}
+          {mouseTomado && (
+            <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/85 shadow" />
+          )}
           {tactil && vertical && (
             <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-2xl bg-black/65 p-3 text-center text-xs text-white/90 backdrop-blur">
               Poné el teléfono horizontal para caminar más cómodo.
@@ -357,7 +356,15 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             )}
             {!tactil && (
               <p className="whitespace-nowrap rounded-full bg-black/55 px-4 py-2 text-[11px] text-white/85 backdrop-blur sm:text-xs">
-                <b>WASD</b> para caminar · <b>← →</b> para girar · <b>Shift</b> para correr · arrastrá para mirar
+                {mouseTomado ? (
+                  <>
+                    <b>WASD</b> para caminar · <b>Shift</b> para correr · <b>Esc</b> suelta el mouse
+                  </>
+                ) : (
+                  <>
+                    <b>Hacé click en el mapa</b> para mirar con el mouse · <b>WASD</b> para caminar
+                  </>
+                )}
               </p>
             )}
             <button
