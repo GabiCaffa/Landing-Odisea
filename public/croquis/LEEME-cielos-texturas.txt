@@ -1,0 +1,10 @@
+Cielos y texturas del croquis 3D: Poly Haven (polyhaven.com), licencia CC0.
+
+cielos/dia.webp        kloofendal_48d_partly_cloudy_puresky (1k .hdr, exposición 0,9)
+cielos/atardecer.webp  belfast_sunset_puresky (1k .hdr, exposición 0,22)
+cielos/noche.webp      moonless_golf (1k .hdr, exposición 1,3)
+texturas/ladrillo.webp red_brick_03 (difusa 1k → 512)
+texturas/revoque.webp  plastered_wall_04 (difusa 1k → 512)
+texturas/arena.webp    red_sand (difusa 1k → 512)
+
+Los .hdr se pasan a imagen común con scripts/cielo-hdr-a-webp.mjs (ACES + sRGB).

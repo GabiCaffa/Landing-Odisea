@@ -6,6 +6,7 @@ import { crearManoConVaso } from "./personaje";
 import { crearGenteReal, type Figurante } from "./gente";
 import { crearJugador, type Jugador } from "./jugador";
 import { CANT_PERSONAS, cargarRecursos } from "./modelos";
+import { crearPostproceso } from "./postproceso";
 
 /**
  * El motor del croquis 3D: arma la escena de un `Predio` (datos) con piezas
@@ -162,7 +163,9 @@ function texturaTexto(texto: string, o: { fondo?: string; color?: string; alto?:
 
 function cartel(texto: string, altoMundo: number, fondo: string, color = "#ffffff") {
   const { tex, aspecto } = texturaTexto(texto, { fondo, color });
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  // Un pelo por debajo del blanco: así el brillo de las luces (postproceso.ts) no
+  // agarra los carteles, que con blanco pleno se veían como manchas.
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, color: 0xe6e6e6 }));
   s.scale.set(altoMundo * aspecto, altoMundo, 1);
   s.renderOrder = 10;
   return s;
@@ -294,6 +297,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const escena = new THREE.Scene();
   escena.fog = new THREE.Fog(0x000000, 140, 560);
   const camara = new THREE.PerspectiveCamera(42, 1, 0.5, 1500);
+  // Luz de ambiente con reflejos y, en escritorio, el brillo de las luces.
+  const post = crearPostproceso(renderer, escena, camara, { movil: op.movil });
 
   const controles = new OrbitControls(camara, canvas);
   controles.enableDamping = true;
@@ -356,6 +361,36 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     new THREE.MeshBasicMaterial({ map: cielos.noche, side: THREE.BackSide, fog: false, depthWrite: false })
   );
   escena.add(domo);
+  // Cielos de foto (Poly Haven, CC0; ver public/croquis/LEEME-cielos-texturas.txt).
+  // El degradé de arriba queda mientras llegan (~20 KB cada uno) o si no llegan.
+  // `uSol`: dónde está el sol en la foto (0..1 a lo ancho), para girar el domo
+  // y que coincida con la luz del sol de la escena.
+  const cielosFoto: Partial<Record<Hora, THREE.Texture>> = {};
+  const uSol: Record<Hora, number | null> = { dia: 0.6, atardecer: 0.69, noche: null };
+  const ponerCielo = (hora: Hora, sol: THREE.Vector3) => {
+    const foto = cielosFoto[hora];
+    (domo.material as THREE.MeshBasicMaterial).map = foto ?? cielos[hora];
+    (domo.material as THREE.MeshBasicMaterial).needsUpdate = true;
+    const u = uSol[hora];
+    if (foto && u !== null) {
+      // En SphereGeometry la columna u de la textura apunta a (-cos 2πu, sin 2πu).
+      const phi = u * Math.PI * 2;
+      domo.rotation.y = Math.atan2(Math.sin(phi), -Math.cos(phi)) - Math.atan2(sol.z, sol.x);
+    } else domo.rotation.y = 0;
+    post.ponerCielo(foto ?? null);
+  };
+  for (const h of ["dia", "atardecer", "noche"] as Hora[]) {
+    new THREE.TextureLoader().load(`/croquis/cielos/${h}.webp`, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.mapping = THREE.EquirectangularReflectionMapping;
+      cielosFoto[h] = t;
+      // Si es la hora que se está viendo, se cambia ya.
+      if (horaActual === h) {
+        ponerCielo(h, sol.position);
+        dibujar();
+      }
+    });
+  }
 
   // ── Piso: césped de cancha ──
   const texPasto = texturaPasto();
@@ -510,10 +545,44 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
    * arco de herradura abajo, dos ventanas arriba y la cornisa. Dos imágenes: el
    * color y lo que se prende de noche (el adentro de los arcos y las ventanas).
    */
+  // Texturas de foto (Poly Haven, CC0; public/croquis/texturas). Se piden una vez
+  // por archivo y cada uso lleva su copia con su propia repetición. Mientras no
+  // llegan, el material se ve con su color liso.
+  const fotos = new Map<string, { base: THREE.Texture; img?: HTMLImageElement; esperan: ((img: HTMLImageElement) => void)[] }>();
+  const textura = (nombre: string, rx: number, ry: number, alCargar?: (img: HTMLImageElement) => void) => {
+    let f = fotos.get(nombre);
+    if (!f) {
+      const nueva: { base: THREE.Texture; img?: HTMLImageElement; esperan: ((img: HTMLImageElement) => void)[] } = {
+        base: new THREE.TextureLoader().load(`/croquis/texturas/${nombre}.webp`, (t) => {
+          nueva.img = t.image as HTMLImageElement;
+          for (const cb of nueva.esperan.splice(0)) cb(nueva.img);
+        }),
+        esperan: [],
+      };
+      f = nueva;
+      f.base.colorSpace = THREE.SRGBColorSpace;
+      f.base.wrapS = f.base.wrapT = THREE.RepeatWrapping;
+      f.base.anisotropy = 4;
+      fotos.set(nombre, f);
+    }
+    // Quien necesita la imagen misma (la fachada la dibuja en su lienzo).
+    if (alCargar) {
+      if (f.img) alCargar(f.img);
+      else f.esperan.push(alCargar);
+    }
+    const base = f.base;
+    const t = base.clone();
+    t.repeat.set(rx, ry);
+    return t;
+  };
+  // Un material con foto: el color tiñe la textura (blanco = la foto tal cual).
+  const conFoto = (nombre: string, rx: number, ry: number, color = "#ffffff", extra: THREE.MeshStandardMaterialParameters = {}) =>
+    mate(color, { map: textura(nombre, rx, ry), flatShading: false, ...extra });
+
   function texturasFachada(repeticiones: number) {
     const W = 256;
     const H = 400;
-    const hacer = (noche: boolean) => {
+    const hacer = (noche: boolean, ladrillo?: HTMLImageElement) => {
       const c = document.createElement("canvas");
       c.width = W;
       c.height = H;
@@ -521,7 +590,13 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       // De noche la pared también se prende un poco (está iluminada desde abajo).
       ctx.fillStyle = noche ? "#3a2814" : "#c7aa78";
       ctx.fillRect(0, 0, W, H);
-      if (!noche) {
+      if (!noche && ladrillo) {
+        // Ladrillo de foto, en baldosas de 128 px (~4,75 m de fachada por 2).
+        for (let y = 0; y < H; y += 128) for (let x = 0; x < W; x += 128) ctx.drawImage(ladrillo, x, y, 128, 128);
+        ctx.fillStyle = "#d8c3a0";
+        ctx.fillRect(0, 34, W, 10);
+        ctx.fillRect(0, 196, W, 8);
+      } else if (!noche) {
         // Hiladas de ladrillo claro y la cornisa.
         ctx.fillStyle = "rgba(90,60,30,0.10)";
         for (let y = 0; y < H; y += 14) ctx.fillRect(0, y, W, 2);
@@ -555,7 +630,14 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       tex.repeat.set(repeticiones, 1);
       return tex;
     };
-    return { color: hacer(false), noche: hacer(true) };
+    const color = hacer(false);
+    // Cuando llega la foto del ladrillo, se redibuja el color de la fachada.
+    textura("ladrillo", 1, 1, (img) => {
+      const nuevo = hacer(false, img);
+      color.image = nuevo.image;
+      color.needsUpdate = true;
+    });
+    return { color, noche: hacer(true) };
   }
 
   // Escaleras: por dónde se sube caminando (ver `alturaEn`).
@@ -884,7 +966,11 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       const juntar = (gs: THREE.BufferGeometry[]) => mergeGeometries(gs) ?? gs[0];
 
       // Muro del ruedo, con el hueco del ingreso.
-      const muro = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 1.6, 96, 1, true, HUECO, VUELTA), mate("#7a2e1f", doble));
+      // Ladrillo (con un rojo de pintura encima, como el muro de una plaza de toros).
+      const muro = new THREE.Mesh(
+        new THREE.CylinderGeometry(R, R, 1.6, 96, 1, true, HUECO, VUELTA),
+        conFoto("ladrillo", Math.round((2 * Math.PI * R) / 2.5), 0.65, "#c0563f", doble)
+      );
       muro.position.y = 0.8;
       g.add(muro);
       const tapa = new THREE.RingGeometry(R, R + 0.3, 96, 1, 1.5 * Math.PI + HUECO, VUELTA);
@@ -909,7 +995,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         c.translate(0, y - altoC / 2, 0);
         contras.push(c);
       }
-      const asientos = new THREE.Mesh(juntar(huellas), mate("#c4c8cf", doble));
+      const asientos = new THREE.Mesh(juntar(huellas), conFoto("revoque", 40, 1, "#d6d8dc", doble));
       asientos.receiveShadow = true;
       g.add(asientos, new THREE.Mesh(juntar(contras), mate("#8d9096", doble)));
       // El túnel del ingreso, por debajo de las gradas.
@@ -919,7 +1005,13 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       const galeria = new THREE.RingGeometry(RT, RF, 96);
       galeria.rotateX(-Math.PI / 2);
       galeria.translate(0, ARRIBA, 0);
-      g.add(new THREE.Mesh(galeria, mate("#a89a86", doble)));
+      g.add(new THREE.Mesh(galeria, conFoto("revoque", 30, 2, "#bfb09a", doble)));
+      // El ruedo: arena (la fiesta es arriba de ella).
+      const ruedo = new THREE.Mesh(new THREE.CircleGeometry(R, 96), conFoto("arena", 10, 10, "#e8d2bb"));
+      ruedo.rotation.x = -Math.PI / 2;
+      ruedo.position.y = 0.004;
+      ruedo.receiveShadow = true;
+      g.add(ruedo);
       const { color, noche } = texturasFachada(Math.round((2 * Math.PI * RF) / 9.5));
       const matFachada = new THREE.MeshStandardMaterial({
         map: color,
@@ -935,7 +1027,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       g.add(fachada);
 
       // Almenas arriba de la fachada.
-      const arena = mate("#c7aa78");
+      // Torres y almenas: ladrillo, un poco más claro que el de la fachada.
+      const arena = conFoto("ladrillo", 4, 4, "#f2d6c0");
       const nAlmenas = Math.floor((2 * Math.PI * RF) / 2.4);
       const almenas = new THREE.InstancedMesh(new THREE.BoxGeometry(1.1, 1.2, 0.8), arena, nAlmenas);
       for (let i = 0; i < nAlmenas; i++) {
@@ -1880,16 +1973,16 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   // ── Hora del día ──
   let horaActual: Hora = "noche";
   const ponerHora = (hora: Hora) => {
+    post.ponerHora(hora);
     horaActual = hora;
     const H = {
       dia: { fondo: "#9cc9ef", cielo: ["#d6ecff", "#4a6b3a", 1.1], sol: ["#ffffff", 2.4, [70, 120, 50]], brillo: 0.12, focos: 0, lamp: "#8a8a8a" },
       atardecer: { fondo: "#e08a5c", cielo: ["#ffcfa0", "#3b2f25", 0.75], sol: ["#ffb070", 1.6, [-110, 35, 40]], brillo: 0.6, focos: 250, lamp: "#d8d8d8" },
       noche: { fondo: "#060912", cielo: ["#3a4a7a", "#0b0f0a", 0.32], sol: ["#9fb4ff", 0.45, [-60, 100, -40]], brillo: 1, focos: 700, lamp: "#ffffff" },
     }[hora];
-    (domo.material as THREE.MeshBasicMaterial).map = cielos[hora];
-    (domo.material as THREE.MeshBasicMaterial).needsUpdate = true;
-    // La niebla toma el color del horizonte, así lo lejano se funde con el cielo.
-    (escena.fog as THREE.Fog).color.set({ dia: "#cfe3f2", atardecer: "#8f5f66", noche: "#0c1020" }[hora]);
+    // La niebla toma el color del horizonte, así lo lejano se funde con el cielo
+    // (los de las fotos: celeste lavado, lila del atardecer y el resplandor de la noche).
+    (escena.fog as THREE.Fog).color.set({ dia: "#cfdcea", atardecer: "#8d8aa3", noche: "#151824" }[hora]);
     escena.background = new THREE.Color(H.fondo);
     cielo.color.set(H.cielo[0] as string);
     cielo.groundColor.set(H.cielo[1] as string);
@@ -1898,6 +1991,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     sol.intensity = H.sol[1] as number;
     const [sx, sy, sz] = H.sol[2] as number[];
     sol.position.set(sx, sy, sz);
+    ponerCielo(hora, sol.position);
     for (const e of emisivos) e.mat.emissiveIntensity = e.base * H.brillo;
     for (const z of Object.values(zonasMat)) z.emissiveIntensity = hora === "noche" ? 0.12 : 0.04;
     focos.forEach((f) => (f.intensity = H.focos));
@@ -1981,7 +2075,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
   /** Un cuadro: el predio y, caminando, la mano con el vaso encima de todo. */
   function dibujar() {
-    renderer.render(escena, camara);
+    post.dibujar();
     // Con el personaje cargado no hace falta la mano: se ve el cuerpo.
     if (!caminando || jugador) return;
     soporte.matrix.copy(camara.matrixWorld);
@@ -1998,6 +2092,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     const w = padre?.clientWidth || canvas.clientWidth || 800;
     const h = padre?.clientHeight || canvas.clientHeight || 600;
     renderer.setSize(w, h, false);
+    post.ajustar(w, h, renderer.getPixelRatio());
     camara.aspect = w / h;
     // En un celular parado el predio no entra a lo ancho: se abre el lente.
     // Caminando, el lente se abre como en un juego (si no, todo se ve encima).
@@ -2145,6 +2240,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
           mat.dispose();
         }
       });
+      post.liberar();
       renderer.dispose();
     },
   };

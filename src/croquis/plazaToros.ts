@@ -89,9 +89,10 @@ const piezas: Pieza[] = [
   { tipo: "acceso", x: 0, z: 25.4, rot: 180, largo: 5, texto: "INGRESO" },
   // Ambientación.
   { tipo: "arbolNavidad", x: -15, z: 18 },
-  // Sponsor: Ferant. Lonas en el muro del ruedo (mirando al centro) y dos
-  // paneles a los costados del escenario.
-  ...LONAS_MURO.map((a) => {
+  // Sponsors: Ferant y Lisoft, intercalados. Lonas en el muro del ruedo (mirando
+  // al centro), lonas grandes arriba de las gradas y un panel a cada costado del
+  // escenario.
+  ...LONAS_MURO.map((a, i) => {
     const [x, z] = en(25.9, a);
     return {
       tipo: "lona" as const,
@@ -101,11 +102,11 @@ const piezas: Pieza[] = [
       largo: 4.3,
       alto: 1.4,
       altura: 0.12,
-      imagen: "/sponsors/ferant-horizontal.png",
+      imagen: i % 2 ? "/sponsors/lisoft-horizontal.png" : "/sponsors/ferant-horizontal.png",
     };
   }),
   // Lonas grandes colgadas arriba de las gradas, que se ven desde todo el ruedo.
-  ...[0.9, 2.25, -0.9, -2.25].map((a) => {
+  ...[0.9, 2.25, -0.9, -2.25].map((a, i) => {
     const [x, z] = en(43.2, a);
     return {
       tipo: "lona" as const,
@@ -115,7 +116,7 @@ const piezas: Pieza[] = [
       largo: 9,
       alto: 2.93,
       altura: 10.9,
-      imagen: "/sponsors/ferant-horizontal.png",
+      imagen: i % 2 ? "/sponsors/lisoft-horizontal.png" : "/sponsors/ferant-horizontal.png",
     };
   }),
   ...[-1, 1].map((lado) => ({
@@ -125,7 +126,7 @@ const piezas: Pieza[] = [
     largo: 2.6,
     alto: 2.72,
     altura: 4.2,
-    imagen: "/sponsors/ferant-amarillo.png",
+    imagen: lado < 0 ? "/sponsors/ferant-amarillo.png" : "/sponsors/lisoft-cuadrado.png",
   })),
 ];
 
