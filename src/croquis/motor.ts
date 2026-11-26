@@ -1202,6 +1202,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     ritmo: number;
     giro: number;
     baila: boolean;
+    /** Baila con todo (sólo en las zonas con `baile: "fuerte"`); si no, suave. */
+    fuerte: boolean;
     /** Está en una ronda con otros (charla); si no, está sola. */
     grupo: boolean;
     escala: number;
@@ -1292,8 +1294,10 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         giro,
         baila,
         grupo,
+        fuerte: baila && z.baile === "fuerte" && sorteo() < 0.5,
         escala: 0.92 + sorteo() * 0.16,
-        arriba: baila && sorteo() < (pista ? 0.45 : 0.18),
+        // Brazos arriba, sólo donde se baila fuerte.
+        arriba: baila && z.baile === "fuerte" && sorteo() < (pista ? 0.45 : 0.3),
         idx: 0,
         fig: null as unknown as Figurante,
       });
@@ -1398,6 +1402,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       giro: pp.giro,
       escala: pp.escala,
       modelo: r() % CANT_PERSONAS,
+      fuerte: pp.fuerte,
       // En una ronda se charla o se toma; sola, nadie habla.
       accion: pp.baila ? "bailar" : pp.grupo ? (otra < 0.55 ? "charlar" : "tomar") : otra < 0.5 ? "tomar" : "quieto",
       fase: sorteo(),
@@ -1425,7 +1430,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
         return;
       }
       const fase = t * pp.ritmo + pp.fase;
-      const salto = pp.baila && !quietos ? Math.abs(Math.sin(fase)) * 0.1 : 0;
+      const salto = pp.baila && !quietos ? Math.abs(Math.sin(fase)) * (pp.fuerte ? 0.1 : 0.035) : 0;
       const giro = pp.giro + (pp.baila && !quietos ? Math.sin(fase * 0.5) * 0.18 : 0);
       q.setFromAxisAngle(ejeY, giro);
       m4.compose(pos.set(pp.x, pp.y + salto, pp.z), q, esc.setScalar(pp.escala));

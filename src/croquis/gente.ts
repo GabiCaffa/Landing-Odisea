@@ -33,6 +33,8 @@ export interface Figurante {
   /** Qué personaje es (0..7). */
   modelo: number;
   accion: AccionGente;
+  /** Baila con todo; si no, suave (`vestir`). */
+  fuerte?: boolean;
   /** 0..1: qué baile le toca y en qué punto de la animación arranca. */
   fase: number;
   /** Lo pone este módulo: la persona está dibujada con un personaje. */
@@ -127,12 +129,25 @@ export function crearGenteReal(
             ? "tomar"
             : "quieto";
     const clip = a.clips.get(nombre) ?? a.clips.get("quieto");
+    // Baile suave: el baile mezclado con estar parado (un tercio y dos tercios)
+    // y más lento. Se mueve al ritmo, en el lugar, sin los saltos y giros del
+    // baile entero, que queda para los sectores de baile fuerte.
+    const suave = nombre.startsWith("bailar") && !f.fuerte;
+    const quieto = a.clips.get("quieto");
     if (clip) {
       const acc = a.mezcla.clipAction(clip);
       acc.reset();
       acc.time = ((f.fase * 7.3) % 1) * clip.duration;
-      acc.timeScale = op.quietos ? 0 : 0.94 + ((f.fase * 13) % 1) * 0.12;
+      acc.timeScale = op.quietos ? 0 : suave ? 0.8 + ((f.fase * 13) % 1) * 0.1 : 0.94 + ((f.fase * 13) % 1) * 0.12;
+      acc.setEffectiveWeight(suave ? 0.33 : 1);
       acc.play();
+    }
+    if (suave && quieto) {
+      const base = a.mezcla.clipAction(quieto);
+      base.reset();
+      base.time = ((f.fase * 3.1) % 1) * quieto.duration;
+      base.setEffectiveWeight(0.67);
+      base.play();
     }
     a.mezcla.update(0);
     a.raiz.visible = true;

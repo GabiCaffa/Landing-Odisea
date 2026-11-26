@@ -48,7 +48,7 @@ export interface Recursos {
 
 const cargador = new GLTFLoader();
 cargador.setMeshoptDecoder(MeshoptDecoder);
-const cargar = (archivo: string) => cargador.loadAsync(BASE + archivo);
+
 
 const buscar = (raiz: THREE.Object3D, nombre: string) => {
   let hallado: THREE.Object3D | undefined;
@@ -113,10 +113,14 @@ function preparar(gltf: GLTF, anims: GLTF, sombras: boolean): Plantilla {
 }
 
 export function cargarRecursos(op: { movil: boolean; sombras: boolean }): Recursos {
+  // El celular baja su versión (`movil/`): texturas a la mitad, la mitad de
+  // triángulos y animaciones a 10 cuadros por segundo. ~800 KB en total.
+  const carpeta = BASE + (op.movil ? "movil/" : "");
+  const cargar = (archivo: string) => cargador.loadAsync(carpeta + archivo);
   const anims = cargar("animaciones.glb");
   const yo = Promise.all([cargar("yo.glb"), anims]).then(([g, a]) => preparar(g, a, op.sombras));
-  // En el celular, menos variedad de gente: cada persona son ~350 KB.
-  const cuantas = op.movil ? 3 : CANT_PERSONAS;
+  // En el celular, menos variedad de gente (cada una son ~115 KB).
+  const cuantas = op.movil ? 4 : CANT_PERSONAS;
   const gente = Array.from({ length: cuantas }, (_, i) =>
     // La gente se pide después del personaje propio, que es lo primero que se ve.
     yo

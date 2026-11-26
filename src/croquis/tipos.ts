@@ -25,6 +25,12 @@ export interface ZonaPredio {
   /** Gente por cada 100 m². 0 o ausente = vacía. */
   gente?: number;
   /**
+   * Cómo baila la gente de esta zona. Por defecto, suave (se mueve en el lugar).
+   * `fuerte`: la mitad baila con todo (los bailes de Mixamo enteros y brazos
+   * arriba). Va en uno o dos sectores (la pista): con todos así era un manicomio.
+   */
+  baile?: "fuerte";
+  /**
    * Qué entradas del evento son de esta zona, por palabras en su nombre (sin
    * tildes ni mayúsculas): así "VIP – 2do lote" sigue siendo del VIP cuando
    * cambia el lote. Al caminar por la zona se ofrece comprarla.

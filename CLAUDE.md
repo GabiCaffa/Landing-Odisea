@@ -2189,7 +2189,7 @@ personaje propio** con el vaso de ODÍSEA en la mano, en primera o tercera perso
   propio), 8 personajes con ropa de calle para la gente y las animaciones (Breathing Idle,
   Talking, Drinking, Smoking, Walking, Running y cuatro bailes: Bboy Hip Hop Move, Brooklyn
   Uprock, Snake Hip Hop Dance, Dancing Twerk).
-- **Lo que va al repo**: `public/croquis/gente/`: `yo.glb` (445 KB), `persona-1..8.glb`
+- **Lo que va al repo**: `public/croquis/gente/` (y su versión `movil/`, ver abajo): `yo.glb`, `persona-1..8.glb`
   (~340 KB cada uno) y `animaciones.glb` (810 KB). **Los FBX no** (~550 MB). Se arman con
   `scripts/gente/` (pasos en la cabecera de `armar-mixamo.mjs`): el FBX se pasa a GLB **en
   el navegador** (`convertir.html`: FBXLoader + GLTFExporter de three, servido por
@@ -2243,6 +2243,26 @@ personaje propio** con el vaso de ODÍSEA en la mano, en primera o tercera perso
 - **Fuera de la pista la gente está en rondas** de 2 a 4, mirándose, charlando o tomando.
   Antes cada uno miraba para cualquier lado y en la entrada parecía que hablaban solos. El
   que queda solo (no entró la ronda) no habla: toma o está quieto.
+- **Más liviano para el celular** (pedido del autor):
+  - **Cada personaje es UNA malla con UN esqueleto** (`unificarPiel` en el armado). Mixamo
+    trae cada prenda como malla aparte con su propio esqueleto: 6 a 8 llamadas de dibujo por
+    persona. Ahora son 2 (cuerpo y ropa en una textura, pelo en otra); el propio, 6 (Remy
+    trae una textura por prenda).
+  - **Los "extras" de FBXLoader se borran** (`sinExtras`): datos de cada hueso que el
+    exportador escribía en el JSON del archivo y eran 600 de los 760 KB de las animaciones.
+    Los giros de las animaciones van a 16 bits (`KHR_mesh_quantization`).
+  - **El celular baja su propia versión** (`public/croquis/gente/movil/`): texturas de 256
+    (512 la propia), 3.500 triángulos por persona (8.000 la propia) y animaciones a 10 cps.
+    `cargarRecursos` elige la carpeta. Medido en 740×360: **945 KB** con 4 modelos de gente
+    (antes 2,3 MB con 3). Escritorio: 2,9 MB con los 8.
+- **Baile suave por defecto, fuerte sólo por sector** (pedido del autor: "que no bailen
+  todos así re locos"). `ZonaPredio.baile: "fuerte"` marca el sector: hoy la **pista
+  electrónica** del Golf y el **VIP +30** de la Plaza. Ahí la mitad baila con el baile entero
+  (y en la malla instanciada, brazos arriba y saltos); el resto, y todos en las demás zonas,
+  bailan **suave**: el baile mezclado un tercio con "quieto" dos tercios y más lento (dos
+  acciones con peso en el mismo mixer, `vestir` en `gente.ts`), así se mueven al ritmo en el
+  lugar sin saltar ni girar. Sin bajar animaciones nuevas. El baile del personaje propio
+  (B) sigue siendo el entero.
 - **El visor dice "Demo en desarrollo · versión cómica"** bajo el nombre del predio,
   pedido del autor: los personajes y las animaciones no están a la altura todavía y se
   publica igual como demo.

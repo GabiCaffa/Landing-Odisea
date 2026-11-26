@@ -19,8 +19,8 @@
 import fs from "fs";
 import path from "path";
 import { NodeIO } from "@gltf-transform/core";
-import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import { dedup, mergeDocuments, meshopt, prune, resample, simplify, textureCompress, weld } from "@gltf-transform/functions";
+import { ALL_EXTENSIONS, KHRMeshQuantization } from "@gltf-transform/extensions";
+import { dedup, joinPrimitives, mergeDocuments, meshopt, prune, resample, simplify, textureCompress, weld } from "@gltf-transform/functions";
 import { MeshoptEncoder, MeshoptSimplifier } from "meshoptimizer";
 import sharp from "sharp";
 
@@ -82,6 +82,82 @@ function juntarHuesos(doc) {
   return quitados;
 }
 
+/**
+ * Mixamo trae cada prenda como una malla con su propio esqueleto (zapatillas,
+ * remera, cuerpo, pelo…): 6 a 8 llamadas de dibujo por persona. Se juntan en
+ * UNA malla con UN esqueleto, y adentro un pedazo por material (casi siempre
+ * dos: cuerpo y ropa en una textura, pelo en otra). En el celular es lo que más
+ * pesa: 14 personas eran ~100 llamadas y pasan a ~30.
+ */
+function unificarPiel(doc) {
+  const root = doc.getRoot();
+  const nodos = root.listNodes().filter((n) => n.getMesh() && n.getSkin());
+  if (nodos.length < 2) return 0;
+  const buf = root.listBuffers()[0];
+  const juntas = [];
+  const ibms = [];
+  const idx = new Map();
+  for (const n of nodos) {
+    const sk = n.getSkin();
+    const acc = sk.getInverseBindMatrices();
+    sk.listJoints().forEach((j, i) => {
+      if (idx.has(j)) return;
+      idx.set(j, juntas.length);
+      juntas.push(j);
+      ibms.push(...acc.getElement(i, []));
+    });
+  }
+  const piel = doc.createSkin("piel");
+  juntas.forEach((j) => piel.addJoint(j));
+  piel.setInverseBindMatrices(doc.createAccessor().setType("MAT4").setArray(new Float32Array(ibms)).setBuffer(buf));
+  const porMaterial = new Map();
+  for (const n of nodos) {
+    const local = n.getSkin().listJoints().map((j) => idx.get(j));
+    for (const p of n.getMesh().listPrimitives()) {
+      const J = p.getAttribute("JOINTS_0");
+      const viejo = J.getArray();
+      const nuevo = new Uint16Array(viejo.length);
+      for (let i = 0; i < viejo.length; i++) nuevo[i] = local[viejo[i]] ?? 0;
+      p.setAttribute("JOINTS_0", doc.createAccessor().setType("VEC4").setArray(nuevo).setBuffer(buf));
+      if (!p.getIndices()) {
+        const cant = p.getAttribute("POSITION").getCount();
+        p.setIndices(doc.createAccessor().setType("SCALAR").setArray(new Uint32Array(Array.from({ length: cant }, (_, i) => i))).setBuffer(buf));
+      }
+      const m = p.getMaterial();
+      if (!porMaterial.has(m)) porMaterial.set(m, []);
+      porMaterial.get(m).push(p);
+    }
+  }
+  const malla = doc.createMesh("persona");
+  for (const [mat, prims] of porMaterial) {
+    const unido = prims.length > 1 ? joinPrimitives(prims) : prims[0];
+    unido.setMaterial(mat);
+    malla.addPrimitive(unido);
+  }
+  const nodo = doc.createNode("persona").setMesh(malla).setSkin(piel);
+  const padre = nodos[0].getParentNode();
+  if (padre) padre.addChild(nodo);
+  else root.listScenes()[0].addChild(nodo);
+  for (const n of nodos) n.dispose();
+  return nodos.length;
+}
+
+/**
+ * FBXLoader guarda en cada hueso datos de la transformación original (nombre,
+ * matrices del padre…) y GLTFExporter los escribe como "extras" en el JSON. No
+ * los usa nadie y eran la mayor parte del peso: 600 de los 760 KB de las
+ * animaciones.
+ */
+const sinExtras = (doc) => {
+  const r = doc.getRoot();
+  for (const lista of [r.listNodes(), r.listMaterials(), r.listMeshes(), r.listSkins(), r.listAnimations(), r.listScenes(), r.listTextures()])
+    for (const x of lista) x.setExtras({});
+};
+const disponerArbol = (n) => {
+  n.listChildren().forEach(disponerArbol);
+  n.dispose();
+};
+
 const limpiarMateriales = (doc) => {
   for (const mt of doc.getRoot().listMaterials()) {
     mt.setNormalTexture(null).setOcclusionTexture(null).setEmissiveTexture(null).setMetallicRoughnessTexture(null);
@@ -99,7 +175,7 @@ const tris = (doc) =>
     .flatMap((m) => m.listPrimitives())
     .reduce((s, p) => s + (p.getIndices()?.getCount() ?? p.getAttribute("POSITION").getCount()) / 3, 0);
 
-async function personaje(nombre, archivo, { lado, triangulos }) {
+async function personaje(nombre, archivo, { lado, triangulos, carpeta = salida, error = 0.02 }) {
   const doc = await io.read(path.join(entrada, nombre + ".glb"));
   for (const a of doc.getRoot().listAnimations()) a.dispose();
   const quitados = juntarHuesos(doc);
@@ -107,28 +183,37 @@ async function personaje(nombre, archivo, { lado, triangulos }) {
   // mixamorig6Hips…): las animaciones se enganchan por nombre y no los encontraban.
   for (const n of doc.getRoot().listNodes()) n.setName(n.getName().replace(/^mixamorig\d+/, "mixamorig"));
   limpiarMateriales(doc);
+  sinExtras(doc);
+  const prendas = unificarPiel(doc);
   await doc.transform(dedup(), prune(), weld());
   const antes = tris(doc);
   const ratio = Math.min(1, triangulos / antes);
-  if (ratio < 1) await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error: 0.02, lockBorder: false }));
+  if (ratio < 1) await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error, lockBorder: false }));
   await doc.transform(
     textureCompress({ encoder: sharp, targetFormat: "webp", resize: [lado, lado], quality: 72 }),
     prune(),
     meshopt({ encoder: MeshoptEncoder, level: "high" })
   );
-  await io.write(path.join(salida, archivo), doc);
-  const kb = Math.round(fs.statSync(path.join(salida, archivo)).size / 1024);
-  console.log(`${archivo}: ${nombre}, huesos repetidos ${quitados}, triángulos ${Math.round(antes)} → ${Math.round(tris(doc))}, ${kb} KB`);
+  fs.mkdirSync(carpeta, { recursive: true });
+  await io.write(path.join(carpeta, archivo), doc);
+  const kb = Math.round(fs.statSync(path.join(carpeta, archivo)).size / 1024);
+  const prims = doc.getRoot().listMeshes().flatMap((m) => m.listPrimitives()).length;
+  console.log(`${path.basename(carpeta)}/${archivo}: ${nombre}, huesos repetidos ${quitados}, ${prendas} prendas → ${prims} pedazos, triángulos ${Math.round(antes)} → ${Math.round(tris(doc))}, ${kb} KB`);
 }
 
 await personaje(YO, "yo.glb", { lado: 1024, triangulos: 14000 });
 for (const [i, n] of GENTE.entries()) await personaje(n, `persona-${i + 1}.glb`, { lado: 512, triangulos: 7000 });
+// El celular baja su propia versión: texturas a la mitad y la mitad de triángulos.
+const MOVIL = path.join(salida, "movil");
+await personaje(YO, "yo.glb", { lado: 512, triangulos: 8000, carpeta: MOVIL, error: 0.05 });
+for (const [i, n] of GENTE.entries()) await personaje(n, `persona-${i + 1}.glb`, { lado: 256, triangulos: 3500, carpeta: MOVIL, error: 0.08 });
 
 // --- Animaciones ---------------------------------------------------------------
 // Todas sobre el esqueleto de la primera: se mezclan los documentos y cada canal
 // pasa a apuntar al hueso del mismo nombre del primero. Se dejan los giros y la
 // traslación de la cadera (como venga: en el sitio se lleva a la medida de cada
 // cuerpo). Caminar y correr, en el lugar: sin avance en el piso.
+async function animaciones(carpeta, cada) {
 const nombres = Object.keys(ANIMS);
 const base = await io.read(path.join(entrada, nombres[0] + ".glb"));
 for (const n of nombres.slice(1)) mergeDocuments(base, await io.read(path.join(entrada, n + ".glb")));
@@ -166,7 +251,7 @@ for (const a of root.listAnimations()) {
     }
   }
 }
-// A 15 cuadros por segundo: en una multitud no se nota y pesa la mitad.
+// A 15 cuadros por segundo (10 en el celular): en una multitud no se nota.
 const vistos = new Set();
 for (const a of root.listAnimations())
   for (const smp of a.listSamplers()) {
@@ -177,21 +262,35 @@ for (const a of root.listAnimations())
     const n = out.getElementSize();
     const o = out.getArray();
     const ki = [], ko = [];
-    for (let i = 0; i < inp.length; i += 2) {
+    for (let i = 0; i < inp.length; i += cada) {
       ki.push(inp[i]);
       for (let k = 0; k < n; k++) ko.push(o[i * n + k]);
     }
-    if ((inp.length - 1) % 2) {
+    if ((inp.length - 1) % cada) {
       ki.push(inp[inp.length - 1]);
       for (let k = 0; k < n; k++) ko.push(o[(inp.length - 1) * n + k]);
     }
     smp.setInput(base.createAccessor().setArray(new Float32Array(ki)).setType("SCALAR"));
     out.setArray(new Float32Array(ko));
   }
+// Los giros, a 16 bits (cuaterniones normalizados): la mitad del peso y no se
+// nota. three los lee igual (KHR_mesh_quantization).
+for (const a of root.listAnimations())
+  for (const c of a.listChannels()) {
+    if (c.getTargetPath() !== "rotation") continue;
+    const out = c.getSampler().getOutput();
+    if (out.getArray() instanceof Int16Array) continue;
+    const f = out.getArray();
+    const q = new Int16Array(f.length);
+    for (let i = 0; i < f.length; i++) q[i] = Math.round(Math.max(-1, Math.min(1, f[i])) * 32767);
+    out.setArray(q).setNormalized(true);
+  }
+base.createExtension(KHRMeshQuantization).setRequired(true);
 for (const s of root.listScenes().slice(1)) {
-  s.listChildren().forEach((n) => n.dispose());
+  s.listChildren().forEach(disponerArbol);
   s.dispose();
 }
+sinExtras(base);
 const usados = new Set();
 for (const a of root.listAnimations()) for (const c of a.listChannels()) usados.add(c.getSampler().getInput()).add(c.getSampler().getOutput());
 for (const a of root.listAccessors()) if (!usados.has(a)) a.dispose();
@@ -200,5 +299,8 @@ const [buf, ...otros] = root.listBuffers();
 for (const a of root.listAccessors()) a.setBuffer(buf);
 otros.forEach((b) => b.dispose());
 await base.transform(resample({ tolerance: 0.0015 }), dedup(), prune({ keepLeaves: true }), meshopt({ encoder: MeshoptEncoder, level: "high" }));
-await io.write(path.join(salida, "animaciones.glb"), base);
-console.log("animaciones.glb", root.listAnimations().map((a) => `${a.getName()}:${a.listChannels().length}`).join(" "), Math.round(fs.statSync(path.join(salida, "animaciones.glb")).size / 1024), "KB");
+await io.write(path.join(carpeta, "animaciones.glb"), base);
+console.log(`${path.basename(carpeta)}/animaciones.glb`, Math.round(fs.statSync(path.join(carpeta, "animaciones.glb")).size / 1024), "KB");
+}
+await animaciones(salida, 2);
+await animaciones(MOVIL, 3);
