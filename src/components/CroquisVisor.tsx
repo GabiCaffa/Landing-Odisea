@@ -23,6 +23,9 @@ interface Props {
   compra?: { href: string; texto: string };
 }
 
+/** Celular parado (angosto) o acostado (bajito). */
+const MEDIA_COMPACTO = "(max-width: 639px), (max-height: 500px)";
+
 const HORAS: { id: Hora; nombre: string; icono: typeof Sun }[] = [
   { id: "dia", nombre: "Día", icono: Sun },
   { id: "atardecer", nombre: "Atardecer", icono: Sunset },
@@ -44,11 +47,11 @@ const HORAS: { id: Hora; nombre: string; icono: typeof Sun }[] = [
  * Palanca táctil para caminar en el celular. Se maneja con el pulgar izquierdo;
  * el derecho queda para girar la cámara arrastrando sobre el mapa.
  */
-const Joystick = ({ onMover }: { onMover: (x: number, y: number) => void }) => {
+const Joystick = ({ onMover, chico = false }: { onMover: (x: number, y: number) => void; chico?: boolean }) => {
   const base = useRef<HTMLDivElement>(null);
   const [perilla, setPerilla] = useState({ x: 0, y: 0 });
   const apretado = useRef(false);
-  const RADIO = 46;
+  const RADIO = chico ? 36 : 46;
 
   const mover = (e: React.PointerEvent) => {
     const r = base.current!.getBoundingClientRect();
@@ -71,7 +74,7 @@ const Joystick = ({ onMover }: { onMover: (x: number, y: number) => void }) => {
   return (
     <div
       ref={base}
-      className="relative h-32 w-32 touch-none select-none rounded-full border border-white/25 bg-white/10 backdrop-blur"
+      className={`relative touch-none select-none rounded-full border border-white/25 bg-white/10 backdrop-blur ${chico ? "h-24 w-24" : "h-32 w-32"}`}
       onPointerDown={(e) => {
         apretado.current = true;
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -84,7 +87,7 @@ const Joystick = ({ onMover }: { onMover: (x: number, y: number) => void }) => {
       role="application"
     >
       <div
-        className="pointer-events-none absolute left-1/2 top-1/2 h-14 w-14 rounded-full bg-white/85 shadow-lg"
+        className={`pointer-events-none absolute left-1/2 top-1/2 rounded-full bg-white/85 shadow-lg ${chico ? "h-11 w-11" : "h-14 w-14"}`}
         style={{ transform: `translate(calc(-50% + ${perilla.x}px), calc(-50% + ${perilla.y}px))` }}
       />
     </div>
@@ -133,6 +136,11 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
   const vende = evento?.status === "activo";
   const [tactil] = useState(() => window.matchMedia("(pointer: coarse)").matches);
   const [vertical, setVertical] = useState(() => window.matchMedia("(orientation: portrait)").matches);
+  // Pantalla chica (celular parado o acostado): todo el HUD más chico, para que
+  // no tape el mapa (pedido del autor).
+  const [compacto, setCompacto] = useState(() => window.matchMedia(MEDIA_COMPACTO).matches);
+  // "Girá el celular": un cartelito arriba que se va solo o con la cruz.
+  const [avisoGiro, setAvisoGiro] = useState(true);
   const caminandoRef = useRef(false);
   caminandoRef.current = caminando;
   // El mouse tomado para mirar (Pointer Lock). Esc lo suelta: ese mismo Escape
@@ -142,9 +150,17 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
 
   useEffect(() => {
     const mq = window.matchMedia("(orientation: portrait)");
-    const cambio = () => setVertical(mq.matches);
+    const mc = window.matchMedia(MEDIA_COMPACTO);
+    const cambio = () => {
+      setVertical(mq.matches);
+      setCompacto(mc.matches);
+    };
     mq.addEventListener("change", cambio);
-    return () => mq.removeEventListener("change", cambio);
+    mc.addEventListener("change", cambio);
+    return () => {
+      mq.removeEventListener("change", cambio);
+      mc.removeEventListener("change", cambio);
+    };
   }, []);
 
   useEffect(() => {
@@ -216,10 +232,17 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
 
   const ponerCaminata = (activo: boolean) => {
     setCaminando(activo);
+    if (activo) setAvisoGiro(true);
     control.current?.caminar(activo);
   };
 
   // Las entradas de la zona donde se está parado.
+  useEffect(() => {
+    if (!caminando || !avisoGiro) return;
+    const t = window.setTimeout(() => setAvisoGiro(false), 6000);
+    return () => window.clearTimeout(t);
+  }, [caminando, avisoGiro]);
+
   const zonaDatos = predio?.zonas.find((z) => z.id === zona?.id);
   const entradasZona = useMemo(
     () => (vende && evento ? entradasDeZona(zonaDatos, evento.tickets) : []),
@@ -280,45 +303,60 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
         </div>
       )}
 
-      {/* Encabezado */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
+      {/* Encabezado. En el celular (compacto) todo más chico: tapaba medio mapa. */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between bg-gradient-to-b from-black/70 to-transparent ${
+          compacto
+            ? "gap-2 px-3 pb-4 pt-[max(0.5rem,env(safe-area-inset-top))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))]"
+            : "gap-3 px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6"
+        }`}
+      >
         <div className="min-w-0">
-          <h2 className="truncate text-xl font-black tracking-tight sm:text-2xl">{predio?.nombre ?? "Mapa del predio"}</h2>
+          <h2 className={`truncate font-black tracking-tight ${compacto ? "text-base leading-tight" : "text-xl sm:text-2xl"}`}>
+            {predio?.nombre ?? "Mapa del predio"}
+          </h2>
           {/* Pedido del autor: que quede claro que es un juego en desarrollo. */}
-          <p className="mt-1 inline-flex items-center rounded-full border border-[#F25C26]/60 bg-black/50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#F25C26] sm:text-[11px]">
+          <p
+            className={`inline-flex items-center rounded-full border border-[#F25C26]/60 bg-black/50 font-bold uppercase tracking-wide text-[#F25C26] ${
+              compacto ? "mt-0.5 px-2 py-px text-[9px]" : "mt-1 px-2.5 py-0.5 text-[10px] sm:text-[11px]"
+            }`}
+          >
             Demo en desarrollo · versión cómica
           </p>
-          {predio && <p className="mt-0.5 line-clamp-2 text-xs text-white/70 sm:text-sm">{predio.subtitulo}</p>}
+          {predio && !compacto && <p className="mt-0.5 line-clamp-2 text-xs text-white/70 sm:text-sm">{predio.subtitulo}</p>}
           {/* Debajo del nombre y no al lado de los botones: en un celular le
-              comía el título entero. */}
-          {compra && (
+              comía el título entero. Caminando en el celular no va: abajo del
+              sector ya está la compra de la zona. */}
+          {compra && !(compacto && caminando) && (
             <Link
               to={compra.href}
-              className="pointer-events-auto mt-2 inline-flex h-10 items-center rounded-full bg-[#F25C26] px-4 text-xs font-bold uppercase tracking-wide text-white transition-opacity hover:opacity-90 sm:text-sm"
+              className={`pointer-events-auto inline-flex items-center rounded-full bg-[#F25C26] font-bold uppercase tracking-wide text-white transition-opacity hover:opacity-90 ${
+                compacto ? "mt-1.5 h-8 px-3 text-[11px]" : "mt-2 h-10 px-4 text-xs sm:text-sm"
+              }`}
             >
               {compra.texto}
             </Link>
           )}
         </div>
-        <div className="pointer-events-auto -mr-1 flex flex-shrink-0 items-start gap-2">
+        <div className={`pointer-events-auto -mr-1 flex flex-shrink-0 items-start ${compacto ? "gap-1.5" : "gap-2"}`}>
           {predio?.musica && estado === "listo" && (
-            <MusicaSoundcloud url={predio.musica.soundcloud} volumen={volumenMusica} auto />
+            <MusicaSoundcloud url={predio.musica.soundcloud} volumen={volumenMusica} auto chico={compacto} />
           )}
           <button
             type="button"
             onClick={() => void compartir()}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 backdrop-blur transition-colors hover:bg-white/20"
+            className={`flex items-center justify-center rounded-full bg-white/10 backdrop-blur transition-colors hover:bg-white/20 ${compacto ? "h-9 w-9" : "h-11 w-11"}`}
             aria-label="Compartir el mapa"
           >
-            <Share2 className="h-5 w-5" />
+            <Share2 className={compacto ? "h-4 w-4" : "h-5 w-5"} />
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 backdrop-blur transition-colors hover:bg-white/20"
+            className={`flex items-center justify-center rounded-full bg-white/10 backdrop-blur transition-colors hover:bg-white/20 ${compacto ? "h-9 w-9" : "h-11 w-11"}`}
             aria-label="Cerrar el mapa"
           >
-            <X className="h-5 w-5" />
+            <X className={compacto ? "h-4 w-4" : "h-5 w-5"} />
           </button>
         </div>
       </div>
@@ -326,30 +364,82 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
       {/* Caminata: sector actual, palanca, correr y salir */}
       {predio && estado === "listo" && caminando && (
         <>
-          {zona && (
-            <div className="pointer-events-none absolute left-1/2 top-[max(6.5rem,calc(env(safe-area-inset-top)+6rem))] -translate-x-1/2 sm:top-24 [@media(max-height:500px)]:top-4">
-              <p className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-black/60 px-4 py-2 text-xs font-bold uppercase tracking-wide backdrop-blur sm:text-sm">
-                <MapPin className="h-4 w-4 text-[#F25C26]" aria-hidden />
-                {zona.nombre}
-              </p>
+          {/* Arriba, debajo del encabezado. En el celular acá van también "Salir"
+              y la compra de la zona: abajo están la palanca y "Correr". */}
+          <div
+            className={`pointer-events-none absolute inset-x-0 flex flex-col items-center gap-1.5 px-3 ${
+              compacto
+                ? "top-[calc(max(0.5rem,env(safe-area-inset-top))+3.6rem)]"
+                : "top-[max(6.5rem,calc(env(safe-area-inset-top)+6rem))] sm:top-24"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              {compacto && (
+                <button
+                  type="button"
+                  onClick={() => ponerCaminata(false)}
+                  className="pointer-events-auto inline-flex h-8 items-center gap-1 rounded-full bg-white px-3 text-[11px] font-bold text-black shadow"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                  Salir
+                </button>
+              )}
+              {zona && (
+                <p
+                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-black/60 font-bold uppercase tracking-wide backdrop-blur ${
+                    compacto ? "h-8 px-3 text-[11px]" : "px-4 py-2 text-xs sm:text-sm"
+                  }`}
+                >
+                  <MapPin className={`text-[#F25C26] ${compacto ? "h-3.5 w-3.5" : "h-4 w-4"}`} aria-hidden />
+                  {zona.nombre}
+                </p>
+              )}
             </div>
-          )}
+            {compacto && entradasZona.length > 0 && evento && (
+              <button
+                type="button"
+                onClick={() => abrirCompra(entradasZona[0].name)}
+                className="pointer-events-auto inline-flex h-8 max-w-full items-center gap-1.5 rounded-full bg-[#F25C26] px-3 text-[11px] font-bold text-white shadow-lg"
+              >
+                <Ticket className="h-3.5 w-3.5 flex-shrink-0" aria-hidden />
+                <span className="truncate">
+                  Comprar {entradasZona[0].name} · {fmtSimple(entradasZona[0].price, evento.currency)}
+                </span>
+              </button>
+            )}
+            {tactil && vertical && avisoGiro && (
+              <p className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-black/60 py-1 pl-3 pr-1 text-[11px] text-white/90 backdrop-blur">
+                Girá el celular para caminar más cómodo
+                <button
+                  type="button"
+                  onClick={() => setAvisoGiro(false)}
+                  className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15"
+                  aria-label="Cerrar el aviso"
+                >
+                  <X className="h-3 w-3" aria-hidden />
+                </button>
+              </p>
+            )}
+          </div>
           {mouseTomado && (
             <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/85 shadow" />
           )}
-          {tactil && vertical && (
-            <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-2xl bg-black/65 p-3 text-center text-xs text-white/90 backdrop-blur">
-              Poné el teléfono horizontal para caminar más cómodo.
-            </p>
-          )}
           {tactil && (
             <>
-              <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-[max(1.25rem,env(safe-area-inset-left))]">
-                <Joystick onMover={(x, y) => control.current?.mover(x, y)} />
+              <div
+                className={`absolute left-[max(1.25rem,env(safe-area-inset-left))] ${
+                  compacto ? "bottom-[max(1rem,env(safe-area-inset-bottom))]" : "bottom-[max(1.25rem,env(safe-area-inset-bottom))]"
+                }`}
+              >
+                <Joystick chico={compacto} onMover={(x, y) => control.current?.mover(x, y)} />
               </div>
               <button
                 type="button"
-                className="absolute bottom-[max(2.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))] h-20 w-20 touch-none select-none rounded-full border border-white/25 bg-[#F25C26]/85 text-xs font-black uppercase tracking-wide shadow-lg active:bg-[#F25C26]"
+                className={`absolute right-[max(1.25rem,env(safe-area-inset-right))] touch-none select-none rounded-full border border-white/25 bg-[#F25C26]/85 font-black uppercase tracking-wide shadow-lg active:bg-[#F25C26] ${
+                  compacto
+                    ? "bottom-[max(1.25rem,env(safe-area-inset-bottom))] h-16 w-16 text-[10px]"
+                    : "bottom-[max(2.5rem,env(safe-area-inset-bottom))] h-20 w-20 text-xs"
+                }`}
                 onPointerDown={() => control.current?.correr(true)}
                 onPointerUp={() => control.current?.correr(false)}
                 onPointerCancel={() => control.current?.correr(false)}
@@ -360,121 +450,132 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
             </>
           )}
           {/* Vista, bailar, tomar y fumar: a la derecha, arriba de "Correr" en el
-              celular (ahí en dos columnas: en un teléfono acostado no entran cuatro). */}
+              celular (ahí en dos columnas: en un teléfono acostado no entran cuatro).
+              En compacto, sólo el ícono. */}
           <div
             className={`absolute right-[max(1.25rem,env(safe-area-inset-right))] grid gap-2 ${
-              tactil ? "grid-cols-2 bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]" : "grid-cols-1 bottom-28"
+              !tactil
+                ? "bottom-28 grid-cols-1"
+                : compacto
+                  ? "bottom-[max(6.25rem,calc(env(safe-area-inset-bottom)+5.25rem))] grid-cols-2"
+                  : "bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))] grid-cols-2"
             }`}
           >
-            <button
-              type="button"
-              onClick={() => {
-                control.current?.vista(!primera);
-                setPrimera(!primera);
-              }}
-              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-white/25 bg-black/60 text-[10px] font-bold uppercase text-white shadow-lg backdrop-blur"
-              title={tactil ? undefined : "Cambiar de vista (V)"}
-              aria-label={primera ? "Pasar a tercera persona" : "Pasar a primera persona"}
-            >
-              {primera ? <Eye className="h-5 w-5" aria-hidden /> : <PersonStanding className="h-5 w-5" aria-hidden />}
-              {primera ? "1ª pers." : "3ª pers."}
-            </button>
-            <button
-              type="button"
-              onClick={() => control.current?.bailar(!bailando)}
-              aria-pressed={bailando}
-              className={`flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border text-[10px] font-bold uppercase shadow-lg backdrop-blur transition-colors ${
-                bailando ? "border-[#F25C26] bg-[#F25C26] text-white" : "border-white/25 bg-black/60 text-white"
-              }`}
-              title={tactil ? undefined : "Bailar (B)"}
-            >
-              <Music className="h-5 w-5" aria-hidden />
-              Bailar
-            </button>
-            <button
-              type="button"
-              onClick={() => control.current?.tomar()}
-              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-white/25 bg-black/60 text-[10px] font-bold uppercase text-white shadow-lg backdrop-blur"
-              title={tactil ? undefined : "Tomar (T)"}
-            >
-              <CupSoda className="h-5 w-5" aria-hidden />
-              Tomar
-            </button>
-            <button
-              type="button"
-              onClick={() => control.current?.fumar()}
-              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-white/25 bg-black/60 text-[10px] font-bold uppercase text-white shadow-lg backdrop-blur"
-              title={tactil ? undefined : "Fumar (F)"}
-            >
-              <Cigarette className="h-5 w-5" aria-hidden />
-              Fumar
-            </button>
+            {[
+              {
+                id: "vista",
+                onClick: () => {
+                  control.current?.vista(!primera);
+                  setPrimera(!primera);
+                },
+                Icono: primera ? Eye : PersonStanding,
+                texto: primera ? "1ª pers." : "3ª pers.",
+                titulo: "Cambiar de vista (V)",
+                aria: primera ? "Pasar a tercera persona" : "Pasar a primera persona",
+                activo: false,
+              },
+              { id: "bailar", onClick: () => control.current?.bailar(!bailando), Icono: Music, texto: "Bailar", titulo: "Bailar (B)", aria: "Bailar", activo: bailando },
+              { id: "tomar", onClick: () => control.current?.tomar(), Icono: CupSoda, texto: "Tomar", titulo: "Tomar (T)", aria: "Tomar", activo: false },
+              { id: "fumar", onClick: () => control.current?.fumar(), Icono: Cigarette, texto: "Fumar", titulo: "Fumar (F)", aria: "Fumar", activo: false },
+            ].map(({ id, onClick, Icono, texto, titulo, aria, activo }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={onClick}
+                aria-pressed={id === "bailar" ? activo : undefined}
+                aria-label={aria}
+                title={tactil ? undefined : titulo}
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-full border font-bold uppercase shadow-lg backdrop-blur transition-colors ${
+                  compacto ? "h-11 w-11" : "h-14 w-14 text-[10px]"
+                } ${activo ? "border-[#F25C26] bg-[#F25C26] text-white" : "border-white/25 bg-black/60 text-white"}`}
+              >
+                <Icono className={compacto ? "h-[18px] w-[18px]" : "h-5 w-5"} aria-hidden />
+                {!compacto && texto}
+              </button>
+            ))}
           </div>
-          <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
-            {entradasZona.length > 0 && evento && (
-              // La compra de la zona donde se está, siempre a un toque.
+          {!compacto && (
+            <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
+              {entradasZona.length > 0 && evento && (
+                // La compra de la zona donde se está, siempre a un toque.
+                <button
+                  type="button"
+                  onClick={() => abrirCompra(entradasZona[0].name)}
+                  className="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-full bg-[#F25C26] px-5 text-xs font-bold text-white shadow-lg sm:text-sm"
+                >
+                  <Ticket className="h-4 w-4" aria-hidden />
+                  Comprar {entradasZona[0].name} · {fmtSimple(entradasZona[0].price, evento.currency)}
+                </button>
+              )}
+              {!tactil && (
+                <p className="whitespace-nowrap rounded-full bg-black/55 px-4 py-2 text-[11px] text-white/85 backdrop-blur sm:text-xs">
+                  {mouseTomado ? (
+                    <>
+                      <b>WASD</b> caminar · <b>Shift</b> correr · <b>B</b> bailar · <b>T</b> tomar · <b>F</b> fumar · <b>V</b> vista · <b>Esc</b> suelta el mouse
+                    </>
+                  ) : (
+                    <>
+                      <b>Hacé click en el mapa</b> para mirar con el mouse · <b>WASD</b> caminar · <b>B</b> bailar · <b>T</b> tomar · <b>V</b> vista
+                    </>
+                  )}
+                </p>
+              )}
               <button
                 type="button"
-                onClick={() => abrirCompra(entradasZona[0].name)}
-                className="inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-full bg-[#F25C26] px-5 text-xs font-bold text-white shadow-lg sm:text-sm"
+                onClick={() => ponerCaminata(false)}
+                className="min-h-[40px] rounded-full bg-white px-5 text-xs font-bold text-black"
               >
-                <Ticket className="h-4 w-4" aria-hidden />
-                Comprar {entradasZona[0].name} · {fmtSimple(entradasZona[0].price, evento.currency)}
+                Salir de la caminata
               </button>
-            )}
-            {!tactil && (
-              <p className="whitespace-nowrap rounded-full bg-black/55 px-4 py-2 text-[11px] text-white/85 backdrop-blur sm:text-xs">
-                {mouseTomado ? (
-                  <>
-                    <b>WASD</b> caminar · <b>Shift</b> correr · <b>B</b> bailar · <b>T</b> tomar · <b>F</b> fumar · <b>V</b> vista · <b>Esc</b> suelta el mouse
-                  </>
-                ) : (
-                  <>
-                    <b>Hacé click en el mapa</b> para mirar con el mouse · <b>WASD</b> caminar · <b>B</b> bailar · <b>T</b> tomar · <b>V</b> vista
-                  </>
-                )}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => ponerCaminata(false)}
-              className="min-h-[40px] rounded-full bg-white px-5 text-xs font-bold text-black"
-            >
-              Salir de la caminata
-            </button>
-          </div>
+            </div>
+          )}
         </>
       )}
 
-      {/* Vistas, descripción y hora */}
+      {/* Vistas, descripción y hora. En compacto: descripción en dos renglones,
+          botones más bajos, las horas sólo con el ícono y sin la nota del pie. */}
       {predio && estado === "listo" && !caminando && (
-        <div className="absolute inset-x-0 bottom-0 space-y-2 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-10 sm:px-6">
+        <div
+          className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent ${
+            compacto
+              ? "space-y-1.5 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-6"
+              : "space-y-2 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-10 sm:px-6"
+          }`}
+        >
           {actual && (
-            <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-black/55 p-3 backdrop-blur sm:p-4">
-              <p className="text-sm font-bold">{actual.nombre}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-white/80 sm:text-sm">{actual.descripcion}</p>
+            <div className={`mx-auto max-w-2xl rounded-2xl border border-white/10 bg-black/55 backdrop-blur ${compacto ? "px-3 py-2" : "p-3 sm:p-4"}`}>
+              <p className={`font-bold ${compacto ? "text-xs" : "text-sm"}`}>{actual.nombre}</p>
+              <p className={`mt-0.5 text-white/80 ${compacto ? `${vertical ? "line-clamp-2" : "line-clamp-1"} text-[11px] leading-snug` : "text-xs leading-relaxed sm:text-sm"}`}>
+                {actual.descripcion}
+              </p>
             </div>
           )}
-          <div className="mx-auto flex max-w-4xl gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:justify-center sm:overflow-visible">
+          <div
+            className={`mx-auto flex max-w-4xl gap-2 overflow-x-auto pb-1 [scrollbar-width:none] ${
+              compacto ? "" : "sm:flex-wrap sm:justify-center sm:overflow-visible"
+            }`}
+          >
             {predio.vistas.map((v) => (
               <button
                 key={v.id}
                 type="button"
                 onClick={() => elegirVista(v.id)}
-                className={`min-h-[40px] flex-shrink-0 rounded-full px-4 text-xs font-semibold transition-colors sm:text-sm ${
-                  v.id === vista ? "bg-[#F25C26] text-white" : "bg-white/10 text-white/85 hover:bg-white/20"
-                }`}
+                className={`flex-shrink-0 rounded-full font-semibold transition-colors ${
+                  compacto ? "min-h-[34px] px-3 text-[11px]" : "min-h-[40px] px-4 text-xs sm:text-sm"
+                } ${v.id === vista ? "bg-[#F25C26] text-white" : "bg-white/10 text-white/85 hover:bg-white/20"}`}
                 aria-pressed={v.id === vista}
               >
                 {v.nombre}
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className={`flex items-center justify-center gap-2 ${compacto ? "flex-nowrap" : "flex-wrap"}`}>
             <button
               type="button"
               onClick={() => ponerCaminata(true)}
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-[#F25C26] bg-[#F25C26]/15 px-4 text-xs font-bold text-white transition-colors hover:bg-[#F25C26]/30"
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#F25C26] bg-[#F25C26]/15 font-bold text-white transition-colors hover:bg-[#F25C26]/30 ${
+                compacto ? "min-h-[34px] px-3 text-[11px]" : "min-h-[40px] px-4 text-xs"
+              }`}
             >
               <Footprints className="h-4 w-4" aria-hidden />
               Caminar por el predio
@@ -484,19 +585,23 @@ const CroquisVisor = ({ slug, onClose, compra }: Props) => {
                 key={id}
                 type="button"
                 onClick={() => elegirHora(id)}
-                className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors ${
-                  id === hora ? "bg-white text-black" : "bg-white/10 text-white/80 hover:bg-white/20"
-                }`}
+                className={`inline-flex items-center gap-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  compacto ? "min-h-[34px] px-2.5" : "min-h-[40px] px-3"
+                } ${id === hora ? "bg-white text-black" : "bg-white/10 text-white/80 hover:bg-white/20"}`}
                 aria-pressed={id === hora}
+                aria-label={nombre}
+                title={nombre}
               >
                 <Icono className="h-3.5 w-3.5" aria-hidden />
-                {nombre}
+                {!compacto && nombre}
               </button>
             ))}
           </div>
-          <p className="text-center text-[10px] text-white/50">
-            Croquis ilustrativo, no está a escala. Arrastrá para girar y pellizcá o usá la rueda para acercar.
-          </p>
+          {!compacto && (
+            <p className="text-center text-[10px] text-white/50">
+              Croquis ilustrativo, no está a escala. Arrastrá para girar y pellizcá o usá la rueda para acercar.
+            </p>
+          )}
         </div>
       )}
       {comprando && evento && (

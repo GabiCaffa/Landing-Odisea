@@ -2352,6 +2352,49 @@ tiene un millón de caras.
     armados del proyecto de logo que pasó el autor y **aplanados sobre blanco** por la
     trampa de arriba. Sólo está en la Plaza, como Ferant; el Golf no tiene lonas.
 
+### Croquis 3D de Canelones: "Baile en la carpa" como decorado del motor (sin migración)
+
+Tercer predio (`src/croquis/carpa.ts`, para `odisea-navidad-canelones`). La escena no es de
+piezas: es la que se hizo en conjunto con la organización (`baile-en-la-carpa.vercel.app`),
+copiada casi tal cual en **`src/croquis/carpa/escena.ts`** (`// @ts-nocheck`, JS original).
+Se le sacó su motor propio (cámara, cielo, horas, OrbitControls, postproceso) y se le agregó
+`crearEscenaCarpa()` al final. **Para actualizarla**: volver a copiar desde el HTML publicado
+las funciones de base (de `azar` a `crearAutos`) y la escena (de `// ===== escena =====` hasta
+el `return` de `crear()`), y dejar ese `return` como `{ grupo: raiz, vistas, tic, deco: DECO }`.
+
+- **`Predio.decorado`** (nuevo, en `tipos.ts`): una función que devuelve `{ grupo, noche(n),
+  tic(t, dt, noche), deco }`. Con decorado, el motor **no dibuja** su pasto, sus árboles ni
+  el tinte/borde/cartel de las zonas (la escena trae los suyos); agrega el grupo, llama a
+  `noche()` al cambiar la hora (día 0, atardecer 0,3, noche 1) y a `tic()` en cada cuadro.
+  El brillo del postproceso va al 45% (`brillo` en `crearPostproceso`): la escena trae luces
+  fuertes y con el brillo de siempre se quemaba de cerca.
+- **Para caminar**, `carpa.ts` define lo que la escena no sabe: **zonas** (Llegada, General,
+  Sector +21, Tarima +21 a 1,42 m, Backstage a 1,4 m; las entradas `general`, `+21` y
+  `backstage`), **vallas invisibles** (perímetro con los dos accesos, pórtico +21, pared del
+  DJ, bordes de las tarimas con el hueco de cada escalera), **`solidos`** (cajas sin dibujo:
+  barras, baños, ropería, cabina, generador, árbol) y **`rampas`** (escaleras sin dibujo, las
+  tres suben hacia el sur desde la franja +21). Los adornos de la escena (`deco`: Papá Noel,
+  trineo, muñecos…) también frenan. `inicio` admite `giro` (grados; acá -90, mirando a la carpa).
+- La gente de la escena es la suya (low-poly, animada por `tic`): las zonas van con `gente: 0`,
+  así que no hay personajes de Mixamo alrededor. El propio sí (jugador.ts).
+- Verificado caminando: sube a las dos tarimas por sus escaleras, la baranda +21 y la cabina
+  frenan, se sale por el acceso a la Llegada y el perímetro frena.
+
+### HUD del mapa en el celular: modo compacto (sin migración)
+
+Pedido del autor: en el celular el HUD de los tres mapas tapaba la pantalla. `CroquisVisor`
+tiene `compacto` (`(max-width: 639px), (max-height: 500px)`: teléfono parado o acostado):
+
+- Encabezado: título `text-base`, cartel de demo chico, sin subtítulo, botones de 36 px y la
+  música (`MusicaSoundcloud` con `chico`) sin el cartel de qué suena (pisaba el título).
+- Vistas: descripción en 2 renglones (1 acostado), botones más bajos en una sola fila con
+  scroll, las horas sólo con ícono y sin la nota del pie.
+- Caminando: arriba, debajo del encabezado, **Salir · sector** y abajo la **compra de la zona**
+  (sin "Comprar entradas" del encabezado); abajo sólo la palanca (96 px), "Correr" (64 px) y
+  las cuatro acciones con ícono solo (44 px). En pantallas grandes, todo como antes.
+- "Girá el celular": ya no es una franja en el medio. Es un cartelito arriba con cruz, que se va
+  solo a los 6 s (vuelve a aparecer al entrar de nuevo a caminar).
+
 ### El brillo de las luces y la luz de ambiente (`postproceso.ts`, sin archivos)
 
 Primer paso para que los predios se vean mejor, sin bajar nada:

@@ -65,11 +65,14 @@ const MusicaSoundcloud = ({
   url,
   volumen,
   auto = false,
+  chico = false,
 }: {
   url: string;
   volumen: () => number;
   /** Arrancar sola al montar (o con el primer toque, si el navegador no deja). */
   auto?: boolean;
+  /** Celular: botón más chico y sin el cartel de qué suena (tapaba el título del mapa). */
+  chico?: boolean;
 }) => {
   const [estado, setEstado] = useState<Estado>(auto ? "cargando" : "apagada");
   const [montar, setMontar] = useState(auto);
@@ -201,7 +204,7 @@ const MusicaSoundcloud = ({
         onClick={tocar}
         aria-pressed={estado === "sonando"}
         aria-label={estado === "sonando" ? "Pausar la música" : "Poner música"}
-        className={`flex h-11 w-11 items-center justify-center rounded-full backdrop-blur transition-colors ${
+        className={`flex items-center justify-center rounded-full backdrop-blur transition-colors ${chico ? "h-9 w-9" : "h-11 w-11"} ${
           estado === "sonando" ? "bg-[#F25C26] text-white" : "bg-white/10 hover:bg-white/20"
         } ${estado === "esperando" ? "animate-pulse ring-2 ring-[#F25C26]" : ""}`}
       >
@@ -215,13 +218,13 @@ const MusicaSoundcloud = ({
       </button>
 
       {estado === "esperando" && (
-        <p className="pointer-events-none absolute right-0 top-12 whitespace-nowrap rounded-full bg-black/65 px-3 py-1.5 text-[11px] text-white/90 backdrop-blur">
+        <p className={`pointer-events-none absolute right-0 whitespace-nowrap ${chico ? "top-10" : "top-12"} rounded-full bg-black/65 px-3 py-1.5 text-[11px] text-white/90 backdrop-blur`}>
           Tocá el mapa para escuchar la música
         </p>
       )}
 
       {/* Qué suena, con el link a SoundCloud. */}
-      {estado === "sonando" && tema && (
+      {estado === "sonando" && tema && !chico && (
         <a
           href={tema.link}
           target="_blank"
@@ -242,7 +245,7 @@ const MusicaSoundcloud = ({
         <div
           className={
             visible
-              ? "absolute right-0 top-12 w-72 max-w-[80vw] overflow-hidden rounded-xl bg-black/80 p-2 shadow-xl"
+              ? `absolute right-0 ${chico ? "top-10" : "top-12"} w-72 max-w-[80vw] overflow-hidden rounded-xl bg-black/80 p-2 shadow-xl`
               : "pointer-events-none fixed -left-[9999px] top-0 h-px w-px overflow-hidden opacity-0"
           }
         >
