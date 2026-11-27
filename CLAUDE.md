@@ -3904,3 +3904,12 @@ deja un byte invisible en el fuente que dispara `no-irregular-whitespace`.
 - Verificar antes de pushear: `npx tsc --noEmit -p tsconfig.app.json` y `npm run build`.
 - Los pasos de dashboard (Supabase/Vercel/Resend) los ejecuta el usuario; Claude
   no tiene acceso a esas consolas.
+
+### La promo en la compra es un botón grande (Black Friday)
+
+En `CompraEntradas`, cada promo vigente de un tipo de entrada ya no es una
+pastilla de 11 px: es un **botón naranja a todo el ancho** (52 px) con el nombre
+de la promo y, si es `precio_especial`, el **precio en grande** a la derecha.
+Tocarlo suma una entrada de ese tipo (mismo `updateQuantity` y mismo `disabled`
+que el "+"), y una vez aplicada dice "✓ Aplicada · ahorrás $X". Es el llamado a
+la acción de la fila: chico no se veía a la hora de comprar.

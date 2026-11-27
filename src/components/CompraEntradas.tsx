@@ -732,20 +732,50 @@ const CompraEntradas = ({
                         const excede =
                           aplicada && p.remaining !== undefined && (l?.qty ?? 0) > p.remaining;
                         return (
-                          <div key={p.id} className="mt-1.5">
-                            <p
-                              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                          <div key={p.id} className="mt-2">
+                            {/* La promo es EL llamado a la acción de la fila: un
+                                botón grande con el precio en grande, que suma una
+                                entrada al tocarlo. Como pastilla de 11 px no se
+                                veía al comprar. */}
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(ticket.name, 1)}
+                              disabled={
+                                loteAgotado(ticket) ||
+                                (ticket.quedan !== undefined && quantities[ticket.name] >= ticket.quedan)
+                              }
+                              className={`flex min-h-[52px] w-full items-center justify-between gap-3 rounded-xl px-3.5 py-2 text-left shadow-md transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${
                                 aplicada
-                                  ? "bg-celeste text-accent-foreground"
-                                  : "border border-celeste/40 text-celeste-deep"
+                                  ? "bg-celeste text-accent-foreground ring-2 ring-foreground/70"
+                                  : "bg-celeste text-accent-foreground hover:brightness-110"
                               }`}
+                              aria-label={`${p.name}${
+                                p.kind === "precio_especial" && p.specialPrice !== undefined
+                                  ? ` a ${plata(p.specialPrice)}`
+                                  : ""
+                              }. Agregar una entrada ${ticket.name}`}
                             >
-                              {p.name}
-                              {p.kind === "precio_especial" && p.specialPrice !== undefined
-                                ? ` · ${plata(p.specialPrice)}`
-                                : ""}
-                              {aplicada && l?.descuento ? ` · −${plata(l.descuento.monto)}` : ""}
-                            </p>
+                              <span className="min-w-0">
+                                <span className="block text-[13px] font-black uppercase leading-tight tracking-wide">
+                                  {p.name}
+                                </span>
+                                <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide opacity-85">
+                                  {aplicada && l?.descuento ? (
+                                    <>
+                                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                      Aplicada · ahorrás {plata(l.descuento.monto)}
+                                    </>
+                                  ) : (
+                                    "Tocá para agregar"
+                                  )}
+                                </span>
+                              </span>
+                              {p.kind === "precio_especial" && p.specialPrice !== undefined && (
+                                <span className="flex-shrink-0 font-sport text-[1.75rem] font-black leading-none tabular-nums">
+                                  {plata(p.specialPrice)}
+                                </span>
+                              )}
+                            </button>
                             {(vence || p.remaining !== undefined) && (
                               <p className="mt-0.5 text-[11px] text-muted-foreground">
                                 {[
