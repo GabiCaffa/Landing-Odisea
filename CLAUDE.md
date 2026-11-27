@@ -3904,3 +3904,13 @@ deja un byte invisible en el fuente que dispara `no-irregular-whitespace`.
 - Verificar antes de pushear: `npx tsc --noEmit -p tsconfig.app.json` y `npm run build`.
 - Los pasos de dashboard (Supabase/Vercel/Resend) los ejecuta el usuario; Claude
   no tiene acceso a esas consolas.
+
+### Botones de promo en la portada como llamado a la acción (Black Friday)
+
+`PromoDestacada` (las tarjetas bajo el banner) se agrandó para que se lean como
+botón de compra y no como aviso: nombre de la promo en `text-2xl` / `sm:text-4xl`,
+y a la derecha un botón negro con la palabra **"Comprar"** en vez de la flechita
+sola. En celular el ícono de regalo se oculta para dejarle ancho al nombre (que
+entra en 2 líneas, ~110 px de alto por tarjeta). En `EventCard`, con Black Friday
+activo (`negra`), el botón "Comprar · 30% OFF" pasa a 56 px, `text-base` y con
+borde blanco.

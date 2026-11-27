@@ -421,7 +421,7 @@ const EventCard = ({
         ) : (
         <div className={`mt-auto flex items-stretch gap-2 ${vertical ? "" : "col-span-2 sm:col-auto"}`}>
           <span
-            className={`group flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm ${negra ? "whitespace-nowrap " : ""} font-bold uppercase tracking-wide transition-all ${
+            className={`group flex flex-1 items-center justify-center gap-2 rounded-full px-4 ${negra ? "min-h-[56px] whitespace-nowrap text-base font-black ring-2 ring-white/40 " : "min-h-[48px] text-sm font-bold "} uppercase tracking-wide transition-all ${
               isSoldOut
                 ? "border border-tinta/20 text-tinta"
                 : negra
