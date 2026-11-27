@@ -35,7 +35,8 @@ export function crearPostproceso(
   renderer: THREE.WebGLRenderer,
   escena: THREE.Scene,
   camara: THREE.PerspectiveCamera,
-  op: { movil: boolean }
+  /** `brillo`: cuánto del brillo de siempre (1). Un decorado con sus propias luces fuertes (la carpa) va con menos. */
+  op: { movil: boolean; brillo?: number }
 ): Postproceso {
   const pmrem = new THREE.PMREMGenerator(renderer);
   const ambiente = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -93,7 +94,7 @@ export function crearPostproceso(
       horaActual = hora;
       aplicarIntensidad();
       if (brillo) {
-        brillo.strength = { dia: 0.1, atardecer: 0.35, noche: 0.55 }[hora];
+        brillo.strength = { dia: 0.1, atardecer: 0.35, noche: 0.55 }[hora] * (op.brillo ?? 1);
         brillo.threshold = { dia: 0.98, atardecer: 0.95, noche: 0.9 }[hora];
         brillo.radius = 0.35;
       }

@@ -10,6 +10,8 @@
  * elija cada predio.
  */
 
+import type { Object3D } from "three";
+
 export type Punto = [number, number];
 
 export type Hora = "dia" | "atardecer" | "noche";
@@ -128,7 +130,8 @@ export interface Predio {
   /** Focos de colores para la noche (escenario, pista). */
   focos?: { x: number; z: number; color: string }[];
   /** Dónde aparece el personaje al empezar a caminar (mirando al norte). */
-  inicio?: { x: number; z: number };
+  /** `giro`: hacia dónde mira, en grados (0 = sur, 90 = este, 180 = norte, el de siempre). */
+  inicio?: { x: number; z: number; giro?: number };
   /**
    * Sin árboles a menos de esta distancia del centro: el predio ocupa más que sus
    * zonas (las gradas y la fachada de la plaza de toros, alrededor del ruedo).
@@ -139,4 +142,25 @@ export interface Predio {
    * tocar "Música" y, caminando, más fuerte cerca de `fuente` (el escenario).
    */
   musica?: { soundcloud: string; fuente: { x: number; z: number } };
+  /**
+   * Un decorado armado por código en vez de piezas: una escena hecha aparte (la
+   * carpa de Canelones). Con decorado, el motor no dibuja su pasto, sus árboles
+   * ni el tinte de las zonas: lo trae el decorado. Las zonas siguen sirviendo
+   * para saber dónde se está al caminar y qué entrada ofrecer.
+   */
+  decorado?: () => Decorado;
+  /** Rampas sin dibujo (el decorado ya trae la escalera): por dónde se sube a una zona alta. */
+  rampas?: { x: number; z: number; rot: number; largo: number; ancho: number; altura: number }[];
+  /** Cajas que frenan al caminar, sin dibujo: [x0, x1, z0, z1]. */
+  solidos?: [number, number, number, number][];
+}
+
+export interface Decorado {
+  grupo: Object3D;
+  /** Prende las luces: 0 de día, 1 de noche. */
+  noche?: (n: number) => void;
+  /** Anima (gente, luces del baile, humo). */
+  tic?: (t: number, dt: number, noche: number) => void;
+  /** Adornos grandes que frenan: [x, z, radio]. */
+  deco?: [number, number, number][];
 }

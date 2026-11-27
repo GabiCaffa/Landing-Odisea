@@ -298,7 +298,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   escena.fog = new THREE.Fog(0x000000, 140, 560);
   const camara = new THREE.PerspectiveCamera(42, 1, 0.5, 1500);
   // Luz de ambiente con reflejos y, en escritorio, el brillo de las luces.
-  const post = crearPostproceso(renderer, escena, camara, { movil: op.movil });
+  const post = crearPostproceso(renderer, escena, camara, { movil: op.movil, brillo: predio.decorado ? 0.45 : 1 });
 
   const controles = new OrbitControls(camara, canvas);
   controles.enableDamping = true;
@@ -403,6 +403,14 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   pasto.receiveShadow = true;
   escena.add(pasto);
 
+  // Un predio con decorado (la carpa de Canelones) trae su propio campo, sus
+  // árboles y sus pisos: el pasto, los árboles y el tinte de las zonas no van.
+  const decorado = predio.decorado?.() ?? null;
+  if (decorado) {
+    pasto.visible = false;
+    escena.add(decorado.grupo);
+  }
+
   const zonasMat: Record<string, THREE.MeshStandardMaterial> = {};
   // Caminando, el cartel de la zona se ve de lejos y no encima (arriba ya dice dónde se está).
   const cartelesZona: THREE.Sprite[] = [];
@@ -420,6 +428,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
       depthWrite: false,
     });
     zonasMat[z.id] = mat;
+    if (decorado) return;
     const piso = new THREE.Mesh(new THREE.ShapeGeometry(forma), mat);
     piso.rotation.x = -Math.PI / 2;
     piso.position.y = (z.altura ?? 0) + 0.03 + i * 0.012;
@@ -641,7 +650,9 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   }
 
   // Escaleras: por dónde se sube caminando (ver `alturaEn`).
-  const rampas: { x: number; z: number; rot: number; largo: number; ancho: number; altura: number }[] = [];
+  const rampas: { x: number; z: number; rot: number; largo: number; ancho: number; altura: number }[] = [
+    ...(predio.rampas ?? []),
+  ];
 
   const constructores: Record<TipoPieza, (p: Pieza) => THREE.Group> = {
     barra: (p) => {
@@ -1285,6 +1296,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   copas.count = nCopas;
   conos.castShadow = conos2.castShadow = copas.castShadow = true;
   escena.add(troncos, conos, conos2, copas);
+  if (decorado) for (const m of [troncos, conos, conos2, copas]) m.visible = false;
 
   // Lo que frena: las vallas (no se cruzan), las barras, baños, auxilios, el DJ
   // y la pantalla (no se atraviesan) y la gente (se la esquiva). Los controles
@@ -1317,6 +1329,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     });
     if (!caja3.isEmpty()) obstaculos.push([caja3.min.x - 0.3, caja3.max.x + 0.3, caja3.min.z - 0.3, caja3.max.z + 0.3]);
   }
+  for (const [x0, x1, z0, z1] of predio.solidos ?? []) obstaculos.push([x0 - 0.3, x1 + 0.3, z0 - 0.3, z1 + 0.3]);
+  for (const [x, z, r] of decorado?.deco ?? []) obstaculos.push([x - r, x + r, z - r, z + r]);
   // ── Gente ──
   // Cada persona son piezas de malla instanciada: piernas (con zapatillas),
   // remera con brazos, piel (cabeza, cuello y manos) y pelo. Hay dos posturas
@@ -1700,7 +1714,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
   const teclas = new Set<string>();
   const inicio = predio.inicio ?? { x: (minX + maxX) / 2, z: maxZ + 6 };
   const yo = new THREE.Vector3(inicio.x, 0, inicio.z);
-  let yaw = Math.PI; // mirando al norte (-z)
+  // Mirando al norte (-z), salvo que el predio diga otra cosa.
+  let yaw = predio.inicio?.giro !== undefined ? (predio.inicio.giro * Math.PI) / 180 : Math.PI;
   let pitch = -0.06;
   let zonaActual: string | null | undefined;
 
@@ -1972,6 +1987,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
 
   // ── Hora del día ──
   let horaActual: Hora = "noche";
+  let nocheDecorado = 1;
   const ponerHora = (hora: Hora) => {
     post.ponerHora(hora);
     horaActual = hora;
@@ -1997,6 +2013,8 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     focos.forEach((f) => (f.intensity = H.focos));
     (lamparitas.material as THREE.MeshBasicMaterial).color.set(H.lamp);
     for (const r of rayos) r.visible = hora !== "dia";
+    nocheDecorado = { dia: 0, atardecer: 0.3, noche: 1 }[hora];
+    decorado?.noche?.(nocheDecorado);
     rellenoActual = { dia: 0, atardecer: 0.12, noche: 0.32 }[hora];
     genteReal.ponerRelleno(rellenoActual);
     jugador?.ponerRelleno(rellenoActual);
@@ -2054,6 +2072,7 @@ export function crearCroquis(canvas: HTMLCanvasElement, predio: Predio, op: Opci
     }
     genteReal.actualizar(dt);
     ubicarGente(t);
+    decorado?.tic?.(t, dt, nocheDecorado);
     if (!op.reducirMovimiento) {
       for (const [i, b] of banderas.entries()) b.rotation.y = Math.sin(t * 1.6 + i) * 0.35;
       for (const r of rayos) {

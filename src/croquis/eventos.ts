@@ -13,23 +13,8 @@
 export const PREDIO_DE_EVENTO: Record<string, string> = {
   "navidad-en-el-golf-paysandu": "golf",
   "navidad-colonia": "plazaToros",
+  "odisea-navidad-canelones": "carpa",
 };
-
-/**
- * Eventos cuyo mapa 3D es una escena HTML hecha aparte (un archivo suelto en
- * `public/mapas/`, con su propio Three.js) en vez de un predio de datos para
- * nuestro motor. Se muestra en un iframe a pantalla completa (`EscenaHtml`),
- * con el mismo botón "Ver el mapa 3D" y la misma dirección `/evento/<slug>/mapa`.
- */
-export const ESCENA_HTML_DE_EVENTO: Record<string, { src: string; nombre: string }> = {
-  // Escena hecha en conjunto con la organización de Canelones (baile-en-la-carpa.vercel.app).
-  "odisea-navidad-canelones": { src: "/mapas/carpa-canelones.html#carpa", nombre: "Baile en la carpa" },
-};
-
-const tiene = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
-
-export const escenaHtmlDe = (slug: string | undefined | null) =>
-  slug && tiene(ESCENA_HTML_DE_EVENTO, slug) ? ESCENA_HTML_DE_EVENTO[slug] : null;
 
 export const tieneCroquis = (slug: string | undefined | null): boolean =>
-  !!slug && (tiene(PREDIO_DE_EVENTO, slug) || tiene(ESCENA_HTML_DE_EVENTO, slug));
+  !!slug && Object.prototype.hasOwnProperty.call(PREDIO_DE_EVENTO, slug);

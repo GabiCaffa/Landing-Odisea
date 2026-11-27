@@ -1,96 +1,10 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex">
-</head>
-<body>
-<title>Baile en la Carpa</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap">
-<style>
-/* Una sola escena a pantalla completa; arriba el nombre y el selector de lugar, abajo el dato, las vistas y la hora. Un único look oscuro, pensado para leerse sobre el 3D. */
-:root {
-  --tinta: #0f141c; --panel: rgba(15, 20, 28, .74); --linea: rgba(255, 255, 255, .16);
-  --texto: #f5f0e6; --suave: #c2c8d0; --sol: #f6b93b; --sobre-sol: #1a1508;
-  --titulo: 'Bricolage Grotesque', 'Inter', system-ui, sans-serif;
-  --cuerpo: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --dato: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-  color-scheme: dark;
-}
-[hidden] { display: none !important; }
-html, body { height: 100%; }
-body { background: var(--tinta); color: var(--texto); font-family: var(--cuerpo); overflow: hidden; }
-#lona { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
-.capa {
-  position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; pointer-events: none;
-  padding-block: calc(14px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-bottom, 0px));
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-}
-.capa > * { pointer-events: none; }
-.capa button, .capa .tarjeta { pointer-events: auto; }
-.cabeza { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.nombre { min-width: 0; text-shadow: 0 1px 14px rgba(0, 0, 0, .55); }
-h1 { margin: 0; font-family: var(--titulo); font-weight: 700; font-size: clamp(1.7rem, 4.6vw, 3rem); line-height: 1; letter-spacing: -.02em; text-wrap: balance; }
-.coord { margin: 8px 0 0; font-family: var(--dato); font-size: .78rem; letter-spacing: .04em; color: var(--texto); }
-.grupo { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--panel); border: 1px solid var(--linea); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); pointer-events: auto; max-width: 100%; }
-.grupo.vistas { overflow-x: auto; scrollbar-width: none; }
-.grupo.vistas::-webkit-scrollbar { display: none; }
-button { font: 500 .86rem/1 var(--cuerpo); color: var(--texto); background: transparent; border: 0; border-radius: 999px; padding: 9px 14px; cursor: pointer; white-space: nowrap; flex: none; }
-button:hover { background: rgba(255, 255, 255, .1); }
-button[aria-pressed="true"] { background: var(--sol); color: var(--sobre-sol); font-weight: 600; }
-button:focus-visible { outline: 2px solid var(--sol); outline-offset: 2px; }
-.pie { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; }
-.tarjeta { max-width: 52ch; padding: 12px 16px; border-radius: 14px; background: var(--panel); border: 1px solid var(--linea); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.tarjeta strong { display: block; font-family: var(--titulo); font-size: 1.05rem; margin-bottom: 4px; }
-.tarjeta p { margin: 0; font-size: .9rem; line-height: 1.5; color: var(--suave); }
-.tarjeta { cursor: pointer; }
-.tarjeta.chica p { display: none; }
-.tarjeta.chica strong { margin-bottom: 0; }
-@media (max-width: 640px) {
-  h1 { font-size: 1.5rem; }
-  .coord { font-size: .7rem; margin-top: 4px; }
-  .tarjeta { padding: 9px 13px; border-radius: 12px; }
-  .tarjeta strong { font-size: .95rem; }
-  .tarjeta p { font-size: .8rem; line-height: 1.4; }
-  button { padding: 9px 12px; font-size: .82rem; }
-  .pie { gap: 8px; }
-}
-.barras { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-self: stretch; min-width: 0; }
-.aviso { position: fixed; inset: 0; display: grid; place-items: center; font-family: var(--dato); font-size: .85rem; color: var(--suave); background: var(--tinta); padding: 24px; text-align: center; }
-/* ODÍSEA: arriba a la derecha van cerrar, compartir y comprar (EscenaHtml.tsx), así que el título deja ese rincón libre. */
-.nombre { padding-right: 104px; }
-</style>
-
-<canvas id="lona" tabindex="0" aria-label="Escena 3D. Arrastrá para girar, rueda o pellizco para acercar."></canvas>
-<div class="capa">
-  <div class="cabeza">
-    <div class="nombre"><h1 id="nombre">Baile en la carpa</h1><p class="coord" id="coord">Estilo low-poly</p></div>
-    <div class="grupo" id="lugares" role="group" aria-label="Lugar"></div>
-  </div>
-  <div class="pie">
-    <div class="tarjeta" id="tarjeta" aria-live="polite" title="Tocá para achicar o agrandar"><strong id="vistaNombre"></strong><p id="vistaDato"></p></div>
-    <div class="barras">
-      <div class="grupo vistas" id="vistas" role="group" aria-label="Vistas"></div>
-      <div class="grupo" id="horas" role="group" aria-label="Hora del día"></div>
-    </div>
-  </div>
-</div>
-<div class="aviso" id="aviso">Armando el lugar…</div>
-
-<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
-<script type="module">
-// ===== motor =====
-// Base compartida de Lugares Emblemáticos: motor, cielo, horas del día y piezas reutilizables.
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+// @ts-nocheck — Copia del código de la escena "Baile en la carpa"
+// (baile-en-la-carpa.vercel.app, hecha en conjunto con la organización de
+// Navidad Canelones). Se deja casi tal cual para poder volver a copiarla si la
+// escena cambia: sólo se sacó su motor (cámara, cielo, horas), porque acá lo
+// pone el nuestro (`motor.ts`), y se agregó `crearEscenaCarpa` al final.
+import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 function azar(semilla) {
   let s = semilla >>> 0;
@@ -459,143 +373,6 @@ function crearAutos(padre, n, semilla = 5) {
 }
 
 // ---------- Horas del día ----------
-const HORAS = {
-  dia: { a: 0x3f86d4, b: 0xc4e2f6, sol: 0xfff3df, solI: 3.1, hc: 0xd6e9ff, hg: 0xa39c8d, hi: 1.35, elev: 54, niebla: 0xcbe0f0, noche: 0, expo: 1.0 },
-  tarde: { a: 0x34508f, b: 0xf7a561, sol: 0xffb777, solI: 2.7, hc: 0xc9c6e6, hg: 0x6a5a5c, hi: 1.05, elev: 8, niebla: 0xf1b58c, noche: 0.3, expo: 1.05 },
-  noche: { a: 0x060a1a, b: 0x1b2a4c, sol: 0x90a9ff, solI: 0.5, hc: 0x33457a, hg: 0x15151d, hi: 0.55, elev: 42, niebla: 0x0f1a30, noche: 1, expo: 1.1 },
-};
-
-function crearMotor(lona) {
-  const renderer = new THREE.WebGLRenderer({ canvas: lona, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
-  const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xcbe0f0, 500, 2600);
-  const camera = new THREE.PerspectiveCamera(38, 1, 2, 14000);
-  const controls = new OrbitControls(camera, lona);
-  controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = 1.5; controls.zoomSpeed = 0.8;
-  const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  controls.autoRotate = !quieto; controls.autoRotateSpeed = 0.35;
-  const parar = () => { controls.autoRotate = false; vuelo = null; };
-  lona.addEventListener('pointerdown', parar); lona.addEventListener('wheel', parar, { passive: true });
-
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x888888, 1); scene.add(hemi);
-  const sol = new THREE.DirectionalLight(0xffffff, 3); sol.castShadow = true;
-  sol.shadow.mapSize.set(CELU ? 2048 : 4096, CELU ? 2048 : 4096); sol.shadow.bias = -0.0004; sol.shadow.normalBias = 0.6;
-  scene.add(sol, sol.target);
-
-  const cielo = new THREE.Mesh(new THREE.SphereGeometry(7000, 32, 16), new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { a: { value: new THREE.Color() }, b: { value: new THREE.Color() }, sd: { value: new THREE.Vector3(0, 1, 0) }, sc: { value: new THREE.Color() } },
-    vertexShader: 'varying vec3 v; void main(){ v=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
-    fragmentShader: `uniform vec3 a,b,sd,sc; varying vec3 v;
-      void main(){ vec3 d=normalize(v); float h=clamp(d.y*1.1+.04,0.,1.);
-        vec3 c=mix(b,a,pow(h,.5)); float s=max(dot(d,normalize(sd)),0.);
-        c+=sc*(pow(s,5.)*.22+pow(s,80.)*.7+smoothstep(.9990,.9995,s)*3.);
-        gl_FragColor=vec4(c,1.);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  }));
-  cielo.frustumCulled = false; scene.add(cielo);
-  // brillo suave alrededor de lo que emite luz (faroles, ventanas, el sol bajo)
-  const compositor = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: CELU ? 0 : 4 }));
-  const brillo = new UnrealBloomPass(new THREE.Vector2(4, 4), 0.2, 0.7, 0.92);
-  compositor.addPass(new RenderPass(scene, camera)); compositor.addPass(brillo); compositor.addPass(new OutputPass());
-  const tamano = (w, h, pr = Math.min(devicePixelRatio, CELU ? 1.5 : 2)) => { renderer.setPixelRatio(pr); renderer.setSize(w, h, false); compositor.setPixelRatio(pr); compositor.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); };
-  // nubes y estrellas
-  const rn = azar(5), listaNubes = [], ep = [];
-  for (let i = 0; i < 16; i++) {
-    const a = rn() * 6.28, R = 900 + rn() * 2600, cx = Math.cos(a) * R, cz = Math.sin(a) * R, cy = 520 + rn() * 380, n = 5 + ((rn() * 4) | 0);
-    for (let k = 0; k < n; k++) { const s = 70 + rn() * 90; listaNubes.push([cx + (rn() - 0.5) * 320, cy + (rn() - 0.5) * 40, cz + (rn() - 0.5) * 160, s * 1.5, s * 0.5, s, 0]); }
-  }
-  const nubes = instancias(scene, new THREE.IcosahedronGeometry(1, 2), M(0xffffff, { fog: false, roughness: 1 }), listaNubes);
-  nubes.castShadow = false; nubes.receiveShadow = false; nubes.frustumCulled = false;
-  for (let i = 0; i < 1100; i++) { const u = rn() * 6.28, v = Math.acos(rn() * 0.98); ep.push(6400 * Math.sin(v) * Math.cos(u), 6400 * Math.cos(v) + 40, 6400 * Math.sin(v) * Math.sin(u)); }
-  const estrellas = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(ep, 3)),
-    new THREE.PointsMaterial({ color: 0xffffff, size: 1.7, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
-  estrellas.frustumCulled = false; scene.add(estrellas);
-
-  const est = { a: new THREE.Color(), b: new THREE.Color(), sol: new THREE.Color(), hc: new THREE.Color(), hg: new THREE.Color(), niebla: new THREE.Color(), solI: 3, hi: 1, noche: 0, expo: 1, dir: new THREE.Vector3(0, 1, 0) };
-  const meta = { ...est, a: new THREE.Color(), b: new THREE.Color(), sol: new THREE.Color(), hc: new THREE.Color(), hg: new THREE.Color(), niebla: new THREE.Color(), dir: new THREE.Vector3(0, 1, 0) };
-  let lugar = null, vuelo = null, hora = 'dia';
-  const hechos = {};
-
-  function fijarHora(nombre, ya) {
-    hora = nombre; const H = HORAS[nombre];
-    for (const k of ['a', 'b', 'sol', 'hc', 'hg', 'niebla']) meta[k].setHex(H[k]);
-    meta.solI = H.solI; meta.hi = H.hi; meta.noche = H.noche; meta.expo = H.expo;
-    const az = THREE.MathUtils.degToRad(lugar.def.azimut[nombre]), el = THREE.MathUtils.degToRad(H.elev);
-    meta.dir.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
-    if (ya) aplicar(1);
-  }
-  function aplicar(k) {
-    for (const c of ['a', 'b', 'sol', 'hc', 'hg', 'niebla']) est[c].lerp(meta[c], k);
-    for (const n of ['solI', 'hi', 'noche', 'expo']) est[n] += (meta[n] - est[n]) * k;
-    est.dir.lerp(meta.dir, k).normalize();
-    const u = cielo.material.uniforms;
-    u.a.value.copy(est.a); u.b.value.copy(est.b); u.sd.value.copy(est.dir); u.sc.value.copy(est.sol).multiplyScalar(0.25 + est.solI * 0.25);
-    sol.color.copy(est.sol); sol.intensity = est.solI;
-    hemi.color.copy(est.hc); hemi.groundColor.copy(est.hg); hemi.intensity = est.hi;
-    scene.fog.color.copy(est.niebla); renderer.toneMappingExposure = est.expo;
-    const c = lugar.def.centro; sol.target.position.set(c[0], c[1], c[2]);
-    sol.position.set(c[0] + est.dir.x * 900, c[1] + est.dir.y * 900, c[2] + est.dir.z * 900);
-    estrellas.material.opacity = Math.max(0, est.noche - 0.45) * 1.7;
-    nubes.material.emissive.copy(est.hc); nubes.material.emissiveIntensity = 0.4 * (1 - est.noche * 0.8);
-    brillo.strength = 0.1 + est.noche * 0.24;
-    for (const f of nocturnos) f(est.noche);
-  }
-
-  function cargar(def, horaInicial) {
-    if (lugar) lugar.grupo.visible = false;
-    lugar = hechos[def.id] ||= { def, ...def.crear() };
-    if (!lugar.grupo.parent) scene.add(lugar.grupo);
-    lugar.grupo.visible = true;
-    const R = def.sombra, sc = sol.shadow.camera;
-    sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 100; sc.far = 2200; sc.updateProjectionMatrix();
-    scene.fog.near = def.niebla[0]; scene.fog.far = def.niebla[1];
-    controls.minDistance = def.dist[0]; controls.maxDistance = def.dist[1];
-    const v = lugar.vistas[0];
-    camera.position.set(...v.pos); controls.target.set(...v.mira); controls.update();
-    fijarHora(horaInicial || def.hora, true);
-    return lugar;
-  }
-  function volar(v, dur = 1.8) {
-    controls.autoRotate = false;
-    if (quieto) { camera.position.set(...v.pos); controls.target.set(...v.mira); return; }
-    vuelo = { t: 0, dur, p0: camera.position.clone(), m0: controls.target.clone(), p1: new THREE.Vector3(...v.pos), m1: new THREE.Vector3(...v.mira) };
-  }
-  function medida() {
-    const w = lona.clientWidth, h = lona.clientHeight;
-    if (!w || !h) return;
-    camera.fov = w < h ? 52 : 38; tamano(w, h);
-  }
-  new ResizeObserver(medida).observe(lona); medida();
-
-  let antes = performance.now(), t = 0, manual = false;
-  // para grabar video: avanza un paso exacto y dibuja, sin depender del reloj
-  function paso(dt, ritmoHora = 2.6) { t += dt; controls.update(); cielo.position.copy(camera.position); estrellas.position.copy(camera.position); nubes.rotation.y = t * 0.004; aplicar(1 - Math.exp(-dt * ritmoHora)); lugar.tic && lugar.tic(t, dt, est.noche); compositor.render(); }
-  function cuadro(ahora) {
-    if (manual) { antes = ahora; requestAnimationFrame(cuadro); return; }
-    const dt = Math.min(0.05, (ahora - antes) / 1000); antes = ahora; t += dt;
-    if (vuelo) {
-      vuelo.t = Math.min(1, vuelo.t + dt / vuelo.dur);
-      const k = vuelo.t < 0.5 ? 4 * vuelo.t ** 3 : 1 - (-2 * vuelo.t + 2) ** 3 / 2;
-      camera.position.lerpVectors(vuelo.p0, vuelo.p1, k); controls.target.lerpVectors(vuelo.m0, vuelo.m1, k);
-      if (vuelo.t >= 1) vuelo = null;
-    }
-    controls.update();
-    if (camera.position.y < 3) camera.position.y = 3;
-    cielo.position.copy(camera.position); estrellas.position.copy(camera.position); nubes.rotation.y = t * 0.004;
-    if (lugar) { aplicar(1 - Math.exp(-dt * 2.6)); lugar.tic && lugar.tic(t, dt, est.noche); }
-    compositor.render();
-    requestAnimationFrame(cuadro);
-  }
-  requestAnimationFrame(cuadro);
-  return { scene, camera, controls, renderer, cargar, volar, paso, tamano, dibujar: () => compositor.render(), set manual(v) { manual = v; }, fijarHora: (n, ya) => fijarHora(n, ya), get hora() { return hora; }, get lugar() { return lugar; } };
-}
-
 // ===== escena =====
 // Baile de Navidad en la carpa. Estilo low-poly. 1 unidad = 1 metro.
 
@@ -1108,60 +885,23 @@ function crear() {
   for (const m of [dorado, verde, rosa, celeste]) matsLuz.delete(m); matsLuz.add(bombita);
   const lucesV = []; raiz.traverse((o) => { if (!o.isMesh || !matsLuz.has(o.material)) return; for (let q = o; q; q = q.parent) if (q === carpaG) return; lucesV.push(o); });
   for (const f of fuegos) lucesV.push(...f.llamas, f.ch); for (const h of humos) lucesV.push(h.m);
-  return { grupo: raiz, vistas, tic, video: { carpa: carpaG, piezas } };
+  return { grupo: raiz, vistas, tic, deco: DECO };
 }
 
-const ESCENA = {
-  id: 'carpa', nombre: 'Baile en la carpa', lugar: 'Baile de Navidad', coord: 'General · ' + ZONA + ' · Backstage',
-  centro: [30, 0, 10], sombra: 160, niebla: [320, 1300], dist: [5, 520], hora: 'noche',
-  azimut: { dia: -70, tarde: 150, noche: -50 },
-  crear,
-};
-
-// ===== página =====
-
-const aviso = document.getElementById('aviso');
-try {
-  const LUGARES = [ESCENA];
-  document.getElementById('lugares').hidden = true;
-  const HORAS = [['dia', 'Día'], ['tarde', 'Atardecer'], ['noche', 'Noche']];
-  const $ = (id) => document.getElementById(id);
-  const motor = crearMotor($('lona'));
-  window.__le = motor;
-  let actual = null;
-
-  function boton(padre, texto, alTocar) {
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = texto; b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', alTocar); padre.appendChild(b); return b;
-  }
-  const marcar = (padre, i) => [...padre.children].forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
-  function mostrarVista(i) {
-    const v = actual.vistas[i];
-    $('vistaNombre').textContent = v.nombre; $('vistaDato').textContent = v.dato; marcar($('vistas'), i);
-  }
-  function abrir(def) {
-    actual = motor.cargar(def);
-    $('nombre').textContent = def.nombre; $('coord').textContent = def.lugar + ' · ' + def.coord;
-    marcar($('lugares'), LUGARES.indexOf(def));
-    $('vistas').replaceChildren();
-    actual.vistas.forEach((v, i) => boton($('vistas'), v.nombre, () => { motor.volar(v); mostrarVista(i); }));
-    mostrarVista(0);
-    marcar($('horas'), HORAS.findIndex((h) => h[0] === motor.hora));
-    if (location.hash.slice(1) !== def.id) history.replaceState(null, '', '#' + def.id);
-  }
-  LUGARES.forEach((def) => boton($('lugares'), def.nombre, () => abrir(def)));
-  HORAS.forEach(([id, texto], i) => boton($('horas'), texto, () => { motor.fijarHora(id); marcar($('horas'), i); }));
-  const porHash = () => LUGARES.find((l) => l.id === location.hash.slice(1)) || LUGARES[0];
-  addEventListener('hashchange', () => { const d = porHash(); if (!actual || actual.def !== d) abrir(d); });
-  const tarjeta = $('tarjeta'); tarjeta.addEventListener('click', () => tarjeta.classList.toggle('chica'));
-  if (matchMedia('(max-width: 640px)').matches) tarjeta.classList.add('chica'); // en el celu arranca chica para no tapar la escena
-  abrir(porHash());
-  aviso.hidden = true;
-} catch (e) {
-  console.error(e);
-  aviso.textContent = 'No se pudo armar la escena 3D en este navegador. ' + (e && e.message ? e.message : '');
+/**
+ * Arma la escena. `noche(n)` prende las luces (0 de día, 1 de noche); `tic`
+ * anima la gente, las luces del baile, el fuego y el humo; `deco` son los
+ * adornos grandes [x, z, radio] (Papá Noel, el trineo…), para que frenen.
+ */
+export function crearEscenaCarpa() {
+  nocturnos.length = 0; // la lista es del módulo: al volver a abrir el mapa, se empieza de cero
+  const hecha = crear();
+  const fns = nocturnos.slice();
+  return {
+    grupo: hecha.grupo,
+    vistas: hecha.vistas,
+    tic: hecha.tic,
+    noche: (n) => fns.forEach((f) => f(n)),
+    deco: hecha.deco as [number, number, number][],
+  };
 }
-</script>
-
-</body>
-</html>
