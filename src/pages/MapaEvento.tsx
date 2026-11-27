@@ -1,10 +1,11 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { tieneCroquis } from "@/croquis/eventos";
+import { escenaHtmlDe, tieneCroquis } from "@/croquis/eventos";
 import { urlDeEvento } from "@/lib/rutas";
 
 const CroquisVisor = lazy(() => import("@/components/CroquisVisor"));
+const EscenaHtml = lazy(() => import("@/components/EscenaHtml"));
 
 /**
  * El mapa 3D con dirección propia: `/evento/<slug>/mapa`.
@@ -39,15 +40,17 @@ const MapaEvento = () => {
 
   const cerrar = () => (desdeEvento ? navigate(-1) : navigate(urlDeEvento(slug)));
   const vende = evento?.status === "activo";
+  // Quien llega desde la página del evento ya tiene la compra abajo.
+  const compra = desdeEvento ? undefined : { href: urlDeEvento(slug), texto: vende ? "Comprar entradas" : "Ver la fecha" };
+  const escena = escenaHtmlDe(slug);
 
   return (
     <Suspense fallback={<div className="fixed inset-0 bg-[#060912]" />}>
-      <CroquisVisor
-        slug={slug}
-        onClose={cerrar}
-        // Quien llega desde la página del evento ya tiene la compra abajo.
-        compra={desdeEvento ? undefined : { href: urlDeEvento(slug), texto: vende ? "Comprar entradas" : "Ver la fecha" }}
-      />
+      {escena ? (
+        <EscenaHtml slug={slug} src={escena.src} nombre={escena.nombre} onClose={cerrar} compra={compra} />
+      ) : (
+        <CroquisVisor slug={slug} onClose={cerrar} compra={compra} />
+      )}
     </Suspense>
   );
 };

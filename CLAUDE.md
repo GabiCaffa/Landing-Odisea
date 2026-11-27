@@ -2352,6 +2352,26 @@ tiene un millón de caras.
     armados del proyecto de logo que pasó el autor y **aplanados sobre blanco** por la
     trampa de arriba. Sólo está en la Plaza, como Ferant; el Golf no tiene lonas.
 
+### Mapa 3D de Canelones: escena HTML aparte en un iframe (sin migración)
+
+Para **ODISEA NAVIDAD CANELONES** (`odisea-navidad-canelones`) el mapa 3D no es un predio de
+nuestro motor: es la escena "Baile en la carpa" que se hizo en conjunto con la organización
+(`baile-en-la-carpa.vercel.app`), copiada tal cual a **`public/mapas/carpa-canelones.html`**
+(un HTML suelto con su propio Three.js 0.160 desde jsDelivr, sus vistas y sus horas).
+
+- **Qué evento la usa: `ESCENA_HTML_DE_EVENTO` en `src/croquis/eventos.ts`** (slug → `src` y
+  `nombre`). `tieneCroquis` cuenta estos eventos también, así que el botón "Ver el mapa 3D",
+  la dirección `/evento/<slug>/mapa`, su vista previa horneada y el sitemap salen solos.
+- **`MapaEvento`** elige: si el slug tiene escena HTML monta **`EscenaHtml`** (iframe a pantalla
+  completa, por portal, con cerrar / compartir / comprar arriba a la derecha y Escape para
+  cerrar); si no, `CroquisVisor` como siempre.
+- **Cambios hechos al HTML copiado** (al actualizar la escena, volver a aplicarlos):
+  `<meta name="robots" content="noindex">` y `.nombre { padding-right: 104px; }` al final del
+  `<style>`, para que el título no quede debajo de nuestros botones en el celular.
+- Vercel sirve el archivo estático antes del rewrite a `index.html`, así que no hace falta
+  tocar `vercel.json`.
+- Para otra escena así: el HTML en `public/mapas/` y una línea en `ESCENA_HTML_DE_EVENTO`.
+
 ### El brillo de las luces y la luz de ambiente (`postproceso.ts`, sin archivos)
 
 Primer paso para que los predios se vean mejor, sin bajar nada:
