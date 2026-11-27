@@ -2925,6 +2925,14 @@ el vendedor cobra de más.
 > scrollea y los 16 px no se pagan. Medido antes y después: 22 px de scroll
 > con el tachado apagado, 22 con el tachado prendido.
 
+### Sección "Promos activas" fuera de la home (sin migración)
+
+`PromosActivasSection` ya no se monta en `pages/Index.tsx` (pedido del cliente,
+nov-2026): repetía lo que muestran las tarjetas de eventos y la pastilla del
+hero (`PromoDestacada`, que sigue). El componente queda en el repo; volver a
+ponerla es agregar `<PromosActivasSection />` entre `CuentaRegresiva` y
+`EventsSection`.
+
 ### Tarjeta negra de Black Friday (sin migración)
 
 `EventCard`: si el evento tiene **vigente** una promo cuyo nombre contiene

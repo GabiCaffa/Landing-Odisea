@@ -1,6 +1,5 @@
 import Header from "@/components/Header";
 import HeroDelSitio from "@/components/HeroDelSitio";
-import PromosActivasSection from "@/components/PromosActivasSection";
 import EventsSection from "@/components/EventsSection";
 import PromosSection from "@/components/PromosSection";
 import GaleriaAnteriores from "@/components/GaleriaAnteriores";
@@ -33,9 +32,9 @@ const Index = () => {
         <HeroDelSitio />
         {/* Sólo con el tema Año Nuevo: cuánto falta para el 2027. */}
         <CuentaRegresiva />
-        {/* Entre el hero y los eventos: una promo que vence en horas es lo más
-            urgente de la página. Si no hay ninguna vigente, no se renderiza. */}
-        <PromosActivasSection />
+        {/* La sección "Promos activas" (PromosActivasSection) se sacó de la home
+            a pedido del cliente: las promos ya se ven en las tarjetas de
+            eventos y en la pastilla del hero. El componente sigue en el repo. */}
         <EventsSection />
         <PromosSection />
         {/* Fotos y videos de fiestas pasadas (v33). Sin nada cargado no se
